@@ -48,6 +48,18 @@ def _wrap_scroll(w: QWidget) -> QScrollArea:
     return s
 
 
+def _form(parent=None) -> QFormLayout:
+    """QFormLayout canh trái, field giãn hết chiều rộng (nhất quán mọi nền tảng)."""
+    f = QFormLayout(parent)
+    f.setFieldGrowthPolicy(QFormLayout.AllNonFixedFieldsGrow)
+    f.setRowWrapPolicy(QFormLayout.DontWrapRows)
+    f.setLabelAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+    f.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+    f.setHorizontalSpacing(16)
+    f.setVerticalSpacing(12)
+    return f
+
+
 class ConfigPage(QWidget):
     changed = Signal()
 
@@ -204,7 +216,7 @@ class SitePanel(QWidget):
     # ---------------- Thông tin ---------------- #
     def _info_tab(self) -> QWidget:
         w = QWidget()
-        f = QFormLayout(w)
+        f = _form(w)
         self.name_edit = QLineEdit()
         self.url_edit = QLineEdit()
         self.newpost_edit = QLineEdit()
@@ -221,7 +233,7 @@ class SitePanel(QWidget):
     # ---------------- Tài khoản ---------------- #
     def _account_tab(self) -> QWidget:
         w = QWidget()
-        f = QFormLayout(w)
+        f = _form(w)
         self.user_edit = QLineEdit()
         self.pass_edit = QLineEdit()
         self.pass_edit.setEchoMode(QLineEdit.Password)
@@ -319,7 +331,7 @@ class SitePanel(QWidget):
     # ---------------- Format ---------------- #
     def _format_tab(self) -> QWidget:
         w = QWidget()
-        f = QFormLayout(w)
+        f = _form(w)
         self.fmt_title = QLineEdit()
         self.fmt_content = QLineEdit()
         self.fmt_desc = QLineEdit()
@@ -567,7 +579,7 @@ class AIImagePanel(QScrollArea):
         self.pillow_on = QCheckBox("Bật")
         self.pillow_on.setChecked(bool(cfg["pillow"].get("enabled", True)))
         c1.body.addWidget(self.pillow_on)
-        form = QFormLayout()
+        form = _form()
         self.out_fmt = QComboBox()
         self.out_fmt.addItems(["PNG (giữ trong suốt)", "JPG"])
         self.out_fmt.setCurrentIndex(0 if cfg["pillow"].get("output_format", "PNG") == "PNG" else 1)
@@ -648,7 +660,7 @@ class SheetsPanel(QScrollArea):
         self.enabled = QCheckBox("Bật lưu kết quả")
         self.enabled.setChecked(bool(cfg.get("enabled")))
         card.body.addWidget(self.enabled)
-        form = QFormLayout()
+        form = _form()
         self.sa_edit = QLineEdit(cfg.get("service_account_file", ""))
         self.sa_edit.setReadOnly(True)
         b = QPushButton("Chọn file Service Account JSON")
