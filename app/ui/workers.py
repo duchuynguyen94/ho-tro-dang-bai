@@ -25,11 +25,25 @@ def pick_footer(site, mode: str = "") -> str:
 
 
 def build_template_images(site, task, brand_logo: str, product_paths: list[str],
-                          footer_mode: str = "", log=None) -> list[dict]:
+                          footer_mode: str = "", log=None, rules: list[str] | None = None) -> list[dict]:
     """Ghép ảnh theo mẫu (dùng cho cả tạo mới và tạo lại ảnh)."""
+    import re as _re
+
+    from ..wp import render_value
+
     images: list[dict] = []
     count = max(1, int(task.image_count or 3))
     mode = footer_mode or task.footer_mode or "random"
+    result = task.result or {}
+    ctx = {
+        "title": result.get("title", ""),
+        "focus_keyword": result.get("focus_keyword", ""),
+        "keyword": result.get("focus_keyword", ""),
+        "site": task.site_name,
+        "description": result.get("description", ""),
+    }
+    rules = list(rules or [])
+
     for i in range(count):
         footer = pick_footer(site, mode)
         prods = product_paths[i:] + product_paths[:i] if product_paths else []
@@ -41,7 +55,13 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             footer_bar=footer,
             watermark=site.watermark_text,
         )
-        out = output_dir() / f"{task.id}_{i + 1}.png"
+        # Rule đặt tên ảnh (nếu có)
+        rule = (rules[i] if i < len(rules) else "").strip()
+        name = ""
+        if rule:
+            name = _re.sub(r"[^\w\-\. ]+", "", render_value(rule, {**ctx, "index": i + 1})).strip()
+        fname = f"{name.replace(' ', '-')[:80]}_{i + 1}.png" if name else f"{task.id}_{i + 1}.png"
+        out = output_dir() / fname
         save_composed(img, str(out))
         images.append({"path": str(out), "footer": footer})
     if log:
@@ -100,7 +120,8 @@ class ContentWorker(QThread):
             # Ghép ảnh theo mẫu
             self.log.emit(f"Đang ghép {t.image_count} ảnh theo mẫu…")
             images = build_template_images(site, t, brand_logo, product_paths,
-                                           t.footer_mode, log=self.log.emit)
+                                           t.footer_mode, log=self.log.emit,
+                                           rules=self.store.image_rules)
             self.progress.emit(100)
 
             result = dict(data)
@@ -153,8 +174,9 @@ class ImagesWorker(QThread):
     ok = Signal(list)
     failed = Signal(str)
 
-    def __init__(self, site, task, footer_mode: str = "") -> None:
+    def __init__(self, store, site, task, footer_mode: str = "") -> None:
         super().__init__()
+        self.store = store
         self.site = site
         self.task = task
         self.footer_mode = footer_mode
@@ -166,6 +188,7 @@ class ImagesWorker(QThread):
                 self.site, self.task,
                 r.get("brand_logo", ""), list(r.get("product_images") or []),
                 self.footer_mode, log=self.log.emit,
+                rules=self.store.image_rules,
             )
             self.ok.emit(images)
         except Exception as exc:

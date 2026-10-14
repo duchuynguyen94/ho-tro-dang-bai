@@ -186,7 +186,7 @@ class MainWindow(QMainWindow):
         self.store.upsert_task(task)
         self.store.save()
 
-        worker = ImagesWorker(site, task, footer_mode)
+        worker = ImagesWorker(self.store, site, task, footer_mode)
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda images: self._on_images_ok(task, images))
         worker.failed.connect(lambda err: self.status("Lỗi tạo ảnh: " + err[:80]))

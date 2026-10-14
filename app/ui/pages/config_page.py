@@ -29,6 +29,7 @@ from ...config import formats_dir, media_dir
 from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
 from ..style import Card
+from ..toast import show_toast
 from ..workers import LoginWorker, RecordWorker
 
 IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
@@ -123,6 +124,7 @@ class ConfigPage(QWidget):
         for site in self.store.sites:
             panel = SitePanel(self.store, site)
             panel.saved.connect(self._on_site_saved)
+            panel.deleted.connect(self._on_site_deleted)
             key = f"site:{site.id}"
             self._panels[key] = panel
             self.stack.addWidget(panel)
@@ -140,7 +142,7 @@ class ConfigPage(QWidget):
         for key, panel, label in [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
-            ("format", fmt, "Format & rule bài viết"),
+            ("format", fmt, "Format Rule"),
             ("sheets", sheets, "Google Sheets"),
         ]:
             self._panels[key] = panel
@@ -194,6 +196,15 @@ class ConfigPage(QWidget):
 
     def _on_site_saved(self) -> None:
         self.changed.emit()
+        key = getattr(self, "_current_key", None)
+        if key and key.startswith("site:"):
+            site = self.store.get_site(key.split(":", 1)[1])
+            btn = self._nav_buttons.get(key)
+            if site and btn:
+                btn.setText(site.name or site.url)
+
+    def _on_site_deleted(self) -> None:
+        self.changed.emit()
         self.reload()
 
 
@@ -202,6 +213,7 @@ class ConfigPage(QWidget):
 # ======================================================================= #
 class SitePanel(QWidget):
     saved = Signal()
+    deleted = Signal()
 
     def __init__(self, store: Store, site: Site, parent=None) -> None:
         super().__init__(parent)
@@ -233,7 +245,7 @@ class SitePanel(QWidget):
         self.tabs.addTab(_wrap_scroll(self._info_tab()), "Thông tin site")
         self.tabs.addTab(_wrap_scroll(self._account_tab()), "Tài khoản đăng nhập")
         self.tabs.addTab(_wrap_scroll(self._script_tab()), "Kịch bản đăng bài")
-        self.tabs.addTab(_wrap_scroll(self._media_tab()), "Logo / Khung / Watermark")
+        self.tabs.addTab(_wrap_scroll(self._media_tab()), "Logo / Khung")
 
     # ---------------- Thông tin ---------------- #
     def _info_tab(self) -> QWidget:
@@ -245,11 +257,6 @@ class SitePanel(QWidget):
         f.addRow("Tên gọi", self.name_edit)
         f.addRow("URL website", self.url_edit)
         f.addRow("Link trang tạo bài viết", self.newpost_edit)
-
-        hint = QLabel("Watermark chéo trên ảnh lấy tự động theo URL website.")
-        hint.setProperty("class", "hint")
-        hint.setWordWrap(True)
-        f.addRow(hint)
 
         del_btn = QPushButton("Xoá website này")
         del_btn.setProperty("class", "danger")
@@ -316,15 +323,6 @@ class SitePanel(QWidget):
         self.rec_status.setProperty("class", "hint")
         self.rec_status.setWordWrap(True)
         v.addWidget(self.rec_status)
-
-        help_lbl = QLabel(
-            "Khi ghi, phần mềm bắt đúng phần tử và tự sinh selector: "
-            "<b>id → name/data-*/aria → text nút → CSS → nth-child</b>. "
-            "<b>Export</b> kịch bản ra file để mang sang máy khác <b>Import</b> vào là chạy được ngay."
-        )
-        help_lbl.setProperty("class", "hint")
-        help_lbl.setWordWrap(True)
-        v.addWidget(help_lbl)
         return w
 
     # ---------------- Logo / Khung / Watermark ---------------- #
@@ -357,14 +355,6 @@ class SitePanel(QWidget):
         grid.addWidget(QLabel("Thanh thông tin dưới — hình 2"), 2, 0)
         grid.addWidget(self.bar2_edit, 2, 1)
         grid.addWidget(c2, 2, 2)
-
-        note = QLabel(
-            "Thanh thông tin dưới là <b>1 hình ảnh</b>; chọn dùng hình nào trong "
-            "<b>trình sửa ảnh</b> ở màn Kết quả (Công việc đang làm)."
-        )
-        note.setProperty("class", "hint")
-        note.setWordWrap(True)
-        grid.addWidget(note, 3, 0, 1, 3)
         return w
 
     # ------------------------------------------------------------------ #
@@ -489,7 +479,7 @@ class SitePanel(QWidget):
             return
         self.store.remove_site(self.site.id)
         self.store.save()
-        self.saved.emit()
+        self.deleted.emit()
 
     # ------------------------------------------------------------------ #
     def _save(self) -> None:
@@ -507,6 +497,7 @@ class SitePanel(QWidget):
             s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
         self.store.upsert_site(s)
         self.store.save()
+        show_toast(self, "Đã lưu website")
         self.saved.emit()
 
 
@@ -593,6 +584,7 @@ class AIContentPanel(QScrollArea):
                 cfg["active"] = key
         cfg["fallback"] = self.fallback.isChecked()
         self.store.save()
+        show_toast(self, "Đã lưu AI nội dung")
 
 
 class AIImagePanel(QScrollArea):
@@ -675,6 +667,7 @@ class AIImagePanel(QScrollArea):
             if row["radio"].isChecked():
                 cfg["active"] = key
         self.store.save()
+        show_toast(self, "Đã lưu AI ảnh")
 
 
 class SheetsPanel(QScrollArea):
@@ -743,11 +736,15 @@ class SheetsPanel(QScrollArea):
         cfg["col_result"] = self.col_res.text().strip() or "B"
         cfg["mode"] = "append" if self.mode.currentIndex() == 0 else "update"
         self.store.save()
+        show_toast(self, "Đã lưu Google Sheets")
 
 
 # ======================================================================= #
-# Panel "Format & rule bài viết" (dùng chung cho mọi website)
+# Panel "Format Rule" (dùng chung cho mọi website)
 # ======================================================================= #
+MAX_IMAGE_RULES = 6
+
+
 class FormatPanel(QScrollArea):
     def __init__(self, store, on_saved=None, parent=None) -> None:
         super().__init__(parent)
@@ -755,14 +752,16 @@ class FormatPanel(QScrollArea):
         self.on_saved = on_saved
         self.setWidgetResizable(True)
         self._edits: dict[str, QLineEdit] = {}
+        self.rule_edits: list[QLineEdit] = []
         self._build()
 
+    # ------------------------------------------------------------------ #
     def _build(self) -> None:
         root = QWidget()
         v = QVBoxLayout(root)
         v.setContentsMargins(20, 18, 20, 20)
 
-        t = QLabel("Format & rule bài viết")
+        t = QLabel("Format Rule")
         t.setProperty("class", "h2")
         v.addWidget(t)
         sub = QLabel(
@@ -773,6 +772,7 @@ class FormatPanel(QScrollArea):
         sub.setWordWrap(True)
         v.addWidget(sub)
 
+        # ---- File quy định ----
         card = Card("File quy định cho AI")
         f = _form()
         rows = [
@@ -793,27 +793,62 @@ class FormatPanel(QScrollArea):
             f.addRow(label, h)
             self._edits[key] = edit
         card.body.addLayout(f)
+        v.addWidget(card)
 
-        note = QLabel("Chưa có file <b>quy định nội dung</b> thì không tạo được bài.")
-        note.setProperty("class", "hint")
-        note.setWordWrap(True)
-        card.body.addWidget(note)
+        # ---- Rule ảnh ----
+        img_card = Card("Rule ảnh")
+        hint = QLabel(
+            "Đặt tên cho ảnh. Dùng biến trong dấu <b>{ }</b>, ví dụ: "
+            "<b>Hello world {title}</b> → \"Hello world \" + <b>tiêu đề bài viết</b> (lấy từ kết quả AI). "
+            "Có thể thêm tối đa 6 rule."
+        )
+        hint.setProperty("class", "hint")
+        hint.setWordWrap(True)
+        img_card.body.addWidget(hint)
+
+        self.rules_box = QVBoxLayout()
+        self.rules_box.setSpacing(8)
+        img_card.body.addLayout(self.rules_box)
+
+        self.add_rule_btn = QPushButton("+ Thêm rule ảnh")
+        self.add_rule_btn.setProperty("class", "ghost")
+        self.add_rule_btn.clicked.connect(lambda: self._add_rule_row(""))
+        img_card.body.addWidget(self.add_rule_btn, alignment=Qt.AlignLeft)
+        v.addWidget(img_card)
 
         save = QPushButton("Lưu")
         save.setProperty("class", "primary")
         save.clicked.connect(self._save)
-        card.body.addWidget(save, alignment=Qt.AlignRight)
+        v.addWidget(save, alignment=Qt.AlignRight)
 
-        v.addWidget(card)
         v.addStretch(1)
         self.setWidget(root)
         self._load()
+
+    # ------------------------------------------------------------------ #
+    def _add_rule_row(self, value: str = "") -> None:
+        if len(self.rule_edits) >= MAX_IMAGE_RULES:
+            return
+        n = len(self.rule_edits) + 1
+        row = QHBoxLayout()
+        lab = QLabel(f"Ảnh {n}")
+        lab.setFixedWidth(52)
+        edit = QLineEdit(value)
+        edit.setPlaceholderText("vd: Hello world {title}")
+        row.addWidget(lab)
+        row.addWidget(edit, 1)
+        self.rules_box.addLayout(row)
+        self.rule_edits.append(edit)
+        self.add_rule_btn.setEnabled(len(self.rule_edits) < MAX_IMAGE_RULES)
 
     def _load(self) -> None:
         fmt = self.store.formats
         for key, edit in self._edits.items():
             edit.setText(getattr(fmt, key, ""))
+        for value in self.store.image_rules:
+            self._add_rule_row(value)
 
+    # ------------------------------------------------------------------ #
     def _pick(self, key: str, edit: QLineEdit, label: str) -> None:
         path, _ = QFileDialog.getOpenFileName(self, label, "", FORMAT_FILTER)
         if not path:
@@ -825,6 +860,8 @@ class FormatPanel(QScrollArea):
         for key, edit in self._edits.items():
             setattr(fmt, key, edit.text())
         self.store.set_formats(fmt)
+        self.store.set_image_rules([e.text().strip() for e in self.rule_edits])
         self.store.save()
+        show_toast(self, "Đã lưu Format Rule")
         if self.on_saved:
             self.on_saved()

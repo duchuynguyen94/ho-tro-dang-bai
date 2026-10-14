@@ -52,6 +52,8 @@ class Store:
                 if sf.get("content"):
                     fmt.update({k: sf.get(k, "") or "" for k in ("title", "content", "description", "tags")})
                     break
+        if not isinstance(fmt.get("image_rules"), list) or not fmt.get("image_rules"):
+            fmt["image_rules"] = ["", "", ""]
         # watermark chéo lấy theo URL website
         for s in self.data.get("sites", []):
             if not s.get("watermark"):
@@ -128,6 +130,16 @@ class Store:
 
     def has_format_content(self) -> bool:
         return bool((self.data.get("formats") or {}).get("content"))
+
+    @property
+    def image_rules(self) -> list[str]:
+        rules = (self.data.get("formats") or {}).get("image_rules")
+        if not isinstance(rules, list) or not rules:
+            rules = ["", "", ""]
+        return [str(r) for r in rules]
+
+    def set_image_rules(self, rules: list[str]) -> None:
+        self.data.setdefault("formats", {})["image_rules"] = [str(r) for r in rules]
 
     # ------------------------------------------------------------------ #
     # Phần cấu hình con

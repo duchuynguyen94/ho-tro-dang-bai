@@ -266,5 +266,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "content": "",
         "description": "",
         "tags": "",
+        "image_rules": ["", "", ""],   # rule đặt tên cho ảnh 1..6, vd: "Hello world {title}"
     },
 }
