@@ -1,8 +1,8 @@
 name: build-windows
 
+# Chỉ build khi bấm tay (tránh build .exe mỗi lần sửa code).
+# Vào GitHub → Actions → build-windows → Run workflow để build.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 jobs:
