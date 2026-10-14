@@ -12,12 +12,14 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QListWidget,
-    QListWidgetItem,
+    QMessageBox,
     QPlainTextEdit,
+    QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QSplitter,
+    QStackedWidget,
     QVBoxLayout,
     QWidget,
 )
@@ -33,25 +35,89 @@ from ...storage.models import (
 )
 from ..style import Card
 
-STATUS_COLORS = {
-    STATUS_QUEUED: "#64748b",
-    STATUS_GENERATING: "#b45309",
-    STATUS_REVIEW: "#1d4ed8",
-    STATUS_POSTING: "#6d28d9",
-    STATUS_DONE: "#047857",
-    STATUS_ERROR: "#b91c1c",
+STATUS_OBJECTS = {
+    STATUS_QUEUED: "chipGray",
+    STATUS_GENERATING: "chipAmber",
+    STATUS_REVIEW: "chipBlue",
+    STATUS_POSTING: "chipAmber",
+    STATUS_DONE: "chipGreen",
+    STATUS_ERROR: "chipRed",
 }
 
 
+class TaskRow(QFrame):
+    """1 dòng trong danh sách công việc (có nút xoá)."""
+
+    clicked = Signal(str)
+    delete = Signal(str)
+
+    def __init__(self, task, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("taskRow")
+        self.task_id = task.id
+
+        h = QHBoxLayout(self)
+        h.setContentsMargins(12, 10, 8, 10)
+        h.setSpacing(8)
+
+        v = QVBoxLayout()
+        v.setSpacing(3)
+
+        title = QLabel((task.result.get("title") or task.source_url or "(chưa có)")[:70])
+        title.setObjectName("taskTitle")
+        title.setWordWrap(True)
+        v.addWidget(title)
+
+        meta = QLabel(f"{STATUS_LABELS.get(task.status, task.status)}  ·  {task.site_name}")
+        meta.setObjectName("taskMeta")
+        v.addWidget(meta)
+
+        url = QLabel(task.source_url)
+        url.setObjectName("taskUrl")
+        url.setWordWrap(True)
+        v.addWidget(url)
+
+        if task.status == STATUS_GENERATING:
+            bar = QProgressBar()
+            bar.setRange(0, 0)
+            bar.setTextVisible(False)
+            bar.setFixedHeight(4)
+            v.addWidget(bar)
+
+        h.addLayout(v, 1)
+
+        self.del_btn = QPushButton("✕")
+        self.del_btn.setObjectName("taskDel")
+        self.del_btn.setFixedSize(24, 24)
+        self.del_btn.setToolTip("Xoá công việc này")
+        self.del_btn.clicked.connect(lambda: self.delete.emit(self.task_id))
+        h.addWidget(self.del_btn, 0, Qt.AlignTop)
+
+        self.set_selected(False)
+
+    def set_selected(self, on: bool) -> None:
+        self.setProperty("selected", "true" if on else "false")
+        st = self.style()
+        st.unpolish(self)
+        st.polish(self)
+        self.update()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        self.clicked.emit(self.task_id)
+        super().mousePressEvent(event)
+
+
 class JobsPage(QWidget):
-    regenerate = Signal(object, str)        # (task, field)  field="" -> toàn bộ
+    regenerate = Signal(object, str)         # (task, field)
     regenerate_images = Signal(object, str)  # (task, footer_mode)
     post = Signal(object)                    # (task)
+    delete_task = Signal(str)                # task id
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
         self.store = store
         self.current = None
+        self._rows: dict[str, TaskRow] = {}
         self._build()
         self.refresh()
 
@@ -61,52 +127,102 @@ class JobsPage(QWidget):
         outer.setContentsMargins(16, 16, 16, 16)
         split = QSplitter(Qt.Horizontal)
 
-        # ---- danh sách việc ----
+        # ---------- danh sách việc ----------
         left = Card()
-        left.setMinimumWidth(320)
+        left.setMinimumWidth(300)
+        left.setMaximumWidth(420)
         left.set_title("Công việc đang làm")
         self.count_badge = QLabel("0")
-        self.count_badge.setStyleSheet(
-            "background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;border-radius:9px;padding:2px 8px;font-size:11px;font-weight:700;"
-        )
+        self.count_badge.setObjectName("chipBlue")
         left.add_header_widget(self.count_badge)
-        self.task_list = QListWidget()
-        self.task_list.currentItemChanged.connect(self._on_select)
-        left.body.addWidget(self.task_list)
+
+        self.tasks_scroll = QScrollArea()
+        self.tasks_scroll.setWidgetResizable(True)
+        self.tasks_scroll.setFrameShape(QFrame.NoFrame)
+        self.tasks_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        holder = QWidget()
+        self.tasks_box = QVBoxLayout(holder)
+        self.tasks_box.setContentsMargins(0, 0, 0, 0)
+        self.tasks_box.setSpacing(0)
+        self.tasks_box.addStretch(1)
+        self.tasks_scroll.setWidget(holder)
+        left.body.addWidget(self.tasks_scroll, 1)
         split.addWidget(left)
 
-        # ---- kết quả ----
-        right = Card("Kết quả AI — chờ duyệt")
-        self.result_root = right
-        self.empty = QLabel("Chọn 1 công việc ở bên trái để xem / duyệt kết quả.")
-        self.empty.setProperty("class", "hint")
-        right.body.addWidget(self.empty)
+        # ---------- panel kết quả ----------
+        right = Card("Kết quả AI")
+        self.result_card = right
+        self.provider_badge = QLabel("")
+        self.provider_badge.setObjectName("chipGreen")
+        right.add_header_widget(self.provider_badge)
 
+        self.stack = QStackedWidget()
+        right.body.addWidget(self.stack, 1)
+
+        # 0: chưa chọn
+        self.page_empty = QLabel("Chọn 1 công việc ở bên trái để xem / duyệt kết quả.")
+        self.page_empty.setAlignment(Qt.AlignCenter)
+        self.page_empty.setObjectName("taskMeta")
+        self.stack.addWidget(self.page_empty)
+
+        # 1: đang chạy
+        self.page_loading = QWidget()
+        lv = QVBoxLayout(self.page_loading)
+        lv.addStretch(1)
+        self.loading_label = QLabel("Đang gọi AI tạo nội dung…")
+        self.loading_label.setAlignment(Qt.AlignCenter)
+        self.loading_label.setStyleSheet("font-size:14px;font-weight:600;")
+        self.loading_bar = QProgressBar()
+        self.loading_bar.setRange(0, 0)
+        self.loading_bar.setTextVisible(False)
+        self.loading_bar.setFixedHeight(6)
+        self.loading_bar.setFixedWidth(320)
+        lv.addWidget(self.loading_label, alignment=Qt.AlignHCenter)
+        lv.addWidget(self.loading_bar, alignment=Qt.AlignHCenter)
+        self.loading_note = QLabel("")
+        self.loading_note.setObjectName("taskMeta")
+        self.loading_note.setAlignment(Qt.AlignCenter)
+        self.loading_note.setWordWrap(True)
+        lv.addWidget(self.loading_note)
+        lv.addStretch(1)
+        self.stack.addWidget(self.page_loading)
+
+        # 2: lỗi
+        self.page_error = QWidget()
+        ev = QVBoxLayout(self.page_error)
+        ev.addStretch(1)
+        self.error_label = QLabel("")
+        self.error_label.setObjectName("warnMsg")
+        self.error_label.setWordWrap(True)
+        self.error_label.setAlignment(Qt.AlignCenter)
+        ev.addWidget(self.error_label)
+        retry = QPushButton("↻ Thử tạo lại")
+        retry.setProperty("class", "primary")
+        retry.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, ""))
+        ev.addWidget(retry, alignment=Qt.AlignHCenter)
+        ev.addStretch(1)
+        self.stack.addWidget(self.page_error)
+
+        # 3: kết quả
         self.editor = QWidget()
-        ev = QVBoxLayout(self.editor)
-        ev.setContentsMargins(0, 0, 0, 0)
-        ev.setSpacing(10)
+        ev2 = QVBoxLayout(self.editor)
+        ev2.setContentsMargins(0, 0, 0, 0)
+        ev2.setSpacing(10)
 
-        # Tiêu đề
         self.title_edit = QLineEdit()
-        ev.addLayout(self._field("Tiêu đề", self.title_edit, "title"))
-        # Focus keyword
+        ev2.addLayout(self._field("Tiêu đề", self.title_edit, "title"))
         self.kw_edit = QLineEdit()
-        ev.addLayout(self._field("Focus keyword", self.kw_edit, "focus_keyword"))
-        # Description
+        ev2.addLayout(self._field("Focus keyword", self.kw_edit, "focus_keyword"))
         self.desc_edit = QPlainTextEdit()
-        self.desc_edit.setFixedHeight(64)
-        ev.addLayout(self._field("Description (mô tả SEO)", self.desc_edit, "description"))
-        # Tags
+        self.desc_edit.setFixedHeight(62)
+        ev2.addLayout(self._field("Description (mô tả SEO)", self.desc_edit, "description"))
         self.tags_edit = QLineEdit()
-        ev.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit, "tags"))
-        # Nội dung
+        ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit, "tags"))
         self.content_edit = QPlainTextEdit()
-        self.content_edit.setMinimumHeight(200)
-        self.content_edit.setStyleSheet("font-family: Menlo, Consolas, monospace; font-size: 12px;")
-        ev.addLayout(self._field("Nội dung (HTML)", self.content_edit, "content_html"))
+        self.content_edit.setMinimumHeight(180)
+        self.content_edit.setObjectName("mono")
+        ev2.addLayout(self._field("Nội dung (HTML)", self.content_edit, "content_html"))
 
-        # Ảnh
         img_head = QHBoxLayout()
         img_lab = QLabel("Ảnh (thumbnail + slider)")
         img_lab.setStyleSheet("font-weight:600;")
@@ -120,44 +236,45 @@ class JobsPage(QWidget):
         regen.setProperty("class", "ghost")
         regen.clicked.connect(self._regen_images)
         img_head.addWidget(regen)
-        ev.addLayout(img_head)
+        ev2.addLayout(img_head)
+
         self.images_row = QHBoxLayout()
-        ev.addLayout(self.images_row)
-
-        hint = QLabel(
-            "Bấm <b>Đăng bài</b> → phần mềm mở trình duyệt và <b>điền sẵn theo kịch bản</b>. "
-            "Bạn tự kiểm tra rồi bấm nút Đăng trên WordPress."
-        )
-        hint.setProperty("class", "hint")
-        hint.setWordWrap(True)
-        ev.addWidget(hint)
-
-        foot = QHBoxLayout()
-        foot.addStretch(1)
-        save = QPushButton("Lưu nháp")
-        save.setProperty("class", "ghost")
-        save.clicked.connect(self._save)
-        self.post_btn = QPushButton("OK — Đăng bài")
-        self.post_btn.setProperty("class", "green")
-        self.post_btn.clicked.connect(lambda: self.current and self.post.emit(self.current))
-        foot.addWidget(save)
-        foot.addWidget(self.post_btn)
-        ev.addLayout(foot)
+        ev2.addLayout(self.images_row)
+        ev2.addStretch(1)
 
         self.editor_scroll = QScrollArea()
         self.editor_scroll.setWidgetResizable(True)
         self.editor_scroll.setFrameShape(QFrame.NoFrame)
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.editor_scroll.setWidget(self.editor)
-        right.body.addWidget(self.editor_scroll, 1)
-        self.editor_scroll.hide()
+        self.stack.addWidget(self.editor_scroll)
+
+        # footer luôn hiện khi có kết quả
+        self.footer = QWidget()
+        f = QHBoxLayout(self.footer)
+        f.setContentsMargins(0, 8, 0, 0)
+        self.check_label = QLabel("")
+        self.check_label.setObjectName("taskMeta")
+        f.addWidget(self.check_label)
+        f.addStretch(1)
+        self.save_btn = QPushButton("Lưu nháp")
+        self.save_btn.setProperty("class", "ghost")
+        self.save_btn.clicked.connect(self._save)
+        self.post_btn = QPushButton("OK — Đăng bài")
+        self.post_btn.setProperty("class", "green")
+        self.post_btn.clicked.connect(lambda: self.current and self.post.emit(self.current))
+        f.addWidget(self.save_btn)
+        f.addWidget(self.post_btn)
+        right.body.addWidget(self.footer)
+        self.footer.hide()
+
         split.addWidget(right)
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
+        split.setSizes([330, 900])
         outer.addWidget(split)
 
-    def _field(self, label: str, widget: QWidget, field: str) -> QHBoxLayout:
-        """1 hàng: label + nút Random; widget ở dưới (dùng VBox ngoài)."""
+    def _field(self, label: str, widget: QWidget, field: str) -> QVBoxLayout:
         box = QVBoxLayout()
         row = QHBoxLayout()
         lab = QLabel(label)
@@ -170,58 +287,90 @@ class JobsPage(QWidget):
         row.addWidget(btn)
         box.addLayout(row)
         box.addWidget(widget)
-        wrapper = QVBoxLayout()
-        wrapper.addLayout(box)
-        return wrapper
+        return box
 
     # ------------------------------------------------------------------ #
     def refresh(self) -> None:
         tasks = self.store.tasks
         self.count_badge.setText(str(len(tasks)))
-        self._ordered = list(reversed(tasks))  # mới nhất lên đầu
+        self._ordered = list(reversed(tasks))
 
-        self.task_list.blockSignals(True)
-        self.task_list.clear()
+        while self.tasks_box.count() > 1:
+            it = self.tasks_box.takeAt(0)
+            w = it.widget()
+            if w is not None:
+                w.setParent(None)
+                w.deleteLater()
+        self._rows.clear()
+
         for t in self._ordered:
-            label = (
-                f"{(t.result.get('title') or t.source_url)[:42]}\n"
-                f"{STATUS_LABELS.get(t.status, t.status)} · {t.site_name}"
-            )
-            item = QListWidgetItem(label)
-            item.setData(Qt.UserRole, t.id)
-            self.task_list.addItem(item)
-        self.task_list.blockSignals(False)
+            row = TaskRow(t)
+            row.clicked.connect(self.select_task)
+            row.delete.connect(self._confirm_delete)
+            self._rows[t.id] = row
+            self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
 
         if not self._ordered:
             self.current = None
-            self.editor_scroll.hide()
-            self.empty.show()
+            self._show_state()
             return
 
         target_id = self.current.id if self.current else None
-        if not target_id or not any(t.id == target_id for t in self._ordered):
-            pick = next((i for i, t in enumerate(self._ordered) if t.result.get("images")), 0)
-            target_id = self._ordered[pick].id
-        for i, t in enumerate(self._ordered):
-            if t.id == target_id:
-                self.task_list.setCurrentRow(i)
-                break
+        if not target_id or target_id not in self._rows:
+            if self.current is not None:
+                # vừa tạo xong -> chọn việc mới nhất
+                target_id = self._ordered[0].id
+            else:
+                target_id = self._ordered[0].id
+        self.select_task(target_id)
 
-    def _on_select(self, item: QListWidgetItem | None) -> None:
-        if item is None:
-            return
-        tid = item.data(Qt.UserRole)
-        task = next((t for t in self.store.tasks if t.id == tid), None)
+    def select_task(self, task_id: str) -> None:
+        task = next((t for t in self.store.tasks if t.id == task_id), None)
         if not task:
             return
         self.current = task
+        for tid, row in self._rows.items():
+            row.set_selected(tid == task_id)
+        r = task.result or {}
+        self.result_card.set_title(f"Kết quả AI — {task.site_name}")
+        active = self.store.ai_content.get("active", "")
+        self.provider_badge.setText(f"Provider: {active}" if active else "")
+        self._show_state()
+
+    def set_loading_message(self, text: str) -> None:
+        if self.current and self.current.status in (STATUS_QUEUED, STATUS_GENERATING):
+            self.loading_note.setText(text)
+
+    # ------------------------------------------------------------------ #
+    def _show_state(self) -> None:
+        task = self.current
+        if task is None:
+            self.footer.hide()
+            self.stack.setCurrentWidget(self.page_empty)
+            return
+
+        if task.status in (STATUS_QUEUED, STATUS_GENERATING):
+            self.footer.hide()
+            self.loading_label.setText(
+                f"Đang tạo nội dung cho {task.site_name}…"
+            )
+            self.stack.setCurrentWidget(self.page_loading)
+            return
+
+        if task.status == STATUS_ERROR:
+            self.footer.hide()
+            self.error_label.setText(
+                "<b>Không tạo được nội dung.</b><br><br>"
+                + (task.message or "Lỗi không xác định.")
+                + "<br><br><span style='color:#64748b'>Kiểm tra API key / model trong Cấu hình → AI nội dung.</span>"
+            )
+            self.stack.setCurrentWidget(self.page_error)
+            return
+
         self._load(task)
 
     def _load(self, task) -> None:
-        self.empty.hide()
-        self.editor_scroll.show()
         r = task.result or {}
-        self.result_root.set_title(f"Kết quả AI — {task.site_name}")
         self.title_edit.setText(r.get("title", ""))
         self.kw_edit.setText(r.get("focus_keyword", ""))
         self.desc_edit.setPlainText(r.get("description", ""))
@@ -235,35 +384,47 @@ class JobsPage(QWidget):
             if w:
                 w.deleteLater()
 
-        for i, im in enumerate(r.get("images", []), 1):
-            box = QFrame()
-            box.setObjectName("imgBox")
-            bl = QVBoxLayout(box)
-            bl.setContentsMargins(6, 6, 6, 6)
-            pic = QLabel()
-            pic.setObjectName("imgThumb")
-            pic.setFixedSize(150, 150)
-            pic.setAlignment(Qt.AlignCenter)
-            p = Path(im.get("path", ""))
-            if p.exists():
-                pm = QPixmap(str(p)).scaled(150, 150, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                pic.setPixmap(pm)
-            else:
-                pic.setText("(chưa có ảnh)")
-            bl.addWidget(pic)
-            bts = QHBoxLayout()
-            up = QPushButton("Tải lên")
-            up.setProperty("class", "ghost")
-            up.clicked.connect(lambda _=False, idx=i - 1: self._upload_image(idx))
-            rnd = QPushButton("↻ Random")
-            rnd.setProperty("class", "ghost")
-            rnd.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, "images"))
-            bts.addWidget(up)
-            bts.addWidget(rnd)
-            bl.addLayout(bts)
-            self.images_row.addWidget(box)
+        images = r.get("images", [])
+        for i, im in enumerate(images, 1):
+            self.images_row.addWidget(self._image_box(i, im))
         self.images_row.addStretch(1)
 
+        n = len(images)
+        self.check_label.setText(f"Kiểm tra: đúng format & đủ {task.image_count} ảnh (hiện có {n})")
+        self.stack.setCurrentWidget(self.editor_scroll)
+        self.footer.show()
+
+    def _image_box(self, index: int, im: dict) -> QWidget:
+        box = QFrame()
+        box.setObjectName("imgBox")
+        bl = QVBoxLayout(box)
+        bl.setContentsMargins(6, 6, 6, 6)
+        bl.setSpacing(6)
+
+        pic = QLabel()
+        pic.setObjectName("imgThumb")
+        pic.setFixedSize(160, 160)
+        pic.setAlignment(Qt.AlignCenter)
+        p = Path(im.get("path", ""))
+        if p.exists():
+            pic.setPixmap(QPixmap(str(p)).scaled(160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        else:
+            pic.setText("(chưa có ảnh)")
+        bl.addWidget(pic)
+
+        bts = QHBoxLayout()
+        up = QPushButton("Tải lên")
+        up.setProperty("class", "ghost")
+        up.clicked.connect(lambda _=False, idx=index - 1: self._upload_image(idx))
+        rnd = QPushButton("↻ Random")
+        rnd.setProperty("class", "ghost")
+        rnd.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, "images"))
+        bts.addWidget(up)
+        bts.addWidget(rnd)
+        bl.addLayout(bts)
+        return box
+
+    # ------------------------------------------------------------------ #
     def _regen_images(self) -> None:
         if not self.current:
             return
@@ -282,6 +443,17 @@ class JobsPage(QWidget):
         self.store.upsert_task(self.current)
         self.store.save()
         self._load(self.current)
+
+    def _confirm_delete(self, task_id: str) -> None:
+        ans = QMessageBox.question(
+            self, "Xoá công việc", "Xoá công việc này khỏi danh sách?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if ans != QMessageBox.Yes:
+            return
+        if self.current and self.current.id == task_id:
+            self.current = None
+        self.delete_task.emit(task_id)
 
     def _save(self) -> None:
         if not self.current:

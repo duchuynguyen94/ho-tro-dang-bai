@@ -96,6 +96,20 @@ QLabel#metaText  {{ color: {MUTED}; font-size: 11px; }}
 QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9px; }}
 QLabel#imgThumb {{ background: #f1f5f9; border-radius: 6px; color: #94a3b8; }}
 
+/* Danh sách công việc */
+QFrame#taskRow {{ background: transparent; border: none; border-bottom: 1px solid {LINE}; }}
+QFrame#taskRow:hover {{ background: #f8fafc; }}
+QFrame#taskRow[selected="true"] {{ background: #eff6ff; }}
+QLabel#taskTitle {{ font-weight: 600; font-size: 12.5px; }}
+QLabel#taskMeta {{ color: {MUTED}; font-size: 11px; }}
+QLabel#taskUrl {{ color: #94a3b8; font-size: 10.5px; }}
+QPushButton#taskDel {{ background: transparent; border: none; color: #94a3b8; font-weight: 700; }}
+QPushButton#taskDel:hover {{ color: {RED}; background: #fef2f2; border-radius: 5px; }}
+QLabel#warnMsg {{ color: {RED}; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px; }}
+QPlainTextEdit#mono {{ font-family: Menlo, Consolas, monospace; font-size: 12px; }}
+QProgressBar {{ background: #e2e8f0; border: none; border-radius: 3px; }}
+QProgressBar::chunk {{ background: {ACCENT}; border-radius: 3px; }}
+
 QPushButton.primary {{ background: {ACCENT}; color: #ffffff; border: none; border-radius: 7px; padding: 8px 14px; font-weight: 600; }}
 QPushButton.primary:hover {{ background: {ACCENT_DARK}; }}
 QPushButton.primary:disabled {{ background: #e2e8f0; color: #94a3b8; }}

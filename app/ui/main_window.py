@@ -100,6 +100,7 @@ class MainWindow(QMainWindow):
         self.post_page.create_task.connect(self._on_create_task)
         self.jobs_page.regenerate.connect(self._on_regenerate)
         self.jobs_page.regenerate_images.connect(self._on_regenerate_images)
+        self.jobs_page.delete_task.connect(self._on_delete_task)
         self.jobs_page.post.connect(self._on_post_task)
         self.config_page.changed.connect(self._on_config_changed)
 
@@ -137,19 +138,30 @@ class MainWindow(QMainWindow):
         site = self.store.get_site(task.site_id)
         if not site:
             return
+        task.status = STATUS_GENERATING
+        task.progress = 10
+        task.message = ""
         self.store.upsert_task(task)
         self.store.save()
-        self._refresh_count()
+
+        # Chuyển ngay sang tab "Công việc đang làm" và chọn việc mới
+        self._go(2)
         self.jobs_page.refresh()
+        self.jobs_page.select_task(task.id)
+        self._refresh_count()
 
         worker = ContentWorker(self.store, task, site)
-        worker.log.connect(lambda m: self.status(m))
+        worker.log.connect(self._on_worker_log)
         worker.ok.connect(lambda res: self._on_content_ok(task, res))
         worker.failed.connect(lambda err: self._on_content_failed(task, err))
         worker.finished.connect(lambda: self._cleanup(worker))
         self._workers.append(worker)
         worker.start()
         self.status(f"Đang tạo nội dung cho {site.name}…")
+
+    def _on_worker_log(self, msg: str) -> None:
+        self.status(msg)
+        self.jobs_page.set_loading_message(msg)
 
     def _on_content_ok(self, task, result: dict) -> None:
         from ..storage.models import Task
@@ -165,16 +177,21 @@ class MainWindow(QMainWindow):
         self.status("Xong — vào tab Công việc đang làm để duyệt.")
 
     def _on_content_failed(self, task, err: str) -> None:
-        from ..storage.models import Task
-
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.status = STATUS_ERROR
         fresh.message = err
         self.store.upsert_task(fresh)
         self.store.save()
         self.jobs_page.refresh()
-        self.status("Lỗi tạo nội dung: " + err[:80])
-        QMessageBox.warning(self, "Lỗi tạo nội dung", err)
+        self.jobs_page.select_task(fresh.id)
+        self._refresh_count()
+        self.status("Lỗi tạo nội dung — xem chi tiết trong panel bên phải.")
+
+    def _on_delete_task(self, task_id: str) -> None:
+        self.store.set_tasks([t for t in self.store.tasks if t.id != task_id])
+        self.store.save()
+        self.jobs_page.refresh()
+        self._refresh_count()
 
     # ------------------------------------------------------------------ #
     def _on_regenerate_images(self, task, footer_mode: str) -> None:
@@ -229,7 +246,7 @@ class MainWindow(QMainWindow):
         ) if widget else ""
 
         worker = FieldWorker(self.store, site, task, field, current)
-        worker.log.connect(lambda m: self.status(m))
+        worker.log.connect(self._on_worker_log)
         worker.ok.connect(lambda f, v: self._on_field_ok(task, f, v))
         worker.failed.connect(lambda err: self.status("Lỗi: " + err[:80]))
         worker.finished.connect(lambda: self._cleanup(worker))
