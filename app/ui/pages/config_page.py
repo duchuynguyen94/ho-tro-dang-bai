@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
@@ -36,6 +37,15 @@ FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.doc *.docx);;Tất cả (*.*)
 def _pick_file(parent, caption, filt) -> str:
     path, _ = QFileDialog.getOpenFileName(parent, caption, "", filt)
     return path or ""
+
+
+def _wrap_scroll(w: QWidget) -> QScrollArea:
+    s = QScrollArea()
+    s.setWidgetResizable(True)
+    s.setFrameShape(QFrame.NoFrame)
+    s.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+    s.setWidget(w)
+    return s
 
 
 class ConfigPage(QWidget):
@@ -185,11 +195,11 @@ class SitePanel(QWidget):
         self.tabs = QTabWidget()
         outer.addWidget(self.tabs, 1)
 
-        self.tabs.addTab(self._info_tab(), "Thông tin site")
-        self.tabs.addTab(self._account_tab(), "Tài khoản đăng nhập")
-        self.tabs.addTab(self._script_tab(), "Kịch bản đăng bài")
-        self.tabs.addTab(self._media_tab(), "Logo / Khung / Watermark")
-        self.tabs.addTab(self._format_tab(), "Format bài viết")
+        self.tabs.addTab(_wrap_scroll(self._info_tab()), "Thông tin site")
+        self.tabs.addTab(_wrap_scroll(self._account_tab()), "Tài khoản đăng nhập")
+        self.tabs.addTab(_wrap_scroll(self._script_tab()), "Kịch bản đăng bài")
+        self.tabs.addTab(_wrap_scroll(self._media_tab()), "Logo / Khung / Watermark")
+        self.tabs.addTab(_wrap_scroll(self._format_tab()), "Format bài viết")
 
     # ---------------- Thông tin ---------------- #
     def _info_tab(self) -> QWidget:

@@ -130,8 +130,13 @@ class JobsPage(QWidget):
         foot.addWidget(self.post_btn)
         ev.addLayout(foot)
 
-        right.body.addWidget(self.editor)
-        self.editor.hide()
+        self.editor_scroll = QScrollArea()
+        self.editor_scroll.setWidgetResizable(True)
+        self.editor_scroll.setFrameShape(QFrame.NoFrame)
+        self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.editor_scroll.setWidget(self.editor)
+        right.body.addWidget(self.editor_scroll, 1)
+        self.editor_scroll.hide()
         split.addWidget(right)
         split.setStretchFactor(0, 0)
         split.setStretchFactor(1, 1)
@@ -175,7 +180,7 @@ class JobsPage(QWidget):
 
         if not self._ordered:
             self.current = None
-            self.editor.hide()
+            self.editor_scroll.hide()
             self.empty.show()
             return
 
@@ -200,7 +205,7 @@ class JobsPage(QWidget):
 
     def _load(self, task) -> None:
         self.empty.hide()
-        self.editor.show()
+        self.editor_scroll.show()
         r = task.result or {}
         self.result_root.set_title(f"Kết quả AI — {task.site_name}")
         self.title_edit.setText(r.get("title", ""))

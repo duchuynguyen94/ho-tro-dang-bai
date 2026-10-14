@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QPushButton,
     QRadioButton,
+    QScrollArea,
     QVBoxLayout,
     QWidget,
 )
@@ -21,41 +22,18 @@ from ..style import Card
 
 
 class SiteRow(QFrame):
-    """1 dòng website trong danh sách chọn (dùng QSS tập trung theo objectName)."""
+    """1 dòng website để chọn (chỉ chọn được 1)."""
 
     def __init__(self, site, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("siteRow")
-        v = QVBoxLayout(self)
-        v.setContentsMargins(10, 8, 10, 8)
-        v.setSpacing(5)
+        self.site_id = site.id
 
-        top = QHBoxLayout()
-        top.setSpacing(8)
+        v = QVBoxLayout(self)
+        v.setContentsMargins(10, 9, 10, 9)
         self.radio = QRadioButton(site.name or site.url)
         self.radio.setObjectName("rowTitle")
-        top.addWidget(self.radio)
-        if site.username:
-            top.addWidget(_chip("đã có tài khoản", "chipGreen"))
-        top.addStretch(1)
-        v.addLayout(top)
-
-        meta = QHBoxLayout()
-        meta.setContentsMargins(22, 0, 0, 0)
-        meta.setSpacing(6)
-        has_script = bool(site.script and site.script.steps)
-        meta.addWidget(
-            _chip("đã có kịch bản" if has_script else "chưa có kịch bản",
-                  "chipGreen" if has_script else "chipAmber")
-        )
-        has_fmt = site.has_format_content()
-        meta.addWidget(
-            _chip("đã có quy định nội dung" if has_fmt else "thiếu quy định nội dung",
-                  "chipGreen" if has_fmt else "chipRed")
-        )
-        meta.addStretch(1)
-        v.addLayout(meta)
-
+        v.addWidget(self.radio)
         self.set_selected(False)
 
     def set_selected(self, on: bool) -> None:
@@ -66,12 +44,6 @@ class SiteRow(QFrame):
         self.update()
 
 
-def _chip(text: str, obj: str) -> QLabel:
-    lab = QLabel(text)
-    lab.setObjectName(obj)
-    return lab
-
-
 class PostPage(QWidget):
     create_task = Signal(object)  # Task
 
@@ -80,20 +52,33 @@ class PostPage(QWidget):
         self.store = store
         self._radios: dict[str, QRadioButton] = {}
         self._rows: dict[str, SiteRow] = {}
+        self._group = QButtonGroup(self)
+        self._group.setExclusive(True)
         self._build()
         self.reload_sites()
 
     # ------------------------------------------------------------------ #
     def _build(self) -> None:
         outer = QVBoxLayout(self)
-        outer.setContentsMargins(24, 20, 24, 24)
+        outer.setContentsMargins(0, 0, 0, 0)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        outer.addWidget(scroll)
+
+        content = QWidget()
+        scroll.setWidget(content)
+        root = QVBoxLayout(content)
+        root.setContentsMargins(24, 20, 24, 24)
 
         steps = QHBoxLayout()
         for i, text in enumerate(
-            ["Nhập link nguồn & chọn site", "Xếp vào Công việc đang làm", "Duyệt & chỉnh sửa", "Đăng bài"]
+            ["Nhập link nguồn & chọn site", "Xếp vào Công việc đang làm",
+             "Duyệt & chỉnh sửa", "Đăng bài"]
         ):
             lab = QLabel(f"{i + 1}. {text}")
-            lab.setProperty("class", "hint")
             lab.setStyleSheet("font-weight:600;" if i == 0 else "color:#94a3b8;")
             steps.addWidget(lab)
             if i < 3:
@@ -101,8 +86,8 @@ class PostPage(QWidget):
                 arrow.setStyleSheet("color:#cbd5e1;")
                 steps.addWidget(arrow)
         steps.addStretch(1)
-        outer.addLayout(steps)
-        outer.addSpacing(10)
+        root.addLayout(steps)
+        root.addSpacing(10)
 
         row = QHBoxLayout()
         row.addStretch(1)
@@ -110,14 +95,15 @@ class PostPage(QWidget):
         self.card.setFixedWidth(700)
         row.addWidget(self.card)
         row.addStretch(1)
-        outer.addLayout(row)
-        outer.addStretch(1)
+        root.addLayout(row)
+        root.addStretch(1)
 
         b = self.card.body
 
         b.addWidget(QLabel("Link bài viết nguồn"))
         self.source_url = QLineEdit()
         self.source_url.setPlaceholderText("https://...")
+        self.source_url.textChanged.connect(self._validate)
         b.addWidget(self.source_url)
 
         b.addSpacing(4)
@@ -150,6 +136,7 @@ class PostPage(QWidget):
         b.addSpacing(6)
         self.create_btn = QPushButton("Tạo nội dung bằng AI")
         self.create_btn.setProperty("class", "primary")
+        self.create_btn.setEnabled(False)
         self.create_btn.clicked.connect(self._create)
         b.addWidget(self.create_btn)
 
@@ -169,6 +156,8 @@ class PostPage(QWidget):
 
     # ------------------------------------------------------------------ #
     def reload_sites(self) -> None:
+        for btn in list(self._group.buttons()):
+            self._group.removeButton(btn)
         while self.sites_box.count():
             it = self.sites_box.takeAt(0)
             w = it.widget()
@@ -186,8 +175,9 @@ class PostPage(QWidget):
             self._validate()
             return
 
-        for site in sites:
+        for idx, site in enumerate(sites):
             row = SiteRow(site)
+            self._group.addButton(row.radio, idx)
             row.radio.toggled.connect(self._validate)
             self._radios[site.id] = row.radio
             self._rows[site.id] = row
@@ -209,13 +199,24 @@ class PostPage(QWidget):
         site = self._selected_site()
         for sid, row in self._rows.items():
             row.set_selected(bool(site and sid == site.id))
-        ok = bool(site and site.has_format_content())
+
+        has_link = bool(self.source_url.text().strip())
+        ok = bool(site and has_link and site.has_format_content())
         self.create_btn.setEnabled(ok)
-        if site and not site.has_format_content():
-            self.warn.setText(
-                f"⚠ <b>Chưa thể tạo nội dung.</b> Website <b>{site.name}</b> chưa có file quy định "
-                "nội dung trong cấu hình. Vào <b>Cấu hình → Format bài viết</b> để thêm rồi thử lại."
+
+        problems: list[str] = []
+        if not site:
+            problems.append("chưa chọn website")
+        elif not site.has_format_content():
+            problems.append(
+                f"website <b>{site.name}</b> chưa có file quy định nội dung "
+                "(vào <b>Cấu hình → Format bài viết</b> để thêm)"
             )
+        if not has_link:
+            problems.append("chưa nhập link bài viết nguồn")
+
+        if problems:
+            self.warn.setText("⚠ <b>Chưa thể tạo nội dung:</b> " + "; ".join(problems) + ".")
             self.warn.show()
         else:
             self.warn.hide()
@@ -230,12 +231,9 @@ class PostPage(QWidget):
 
     def _create(self) -> None:
         site = self._selected_site()
-        if not site:
-            return
         url = self.source_url.text().strip()
-        if not url:
-            self.warn.setText("⚠ Vui lòng nhập link bài viết nguồn.")
-            self.warn.show()
+        if not site or not url or not site.has_format_content():
+            self._validate()
             return
         count = int(self.image_count.currentText().split()[0])
         task = Task(
@@ -247,3 +245,4 @@ class PostPage(QWidget):
         )
         self.create_task.emit(task)
         self.source_url.clear()
+        self.brand_logo.clear()
