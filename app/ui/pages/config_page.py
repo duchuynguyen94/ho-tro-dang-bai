@@ -68,8 +68,8 @@ class ConfigPage(QWidget):
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
         self.store = store
-        self.record_worker: RecordWorker | None = None
         self._panels: dict[str, QWidget] = {}
+        self._nav_buttons: dict[str, QPushButton] = {}
         self._build()
         self.reload()
 
@@ -221,6 +221,7 @@ class SitePanel(QWidget):
         self.site = store.get_site(site.id) or site
         self._steps: list[dict] = [s.to_dict() for s in (self.site.script.steps if self.site.script else [])]
         self.login_worker: LoginWorker | None = None
+        self.record_worker: RecordWorker | None = None
         self._build()
         self._load()
 

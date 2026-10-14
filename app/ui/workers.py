@@ -334,20 +334,37 @@ class RecordWorker(QThread):
         from ..wp import WPBrowser
         from ..wp import recorder
 
+        br = None
         try:
             br = WPBrowser(headless=False, site_id=self.site.id)
             page = br.open()
             page.expose_binding("__wpRecordStep", self._on_step)
             page.add_init_script(recorder.RECORDER_JS)
-            self.log.emit("Bắt đầu ghi. Thao tác trên trình duyệt rồi bấm Dừng.")
+            self.log.emit("Đã mở trình duyệt. Thao tác trên trình duyệt rồi bấm Dừng ghi.")
+
             if self.start_url:
-                page.goto(self.start_url, wait_until="domcontentloaded")
+                try:
+                    page.goto(self.start_url, wait_until="domcontentloaded", timeout=25000)
+                except Exception as exc:
+                    self.log.emit(
+                        "Không mở được địa chỉ đã cấu hình — bạn có thể tự nhập địa chỉ trên trình duyệt. "
+                        f"({str(exc)[:100]})"
+                    )
+
             while self._running:
                 try:
+                    if page.is_closed():
+                        break
                     page.wait_for_timeout(300)
                 except Exception:
                     break
-            br.close()
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))
+        finally:
+            try:
+                if br:
+                    br.close()
+            except Exception:
+                pass
+            self.log.emit("Đã đóng trình duyệt ghi.")
