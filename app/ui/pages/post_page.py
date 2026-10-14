@@ -20,6 +20,58 @@ from ...storage.models import Task
 from ..style import Card
 
 
+class SiteRow(QFrame):
+    """1 dòng website trong danh sách chọn (dùng QSS tập trung theo objectName)."""
+
+    def __init__(self, site, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("siteRow")
+        v = QVBoxLayout(self)
+        v.setContentsMargins(10, 8, 10, 8)
+        v.setSpacing(5)
+
+        top = QHBoxLayout()
+        top.setSpacing(8)
+        self.radio = QRadioButton(site.name or site.url)
+        self.radio.setObjectName("rowTitle")
+        top.addWidget(self.radio)
+        if site.username:
+            top.addWidget(_chip("đã có tài khoản", "chipGreen"))
+        top.addStretch(1)
+        v.addLayout(top)
+
+        meta = QHBoxLayout()
+        meta.setContentsMargins(22, 0, 0, 0)
+        meta.setSpacing(6)
+        has_script = bool(site.script and site.script.steps)
+        meta.addWidget(
+            _chip("đã có kịch bản" if has_script else "chưa có kịch bản",
+                  "chipGreen" if has_script else "chipAmber")
+        )
+        has_fmt = site.has_format_content()
+        meta.addWidget(
+            _chip("đã có quy định nội dung" if has_fmt else "thiếu quy định nội dung",
+                  "chipGreen" if has_fmt else "chipRed")
+        )
+        meta.addStretch(1)
+        v.addLayout(meta)
+
+        self.set_selected(False)
+
+    def set_selected(self, on: bool) -> None:
+        self.setProperty("selected", "true" if on else "false")
+        st = self.style()
+        st.unpolish(self)
+        st.polish(self)
+        self.update()
+
+
+def _chip(text: str, obj: str) -> QLabel:
+    lab = QLabel(text)
+    lab.setObjectName(obj)
+    return lab
+
+
 class PostPage(QWidget):
     create_task = Signal(object)  # Task
 
@@ -27,6 +79,7 @@ class PostPage(QWidget):
         super().__init__(parent)
         self.store = store
         self._radios: dict[str, QRadioButton] = {}
+        self._rows: dict[str, SiteRow] = {}
         self._build()
         self.reload_sites()
 
@@ -117,11 +170,13 @@ class PostPage(QWidget):
     # ------------------------------------------------------------------ #
     def reload_sites(self) -> None:
         while self.sites_box.count():
-            item = self.sites_box.takeAt(0)
-            w = item.widget()
-            if w:
+            it = self.sites_box.takeAt(0)
+            w = it.widget()
+            if w is not None:
+                w.setParent(None)
                 w.deleteLater()
         self._radios.clear()
+        self._rows.clear()
 
         sites = self.store.sites
         if not sites:
@@ -132,48 +187,12 @@ class PostPage(QWidget):
             return
 
         for site in sites:
-            row = QFrame()
-            row.setStyleSheet(
-                "QFrame{border:1px solid #e5e7eb;border-radius:8px;padding:6px 8px;}"
-            )
-            rl = QVBoxLayout(row)
-            rl.setContentsMargins(8, 6, 8, 6)
-            rl.setSpacing(2)
-
-            line1 = QHBoxLayout()
-            rb = QRadioButton(site.name or site.url)
-            rb.setStyleSheet("font-weight:600;")
-            rb.toggled.connect(self._validate)
-            self._radios[site.id] = rb
-            line1.addWidget(rb)
-            if site.username:
-                tag = QLabel("đã có tài khoản")
-                tag.setStyleSheet("color:#047857;font-size:11px;")
-                line1.addWidget(tag)
-            line1.addStretch(1)
-            rl.addLayout(line1)
-
-            has_script = bool(site.script and site.script.steps)
-            has_format = site.has_format_content()
-            meta = [
-                ("đã có kịch bản" if has_script else "chưa có kịch bản",
-                 "#16a34a" if has_script else "#b45309"),
-                ("đã có quy định nội dung" if has_format else "thiếu quy định nội dung",
-                 "#16a34a" if has_format else "#dc2626"),
-            ]
-            ml = QHBoxLayout()
-            ml.setContentsMargins(20, 0, 0, 0)
-            for text, color in meta:
-                lab = QLabel(text)
-                lab.setStyleSheet(f"color:{color};font-size:11px;")
-                ml.addWidget(lab)
-                ml.addWidget(QLabel("·"))
-            ml.takeAt(ml.count() - 1)
-            ml.addStretch(1)
-            rl.addLayout(ml)
+            row = SiteRow(site)
+            row.radio.toggled.connect(self._validate)
+            self._radios[site.id] = row.radio
+            self._rows[site.id] = row
             self.sites_box.addWidget(row)
 
-        # chọn site đầu tiên
         first = next(iter(self._radios.values()), None)
         if first:
             first.setChecked(True)
@@ -188,6 +207,8 @@ class PostPage(QWidget):
 
     def _validate(self) -> None:
         site = self._selected_site()
+        for sid, row in self._rows.items():
+            row.set_selected(bool(site and sid == site.id))
         ok = bool(site and site.has_format_content())
         self.create_btn.setEnabled(ok)
         if site and not site.has_format_content():

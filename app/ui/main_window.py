@@ -28,7 +28,7 @@ from .pages.history_page import HistoryPage
 from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
 from .style import app_font
-from .workers import ContentWorker, PostWorker
+from .workers import ContentWorker, FieldWorker, PostWorker
 
 NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Lịch sử"]
 
@@ -182,7 +182,42 @@ class MainWindow(QMainWindow):
             return
         # Ghi lại các trường đã sửa trước khi tạo lại
         self.jobs_page._save()
-        self._on_create_task(task)
+
+        if field == "images" or not field:
+            # ảnh / toàn bộ -> chạy lại quy trình đầy đủ
+            self._on_create_task(task)
+            return
+
+        value_map = {
+            "title": self.jobs_page.title_edit,
+            "focus_keyword": self.jobs_page.kw_edit,
+            "description": self.jobs_page.desc_edit,
+            "tags": self.jobs_page.tags_edit,
+            "content_html": self.jobs_page.content_edit,
+        }
+        widget = value_map.get(field)
+        current = (
+            widget.toPlainText() if hasattr(widget, "toPlainText") else widget.text()
+        ) if widget else ""
+
+        worker = FieldWorker(self.store, site, task, field, current)
+        worker.log.connect(lambda m: self.status(m))
+        worker.ok.connect(lambda f, v: self._on_field_ok(task, f, v))
+        worker.failed.connect(lambda err: self.status("Lỗi: " + err[:80]))
+        worker.finished.connect(lambda: self._cleanup(worker))
+        self._workers.append(worker)
+        worker.start()
+        self.status(f"Đang tạo lại {field}…")
+
+    def _on_field_ok(self, task, field: str, value: str) -> None:
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh.result[field] = value
+        self.store.upsert_task(fresh)
+        self.store.save()
+        self.current_task = fresh
+        self.jobs_page.current = fresh
+        self.jobs_page._load(fresh)
+        self.status("Đã tạo lại xong.")
 
     def _on_post_task(self, task) -> None:
         site = self.store.get_site(task.site_id)

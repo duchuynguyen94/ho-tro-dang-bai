@@ -217,12 +217,12 @@ class JobsPage(QWidget):
 
         for i, im in enumerate(r.get("images", []), 1):
             box = QFrame()
-            box.setStyleSheet("QFrame{border:1px solid #e5e7eb;border-radius:8px;}")
+            box.setObjectName("imgBox")
             bl = QVBoxLayout(box)
             bl.setContentsMargins(6, 6, 6, 6)
             pic = QLabel()
+            pic.setObjectName("imgThumb")
             pic.setFixedSize(150, 150)
-            pic.setStyleSheet("background:#f1f5f9;border-radius:6px;")
             pic.setAlignment(Qt.AlignCenter)
             p = Path(im.get("path", ""))
             if p.exists():

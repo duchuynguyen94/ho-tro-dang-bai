@@ -75,6 +75,53 @@ def _active_chain(cfg: dict) -> list[str]:
     return chain
 
 
+FIELD_RULES = {
+    "title": ("Tiêu đề", "title"),
+    "focus_keyword": ("Focus keyword (từ khóa chính)", None),
+    "description": ("Description (mô tả SEO)", "description"),
+    "tags": ("Search tags (thẻ, cách nhau bởi dấu phẩy)", "tags"),
+    "content_html": ("Nội dung dạng HTML", "content"),
+}
+
+
+def build_field_prompt(site, source: dict, field: str, current: str = "") -> str:
+    label, rule_key = FIELD_RULES.get(field, ("Nội dung", None))
+    rules = read_rule(getattr(site.formats, rule_key, "") if rule_key else "")
+    return f"""Bạn là chuyên gia content SEO tiếng Việt. Hãy tạo lại DUY NHẤT trường "{label}" cho bài viết.
+
+=== QUY ĐỊNH ===
+{rules or "(Không có quy định riêng.)"}
+
+=== BÀI VIẾT NGUỒN ===
+Tiêu đề gốc: {source.get('title', '')}
+URL: {source.get('url', '')}
+Nội dung:
+{source.get('text', '')[:4000]}
+
+=== BẢN HIỆN TẠI (cần viết lại KHÁC đi, hay hơn) ===
+{current}
+
+CHỈ trả về đúng nội dung của trường "{label}", không thêm nhãn, không giải thích, không bọc JSON.
+"""
+
+
+def generate_field(store, site, source: dict, field: str, current: str = "", log=None) -> str:
+    prompt = build_field_prompt(site, source, field, current)
+    cfg = store.ai_content
+    errors: list[str] = []
+    for provider in _active_chain(cfg):
+        pcfg = cfg.get("providers", {}).get(provider, {})
+        api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
+        if provider in ("gemini", "groq", "openrouter", "openai") and not api_key:
+            errors.append(f"{provider}: thiếu API key")
+            continue
+        try:
+            return providers.generate_text(provider, pcfg, prompt, api_key).strip()
+        except Exception as exc:
+            errors.append(f"{provider}: {exc}")
+    raise providers.AIError("Không tạo được trường này. " + " | ".join(errors[-4:]))
+
+
 def generate_content(store, site, source: dict, log=None) -> dict:
     prompt = build_prompt(site, source)
     cfg = store.ai_content

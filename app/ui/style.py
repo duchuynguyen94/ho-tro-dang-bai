@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from PySide6.QtGui import QFont, QFontDatabase
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
 
 ACCENT = "#2563eb"
 ACCENT_DARK = "#1d4ed8"
@@ -21,6 +21,27 @@ def app_font() -> QFont:
         if name in QFontDatabase.families():
             return QFont(name, 10)
     return QFont()
+
+
+def _ensure_arrow() -> str:
+    """Tạo mũi tên cho QComboBox (Qt QSS cần file ảnh)."""
+    from PIL import Image, ImageDraw
+
+    from ..config import app_data_dir
+
+    d = app_data_dir() / "assets"
+    d.mkdir(parents=True, exist_ok=True)
+    p = d / "arrow_down.png"
+    if not p.exists():
+        size = 48
+        img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+        dr = ImageDraw.Draw(img)
+        dr.line([(12, 18), (24, 30), (36, 18)], fill=(51, 65, 85, 255), width=6, joint="curve")
+        img.save(p)
+    return p.as_posix()
+
+
+ARROW = _ensure_arrow()
 
 
 QSS = f"""
@@ -51,6 +72,29 @@ QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{
     background: #ffffff; border: 1px solid #cbd5e1; border-radius: 7px; padding: 7px 9px;
 }}
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus {{ border: 1px solid {ACCENT}; }}
+
+QComboBox {{ padding-right: 28px; }}
+QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right;
+    width: 26px; border: none; background: transparent; }}
+QComboBox::down-arrow {{ image: url("{ARROW}"); width: 12px; height: 12px; }}
+QComboBox QAbstractItemView {{ background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;
+    padding: 4px; outline: none; selection-background-color: #eff6ff; selection-color: {ACCENT_DARK}; }}
+QComboBox QAbstractItemView::item {{ padding: 6px 8px; border-radius: 6px; }}
+
+QFrame#siteRow {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9px; }}
+QFrame#siteRow[selected="true"] {{ background: #eff6ff; border: 1px solid {ACCENT}; }}
+QLabel#rowTitle {{ font-weight: 600; font-size: 13px; }}
+QLabel#chipGreen, QLabel#chipRed, QLabel#chipAmber, QLabel#chipGray, QLabel#chipBlue {{
+    border-radius: 9px; padding: 1px 8px; font-size: 11px;
+}}
+QLabel#chipGreen {{ color: #047857; background: #ecfdf5; border: 1px solid #a7f3d0; }}
+QLabel#chipRed   {{ color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca; }}
+QLabel#chipAmber {{ color: #b45309; background: #fff7ed; border: 1px solid #fed7aa; }}
+QLabel#chipGray  {{ color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; }}
+QLabel#chipBlue  {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #bfdbfe; }}
+QLabel#metaText  {{ color: {MUTED}; font-size: 11px; }}
+QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9px; }}
+QLabel#imgThumb {{ background: #f1f5f9; border-radius: 6px; color: #94a3b8; }}
 
 QPushButton.primary {{ background: {ACCENT}; color: #ffffff; border: none; border-radius: 7px; padding: 8px 14px; font-weight: 600; }}
 QPushButton.primary:hover {{ background: {ACCENT_DARK}; }}
@@ -93,27 +137,27 @@ class Card(QFrame):
 
         self.header = QFrame()
         self.header.setObjectName("cardHeader")
+        self.header.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         hl = QHBoxLayout(self.header)
         hl.setContentsMargins(14, 11, 14, 11)
         self.header_label = QLabel(title)
         hl.addWidget(self.header_label)
         hl.addStretch(1)
         self.header_layout = hl
-        if title:
-            self._outer.addWidget(self.header)
-        else:
-            self.header.hide()
+        self._outer.addWidget(self.header)
+        self.header.setVisible(bool(title))
 
         body = QWidget()
         body.setObjectName("cardBody")
         self.body = QVBoxLayout(body)
         self.body.setContentsMargins(14, 14, 14, 14)
         self.body.setSpacing(10)
-        self._outer.addWidget(body)
+        self._outer.addWidget(body, 1)
+        self._body_widget = body
 
     def set_title(self, text: str) -> None:
         self.header_label.setText(text)
-        self.header.show()
+        self.header.setVisible(True)
 
     def add_header_widget(self, w: QWidget) -> None:
         self.header_layout.addWidget(w)
