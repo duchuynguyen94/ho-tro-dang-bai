@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Mockup 6 — Google Sheets</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <div class="lights"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+    <div class="apptitle">WP Multi Poster</div>
+    <div class="grow"></div>
+    <div class="pill">&#9679; Đã kết nối Google</div>
+  </div>
+
+  <div class="topnav">
+    <button class="tab">Đăng bài</button>
+    <button class="tab active">Cấu hình</button>
+    <button class="tab">Công việc đang làm <span class="count">4</span></button>
+    <button class="tab">Lịch sử</button>
+  </div>
+
+  <div class="layout">
+    <div class="side">
+      <h4>Website WordPress</h4>
+      <div class="sitem">siteA.com<span class="dot"></span></div>
+      <div class="sitem">shopB.vn<span class="dot"></span></div>
+      <div class="sitem">blogC.net<span class="dot off"></span></div>
+      <div class="sitem"><span class="add">+ Thêm website</span></div>
+
+      <h4>Thiết lập chung</h4>
+      <div class="sitem">AI nội dung</div>
+      <div class="sitem">AI ảnh</div>
+      <div class="sitem sel">Google Sheets</div>
+    </div>
+
+    <div class="main">
+      <h2>Google Sheets</h2>
+      <div class="sub">Lưu <b>link nguồn</b> và <b>link kết quả</b> sau khi đăng bài vào 1 trang Google Sheets.</div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="head">Kết nối Google <span class="grow"></span>
+          <span class="radio" style="margin-left:0"><input type="checkbox" checked> Bật lưu kết quả</span>
+        </div>
+        <div class="pad">
+          <div class="field-row">
+            <div class="row"><label class="f">Tài khoản Google (đăng nhập)</label>
+              <div class="filechip" style="margin-top:0">thach.phan@ngochuyduong.com <span class="x" style="color:#16a34a">đã kết nối</span></div>
+            </div>
+            <div class="row"><label class="f">Hoặc Service Account (JSON)</label>
+              <div class="filechip" style="margin-top:0">service-account.json <span class="x" style="color:#64748b">(tùy chọn)</span></div>
+            </div>
+          </div>
+          <div class="wrap" style="margin-top:6px"><button class="btn ghost sm">Đăng nhập Google</button><button class="btn ghost sm">Test kết nối</button></div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:16px">
+        <div class="head">Trang tính đích</div>
+        <div class="pad">
+          <div class="row">
+            <label class="f">Link / ID Google Sheets</label>
+            <input class="input" value="https://docs.google.com/spreadsheets/d/1AbCdEfGhIjKlMnOpQrStUvWxYz1234567890/edit">
+          </div>
+          <div class="field-row">
+            <div class="row"><label class="f">Tên sheet (tab)</label><select><option>Bài đã đăng</option><option>Trang tính 1</option></select></div>
+            <div class="row"><label class="f">Chế độ ghi</label><select><option>Thêm dòng mới</option><option>Cập nhật dòng trùng</option></select></div>
+          </div>
+          <div class="field-row">
+            <div class="row"><label class="f">Cột "Link nguồn"</label><select><option>A</option><option>B</option><option>C</option></select></div>
+            <div class="row"><label class="f">Cột "Link kết quả"</label><select><option>B</option><option>C</option><option>D</option></select></div>
+          </div>
+          <div class="help">Ngoài 2 cột bắt buộc, có thể thêm cột tùy chọn: website, thời gian đăng, trạng thái.</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="head">Xem trước dữ liệu sẽ ghi</div>
+        <div class="pad">
+          <table>
+            <thead>
+              <tr><th>Link nguồn</th><th>Link kết quả</th><th>Website</th><th>Thời gian</th></tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="sel-tag" style="color:#475569;background:#f8fafc;border-color:var(--line)">nguon.com/san-pham/ao-thun-nam-cao-cap.html</td>
+                <td class="sel-tag" style="color:#475569;background:#f8fafc;border-color:var(--line)">siteA.com/ao-thun-nam-cao-cap</td>
+                <td>siteA.com</td><td>15/10 08:20</td>
+              </tr>
+              <tr>
+                <td class="sel-tag" style="color:#475569;background:#f8fafc;border-color:var(--line)">nguon.com/san-pham/binh-giu-nhiet-500ml.html</td>
+                <td class="sel-tag" style="color:#475569;background:#f8fafc;border-color:var(--line)">siteA.com/binh-giu-nhiet-500ml</td>
+                <td>siteA.com</td><td>15/10 08:41</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="wrap" style="margin-top:14px">
+            <button class="btn ghost sm">Ghi thử 1 dòng</button>
+            <span class="grow"></span>
+            <button class="btn primary">Lưu cấu hình</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<title>Mockup 4 — Công việc đang làm</title>
+<link rel="stylesheet" href="app.css">
+</head>
+<body>
+<div class="window">
+  <div class="titlebar">
+    <div class="lights"><span class="r"></span><span class="y"></span><span class="g"></span></div>
+    <div class="apptitle">WP Multi Poster</div>
+    <div class="grow"></div>
+    <div class="pill">&#9679; 1 việc chờ duyệt &middot; 2 đang chạy</div>
+  </div>
+
+  <div class="topnav">
+    <button class="tab">Đăng bài</button>
+    <button class="tab">Cấu hình</button>
+    <button class="tab active">Công việc đang làm <span class="count">4</span></button>
+    <button class="tab">Lịch sử</button>
+  </div>
+
+  <div class="body">
+    <div class="jobs-layout">
+      <!-- DANH SÁCH CÔNG VIỆC -->
+      <div class="card">
+        <div class="jobs-head">
+          Công việc đang làm
+          <span class="badge b-ai">4</span>
+          <span class="grow"></span>
+          <button class="btn ghost sm">+ Tạo mới</button>
+        </div>
+        <div style="padding:12px">
+          <div class="jobs">
+            <div class="job sel">
+              <div class="jt">Áo Thun Nam Cao Cấp — Bền Đẹp, Giá Tốt 2026</div>
+              <div class="jmeta"><span class="st wait">Chờ duyệt</span> <span>siteA.com</span></div>
+              <div class="jurl">nguon.com/san-pham/ao-thun-nam-cao-cap.html</div>
+              <div class="jbar"><i style="width:100%"></i></div>
+            </div>
+
+            <div class="job">
+              <div class="jt">Giày Thể Thao Nam Năng Động 2026</div>
+              <div class="jmeta"><span class="st run">Đang tạo nội dung...</span> <span>shopB.vn</span></div>
+              <div class="jurl">nguon.com/san-pham/giay-the-thao-nam.html</div>
+              <div class="jbar"><i style="width:55%"></i></div>
+            </div>
+
+            <div class="job">
+              <div class="jt">Bình Giữ Nhiệt Inox 500ml Giữ Nóng 12h</div>
+              <div class="jmeta"><span class="st post">Đang đăng bài...</span> <span>siteA.com</span></div>
+              <div class="jurl">nguon.com/san-pham/binh-giu-nhiet-500ml.html</div>
+              <div class="jbar green"><i style="width:85%"></i></div>
+            </div>
+
+            <div class="job">
+              <div class="jt">Đồng Hồ Thông Minh ABC Series 9</div>
+              <div class="jmeta"><span class="st err">Lỗi: thiếu format content</span> <span>blogC.net</span></div>
+              <div class="jurl">nguon.com/san-pham/dong-ho-thong-minh-abc.html</div>
+              <div class="jbar red"><i style="width:0%"></i></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- KẾT QUẢ AI CHỜ DUYỆT (hiện khi bấm 1 task) -->
+      <div class="card">
+        <div class="head">
+          Kết quả AI — chờ duyệt
+          <span class="grow"></span>
+          <span class="badge b-ai">Provider: Gemini 2.5 Flash (free)</span>
+        </div>
+        <div class="pad">
+          <div class="toolbar">
+            <label class="f" style="margin:0">Tiêu đề</label>
+            <span class="grow"></span>
+            <button class="btn ghost">&#8635; Random tiêu đề</button>
+          </div>
+          <input class="input title-input" value="Áo Thun Nam Cao Cấp — Bền Đẹp, Giá Tốt 2026">
+
+          <div style="height:14px"></div>
+          <div class="toolbar">
+            <label class="f" style="margin:0">Focus keyword (từ khóa chính)</label>
+            <span class="grow"></span>
+            <button class="btn ghost">&#8635; Random</button>
+          </div>
+          <input class="input" value="áo thun nam cao cấp">
+
+          <div style="height:14px"></div>
+          <div class="toolbar">
+            <label class="f" style="margin:0">Description (mô tả SEO)</label>
+            <span class="grow"></span>
+            <button class="btn ghost">&#8635; Random</button>
+          </div>
+          <textarea class="input" style="min-height:64px;resize:vertical;line-height:1.5">Áo thun nam cao cấp chất liệu cotton 100% thoáng mát, bền đẹp, đủ size M–XXL. Giá tốt, giao nhanh toàn quốc. Xem ngay!</textarea>
+
+          <div style="height:14px"></div>
+          <div class="toolbar">
+            <label class="f" style="margin:0">Search tags (thẻ)</label>
+            <span class="grow"></span>
+            <button class="btn ghost">&#8635; Random</button>
+          </div>
+          <input class="input" value="áo thun nam, cotton, thời trang, cao cấp">
+          <div class="hint">Các thẻ cách nhau bởi dấu phẩy.</div>
+
+          <div style="height:14px"></div>
+          <div class="toolbar">
+            <label class="f" style="margin:0">Nội dung (soạn thảo trực tiếp — chèn được link/ảnh &amp; sửa HTML)</label>
+            <span class="grow"></span>
+            <button class="btn ghost">&#8635; Random nội dung</button>
+          </div>
+          <div class="rte">
+            <div class="rte-menu">
+              <span>File</span><span>Edit</span><span>View</span><span>Insert</span><span>Format</span><span>Tools</span><span>Table</span>
+            </div>
+            <div class="rte-toolbar">
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+              <button class="tb sq">&#8630;</button>
+              <button class="tb sq">&#8631;</button>
+              <span class="sep"></span>
+              <button class="tb">Paragraph &#9662;</button>
+              <span class="sep"></span>
+              <button class="tb"><b>B</b></button>
+              <button class="tb"><i>I</i></button>
+              <button class="tb"><u>U</u></button>
+              <button class="tb sq"><span>A<span class="swatch" style="display:block"></span></span></button>
+              <span class="sep"></span>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="8.5" cy="9.5" r="1.4"/><path d="M4.5 17l4.5-4.5L12 15.5l3-3 4.5 4.5"/></svg></button>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"/><polygon points="10.5,9.5 15.5,12 10.5,14.5"/></svg></button>
+              <span class="sep"></span>
+              <button class="tb">15.6pt &#9662;</button>
+              <span class="sep"></span>
+              <button class="tb sq active"><svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="10.5" x2="14" y2="10.5"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="4" y1="19.5" x2="14" y2="19.5"/></svg></button>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="10.5" x2="17" y2="10.5"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="7" y1="19.5" x2="17" y2="19.5"/></svg></button>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="10" y1="10.5" x2="20" y2="10.5"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="10" y1="19.5" x2="20" y2="19.5"/></svg></button>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="10.5" x2="20" y2="10.5"/><line x1="4" y1="15" x2="20" y2="15"/><line x1="4" y1="19.5" x2="20" y2="19.5"/></svg></button>
+              <span class="sep"></span>
+              <button class="tb sq active"><svg class="ico" viewBox="0 0 24 24"><circle class="dot" cx="5" cy="7" r="1.4"/><circle class="dot" cx="5" cy="12" r="1.4"/><circle class="dot" cx="5" cy="17" r="1.4"/><line x1="10" y1="7" x2="20" y2="7"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="17" x2="20" y2="17"/></svg></button>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><text x="3" y="9" font-size="8" fill="#334155" stroke="none" font-family="system-ui">1</text><text x="3" y="19" font-size="8" fill="#334155" stroke="none" font-family="system-ui">2</text><line x1="10" y1="7" x2="20" y2="7"/><line x1="10" y1="12" x2="20" y2="12"/><line x1="10" y1="17" x2="20" y2="17"/></svg></button>
+              <span class="sep"></span>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><polyline points="14,10 10,14 14,18"/><line x1="10" y1="14" x2="20" y2="14"/></svg></button>
+              <button class="tb sq"><svg class="ico" viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><polyline points="10,10 14,14 10,18"/><line x1="4" y1="14" x2="14" y2="14"/></svg></button>
+              <span class="sep"></span>
+              <button class="tb sq html" title="Chế độ HTML">&lt;/&gt;</button>
+            </div>
+            <div class="rte-body">
+              <p>Áo thun nam cao cấp là lựa chọn quen thuộc cho phong cách hằng ngày, mang lại sự thoải mái và lịch sự. Dưới đây là thông tin chi tiết về sản phẩm:</p>
+              <h2>1. Đặc điểm nổi bật</h2>
+              <p>Chất liệu cotton 100% thoáng mát, đường may tỉ mỉ và bền đẹp. Sản phẩm có đủ size M, L, XL, XXL và nhiều màu. Xem chi tiết tại <a href="https://nguon.com/san-pham/ao-thun-nam-cao-cap.html">trang sản phẩm</a>.</p>
+              <p>Chúng tôi tự hào cung cấp sản phẩm chính hãng, bảo hành đầy đủ và hỗ trợ kỹ thuật tận nơi trên toàn quốc.</p>
+              <p>Liên hệ ngay để nhận báo giá tốt nhất qua hotline <b>0909 399 174</b> hoặc email <b>thach.phan@ngochuyduong.com</b>.</p>
+            </div>
+            <div class="rte-status">
+              <span>p</span>
+              <span style="flex:1"></span>
+              <span>Ký tự: 612 &bull; Từ: 96</span>
+            </div>
+          </div>
+
+          <div style="height:14px"></div>
+          <label class="f">Ảnh</label>
+          <div class="thumb-row">
+            <div class="thumb sel"><div class="ph"><img src="anh-mau-1.svg" alt="Ảnh 1"></div>
+              <div class="cap">3 ảnh SP &middot; thanh TT #1</div>
+              <div class="tools"><button class="mini">Tải lên</button><button class="mini">&#8635; Random</button><button class="mini on">Sửa</button></div></div>
+            <div class="thumb"><div class="ph"><img src="anh-mau-2.svg" alt="Ảnh 2"></div>
+              <div class="cap">1 ảnh SP &middot; thanh TT #2</div>
+              <div class="tools"><button class="mini">Tải lên</button><button class="mini">&#8635; Random</button><button class="mini">Sửa</button></div></div>
+            <div class="thumb"><div class="ph"><img src="anh-mau-3.svg" alt="Ảnh 3"></div>
+              <div class="cap">2 ảnh SP &middot; thanh TT #1</div>
+              <div class="tools"><button class="mini">Tải lên</button><button class="mini">&#8635; Random</button><button class="mini">Sửa</button></div></div>
+          </div>
+
+          <div class="editor">
+            <div class="ehead">
+              Trình sửa ảnh trực tiếp — <span style="color:var(--accent)">Ảnh 1</span>
+              <span class="grow"></span>
+              <button class="btn ghost" style="padding:6px 10px;font-size:12px">&#8630; Hoàn tác</button>
+              <button class="btn ghost" style="padding:6px 10px;font-size:12px">&#8631; Làm lại</button>
+            </div>
+            <div class="ebody">
+              <div class="canvas-wrap">
+                <div class="stage">
+                  <img class="tpl" src="anh-mau-1.svg" alt="Ảnh mẫu">
+                  <div class="slot slot-tl">Logo site (cấu hình web)</div>
+                  <div class="slot slot-tr">Logo brand (AI tìm)</div>
+                  <div class="slot slot-c">Ảnh sản phẩm<br>(1–3 ảnh từ link nguồn)</div>
+                  <div class="slot slot-b">Thanh thông tin (là 1 hình ảnh)</div>
+                </div>
+                <div class="demo-note">Kéo để di chuyển từng vùng &bull; kéo góc để đổi kích thước &bull; <b>3 ảnh dùng chung 1 mẫu này</b>.</div>
+              </div>
+
+              <div class="controls">
+                <div class="ctl">
+                  <div class="lbl">Logo thương hiệu (trên-phải)<span class="from ai">AI tự tìm</span></div>
+                  <div style="display:flex;gap:8px">
+                    <input class="input" value="carten_logo.png">
+                    <button class="btn ghost" style="white-space:nowrap">Đổi</button>
+                  </div>
+                  <button class="btn ghost" style="padding:7px 12px;font-size:12.5px;margin-top:8px">&#10024; AI tìm lại logo thương hiệu</button>
+                  <div class="hint">Đổi nếu chọn nhầm logo. Nếu AI không tìm ra, dùng logo dự phòng đã chọn ở bước 1.</div>
+                </div>
+
+                <div class="ctl">
+                  <div class="lbl">Khổ ảnh</div>
+                  <div class="seg"><button class="on">Vuông 1:1</button></div>
+                  <div class="hint">Tất cả ảnh dùng khổ vuông 1:1.</div>
+                </div>
+
+                <div class="ctl">
+                  <div class="lbl">Logo website (trên-trái)<span class="from">từ Cấu hình website</span></div>
+                  <div class="prov-mini">siteA_logo.png</div>
+                  <div class="lbl" style="margin-top:10px">Kích thước <span class="v">120 px</span></div>
+                  <input class="range" type="range" min="60" max="240" value="120">
+                </div>
+
+                <div class="ctl">
+                  <div class="lbl">Ảnh sản phẩm — số lượng</div>
+                  <div class="seg"><button class="on">1 ảnh</button><button>2 ảnh</button><button>3 ảnh</button></div>
+                  <div class="hint">Nguồn có bao nhiêu ảnh thì dùng bấy nhiêu.</div>
+                </div>
+                <div class="ctl">
+                  <div class="lbl">Ảnh sản phẩm — kích thước &amp; vị trí <span class="v">150 px</span></div>
+                  <input class="range" type="range" min="60" max="300" value="150">
+                </div>
+                <div class="ctl">
+                  <div class="switch"><b style="font-weight:600">Xoá nền → trong suốt</b><span class="track"></span></div>
+                </div>
+
+                <div class="ctl">
+                  <div class="lbl">Thanh thông tin dưới<span class="from">từ Cấu hình website</span></div>
+                  <div class="prov-mini">siteA_footer_bar_1.png</div>
+                  <div class="prov-mini">siteA_footer_bar_2.png</div>
+                  <div class="lbl" style="margin-top:10px">Áp dụng</div>
+                  <div class="seg"><button class="on">Random (mặc định)</button><button>Chọn thủ công</button></div>
+                  <div class="hint">Mỗi ảnh sẽ <b>random</b> chọn 1 trong 2 hình thanh thông tin ở trên.</div>
+                </div>
+
+                <div class="ctl">
+                  <div class="lbl">Watermark chéo (https://siteA.com)<span class="from">từ Cấu hình website</span></div>
+                  <div class="lbl" style="margin-top:10px">Độ mờ <span class="v">7%</span></div>
+                  <input class="range" type="range" min="0" max="40" value="7">
+                </div>
+
+                <div class="eactions">
+                  <button class="btn ghost" style="padding:7px 12px;font-size:12.5px">Đặt lại</button>
+                  <span class="grow"></span>
+                  <button class="btn primary" style="padding:7px 12px;font-size:12.5px">Lưu &amp; áp dụng</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="hint" style="margin-top:16px">Bấm <b>Đăng bài</b> &rarr; phần mềm mở trình duyệt và <b>điền sẵn thông tin theo kịch bản</b> của website. Bạn tự kiểm tra rồi bấm nút Đăng trên WordPress.</div>
+          <div class="foot">
+            <span class="hint" style="margin:0">Kiểm tra: đúng format &amp; đủ 3 ảnh</span>
+            <span class="spacer"></span>
+            <button class="btn ghost">Lưu nháp</button>
+            <button class="btn green">OK — Đăng bài</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,57 @@
+name: build-windows
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Cài thư viện
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Tải Chromium kèm theo app
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: "0"
+        run: python -m playwright install chromium
+
+      - name: Kiểm tra ứng dụng khởi động (smoke test)
+        env:
+          QT_QPA_PLATFORM: offscreen
+          HTDB_DATA_DIR: ${{ runner.temp }}\htdb_smoke
+        run: python -c "from app.ui.main_window import MainWindow; from PySide6.QtWidgets import QApplication; a=QApplication([]); w=MainWindow(); print('OK', w.stack.count())"
+
+      - name: Build .exe (PyInstaller)
+        env:
+          PLAYWRIGHT_BROWSERS_PATH: "0"
+        run: >
+          pyinstaller --noconfirm --clean --windowed
+          --name HoTroDangBai
+          --collect-all PySide6
+          --collect-all playwright
+          --collect-all cryptography
+          --collect-all bs4
+          --collect-all lxml
+          --hidden-import app
+          main.py
+
+      - name: Đóng gói zip
+        shell: pwsh
+        run: Compress-Archive -Path dist/HoTroDangBai/* -DestinationPath HoTroDangBai-windows.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: HoTroDangBai-windows
+          path: HoTroDangBai-windows.zip
+          if-no-files-found: error

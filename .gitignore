@@ -1,0 +1,19 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+*.spec
+
+# App data / secrets
+*.key
+config.json
+sessions/
+media/
+
+# OS
+.DS_Store
+Thumbs.db
