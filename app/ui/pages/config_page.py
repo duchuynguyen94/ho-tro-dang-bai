@@ -235,7 +235,7 @@ class SitePanel(QWidget):
         head.addStretch(1)
         save = QPushButton("Lưu")
         save.setProperty("class", "primary")
-        save.clicked.connect(self._save)
+        save.clicked.connect(lambda: self._save())
         head.addWidget(save)
         outer.addLayout(head)
 
@@ -400,8 +400,8 @@ class SitePanel(QWidget):
             self.rec_status.setText(f"Đã dừng ghi. Có {len(self._steps)} bước — bấm Lưu để lưu kịch bản.")
             return
 
-        # Lưu cấu hình trước để dùng đúng URL/tài khoản
-        self._save()
+        # Lưu cấu hình trước để dùng đúng URL/tài khoản (không hiện toast)
+        self._save(silent=True)
         self._steps = []
         self._refresh_steps()
 
@@ -451,7 +451,7 @@ class SitePanel(QWidget):
             self.login_status.setText("Đã dừng.")
             return
 
-        self._save()
+        self._save(silent=True)
         self.login_worker = LoginWorker(self.site)
         self.login_worker.log.connect(self.login_status.setText)
         self.login_worker.ok.connect(
@@ -482,7 +482,7 @@ class SitePanel(QWidget):
         self.deleted.emit()
 
     # ------------------------------------------------------------------ #
-    def _save(self) -> None:
+    def _save(self, silent: bool = False) -> None:
         s = self.site
         s.name = self.name_edit.text().strip()
         s.url = self.url_edit.text().strip()
@@ -497,7 +497,8 @@ class SitePanel(QWidget):
             s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
         self.store.upsert_site(s)
         self.store.save()
-        show_toast(self, "Đã lưu website")
+        if not silent:
+            show_toast(self, "Đã lưu website")
         self.saved.emit()
 
 

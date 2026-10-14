@@ -17,3 +17,6 @@ media/
 # OS
 .DS_Store
 Thumbs.db
+
+# Gói build tải về
+dist-windows/
