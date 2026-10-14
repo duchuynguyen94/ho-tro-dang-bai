@@ -42,9 +42,21 @@ def _openai_compatible(base_url: str, model: str, prompt: str, api_key: str) -> 
         raise AIError(f"Phản hồi không hợp lệ: {str(data)[:200]}") from exc
 
 
-def _gemini(model: str, prompt: str, api_key: str) -> str:
-    if not api_key:
-        raise AIError("Chưa có API key cho Gemini.")
+def _gemini_models(api_key: str) -> list[str]:
+    """Danh sách model Gemini khả dụng cho key này."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models?key={api_key}"
+    r = httpx.get(url, headers=UA, timeout=30)
+    r.raise_for_status()
+    out: list[str] = []
+    for m in r.json().get("models", []):
+        name = str(m.get("name", "")).replace("models/", "")
+        methods = m.get("supportedGenerationMethods") or []
+        if "generateContent" in methods and "embedding" not in name and "aqa" not in name:
+            out.append(name)
+    return out
+
+
+def _gemini_call(model: str, prompt: str, api_key: str):
     url = (
         f"https://generativelanguage.googleapis.com/v1beta/models/"
         f"{model}:generateContent?key={api_key}"
@@ -53,14 +65,46 @@ def _gemini(model: str, prompt: str, api_key: str) -> str:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.8, "responseMimeType": "application/json"},
     }
-    r = httpx.post(url, json=body, headers={"Content-Type": "application/json", **UA}, timeout=TIMEOUT)
-    if r.status_code >= 400:
-        raise AIError(f"Gemini trả về {r.status_code}: {r.text[:200]}")
-    data = r.json()
+    return httpx.post(url, json=body, headers={"Content-Type": "application/json", **UA}, timeout=TIMEOUT)
+
+
+def _gemini_text(resp) -> str:
+    data = resp.json()
     try:
         return data["candidates"][0]["content"]["parts"][0]["text"] or ""
     except (KeyError, IndexError, TypeError) as exc:  # pragma: no cover
         raise AIError(f"Phản hồi không hợp lệ: {str(data)[:200]}") from exc
+
+
+def _gemini(model: str, prompt: str, api_key: str) -> str:
+    if not api_key:
+        raise AIError("Chưa có API key cho Gemini.")
+    model = model or "gemini-3.8-flash"
+    r = _gemini_call(model, prompt, api_key)
+
+    # Model không còn khả dụng -> tự dò model khác đang hoạt động
+    if r.status_code == 404:
+        tried: list[str] = []
+        try:
+            for cand in _gemini_models(api_key):
+                low = cand.lower()
+                if "flash" not in low or "image" in low or "embedding" in low or "tts" in low:
+                    continue
+                tried.append(cand)
+                r2 = _gemini_call(cand, prompt, api_key)
+                if r2.status_code < 400:
+                    return _gemini_text(r2)
+        except Exception:
+            pass
+        hint = f" Model đang hoạt động: {', '.join(tried[:5])}." if tried else ""
+        raise AIError(
+            f"Model “{model}” không còn khả dụng (404). "
+            f"Vào Cấu hình → AI nội dung để đổi model.{hint}"
+        )
+
+    if r.status_code >= 400:
+        raise AIError(f"Gemini trả về {r.status_code}: {r.text[:200]}")
+    return _gemini_text(r)
 
 
 # --------------------------------------------------------------------------- #

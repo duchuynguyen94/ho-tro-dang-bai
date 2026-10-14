@@ -59,6 +59,13 @@ class Store:
             if not s.get("watermark"):
                 s["watermark"] = s.get("url", "")
 
+        # cập nhật model Gemini cũ đã bị Google bỏ
+        old_models = {"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"}
+        providers = (self.data.get("ai_content") or {}).get("providers") or {}
+        g = providers.get("gemini") or {}
+        if g.get("model") in old_models:
+            g["model"] = "gemini-3.8-flash"
+
     def save(self) -> None:
         p = config.config_path()
         tmp = p.with_suffix(".json.tmp")

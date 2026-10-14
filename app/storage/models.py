@@ -229,7 +229,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "active": "gemini",
         "fallback": True,
         "providers": {
-            "gemini": {"api_key_enc": "", "model": "gemini-2.5-flash"},
+            "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash"},
             "groq": {"api_key_enc": "", "model": "llama-3.3-70b-versatile"},
             "openrouter": {"api_key_enc": "", "model": "meta-llama/llama-3.3-70b-instruct:free"},
             "ollama": {"base_url": "http://localhost:11434", "model": "qwen2.5:7b"},
