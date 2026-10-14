@@ -12,6 +12,16 @@ from ..config import output_dir
 from ..images import compose, save_composed
 
 
+def _remove_bg_opts(store) -> tuple[bool, int]:
+    cfg = (store.ai_image or {}).get("remove_bg") or {}
+    enabled = cfg.get("mode", "off") != "off"
+    try:
+        thresh = max(10, int(float(cfg.get("threshold", 0.5)) * 100))
+    except (TypeError, ValueError):
+        thresh = 42
+    return enabled, thresh
+
+
 def pick_footer(site, mode: str = "") -> str:
     bars = [b for b in (site.footer_bars or []) if b]
     if not bars:
@@ -25,7 +35,8 @@ def pick_footer(site, mode: str = "") -> str:
 
 
 def build_template_images(site, task, brand_logo: str, product_paths: list[str],
-                          footer_mode: str = "", log=None, rules: list[str] | None = None) -> list[dict]:
+                          footer_mode: str = "", log=None, rules: list[str] | None = None,
+                          remove_bg: bool = False, remove_bg_thresh: int = 42) -> list[dict]:
     """Ghép ảnh theo mẫu (dùng cho cả tạo mới và tạo lại ảnh)."""
     import re as _re
 
@@ -53,7 +64,10 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             brand_logo=brand_logo,
             products=prods[:3],
             footer_bar=footer,
+            frame=site.frame_path,
             watermark=site.watermark_text,
+            remove_bg=remove_bg,
+            remove_bg_thresh=remove_bg_thresh,
         )
         # Rule đặt tên ảnh (nếu có)
         rule = (rules[i] if i < len(rules) else "").strip()
@@ -119,9 +133,11 @@ class ContentWorker(QThread):
 
             # Ghép ảnh theo mẫu
             self.log.emit(f"Đang ghép {t.image_count} ảnh theo mẫu…")
+            rb, th = _remove_bg_opts(self.store)
             images = build_template_images(site, t, brand_logo, product_paths,
                                            t.footer_mode, log=self.log.emit,
-                                           rules=self.store.image_rules)
+                                           rules=self.store.image_rules,
+                                           remove_bg=rb, remove_bg_thresh=th)
             self.progress.emit(100)
 
             result = dict(data)
@@ -184,11 +200,13 @@ class ImagesWorker(QThread):
     def run(self) -> None:
         try:
             r = self.task.result or {}
+            rb, th = _remove_bg_opts(self.store)
             images = build_template_images(
                 self.site, self.task,
                 r.get("brand_logo", ""), list(r.get("product_images") or []),
                 self.footer_mode, log=self.log.emit,
                 rules=self.store.image_rules,
+                remove_bg=rb, remove_bg_thresh=th,
             )
             self.ok.emit(images)
         except Exception as exc:
@@ -303,6 +321,104 @@ class LoginWorker(QThread):
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))
+
+
+class ImageEditWorker(QThread):
+    """Sửa 1 ảnh bằng AI theo yêu cầu người dùng."""
+
+    log = Signal(str)
+    ok = Signal(str)          # đường dẫn ảnh mới
+    failed = Signal(str)
+
+    def __init__(self, store, task, index: int, prompt: str) -> None:
+        super().__init__()
+        self.store = store
+        self.task = task
+        self.index = index
+        self.prompt = prompt
+
+    def run(self) -> None:
+        from ..images.aiedit import edit_image
+
+        try:
+            images = (self.task.result or {}).get("images") or []
+            if self.index >= len(images):
+                raise RuntimeError("Không tìm thấy ảnh để sửa.")
+            src = images[self.index].get("path", "")
+            path = edit_image(self.store, src, self.prompt, log=self.log.emit)
+            self.ok.emit(path)
+        except Exception as exc:
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
+class PostRecordWorker(QThread):
+    """Mở trình duyệt để đăng bài bằng tay, đồng thời GHI lại kịch bản."""
+
+    log = Signal(str)
+    step = Signal(dict)
+    ok = Signal(list)          # danh sách bước ghi được
+    failed = Signal(str)
+
+    def __init__(self, site, task=None) -> None:
+        super().__init__()
+        self.site = site
+        self.task = task
+        self._running = True
+        self.steps: list[dict] = []
+
+    def stop(self) -> None:
+        self._running = False
+
+    def _on_step(self, _source, payload: dict) -> None:
+        if self.steps and self.steps[-1].get("selector") == payload.get("selector") \
+                and self.steps[-1].get("value") == payload.get("value"):
+            return
+        self.steps.append(payload)
+        self.step.emit(payload)
+
+    def run(self) -> None:
+        from ..wp import WPBrowser
+        from ..wp import recorder
+
+        br = None
+        try:
+            br = WPBrowser(headless=False, site_id=self.site.id)
+            page = br.open()
+            page.expose_binding("__wpRecordStep", self._on_step)
+            page.add_init_script(recorder.RECORDER_JS)
+
+            self.log.emit("Đang đăng nhập WordPress…")
+            try:
+                br.login(self.site)
+            except Exception:
+                pass
+
+            target = self.site.new_post_url or self.site.url
+            if target:
+                try:
+                    page.goto(target, wait_until="domcontentloaded", timeout=25000)
+                except Exception as exc:
+                    self.log.emit(f"Không mở được địa chỉ đã cấu hình ({str(exc)[:80]}).")
+            self.log.emit("● Đang ghi: đăng bài bằng tay rồi bấm “Dừng & Lưu kịch bản”.")
+
+            while self._running:
+                try:
+                    if page.is_closed():
+                        break
+                    page.wait_for_timeout(300)
+                except Exception:
+                    break
+            self.ok.emit(list(self.steps))
+        except Exception as exc:
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+        finally:
+            try:
+                if br:
+                    br.close()
+            except Exception:
+                pass
 
 
 class RecordWorker(QThread):

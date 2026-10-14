@@ -66,6 +66,11 @@ class Store:
         if g.get("model") in old_models:
             g["model"] = "gemini-3.8-flash"
 
+        img_providers = (self.data.get("ai_image") or {}).get("providers") or {}
+        gi = img_providers.get("gemini") or {}
+        if gi.get("model") in ("gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation", ""):
+            gi["model"] = "gemini-3.8-flash-image"
+
     def save(self) -> None:
         p = config.config_path()
         tmp = p.with_suffix(".json.tmp")
@@ -137,6 +142,25 @@ class Store:
 
     def has_format_content(self) -> bool:
         return bool((self.data.get("formats") or {}).get("content"))
+
+    # ------------------------------------------------------------------ #
+    # Log lỗi
+    # ------------------------------------------------------------------ #
+    @property
+    def error_log(self) -> list[dict]:
+        return list(self.data.get("error_log") or [])
+
+    def log_error(self, source: str, message: str) -> None:
+        from .models import now_iso
+
+        log = self.data.setdefault("error_log", [])
+        log.append({"time": now_iso(), "source": source, "message": str(message)[:3000]})
+        del log[:-500]
+        self.save()
+
+    def clear_error_log(self) -> None:
+        self.data["error_log"] = []
+        self.save()
 
     @property
     def image_rules(self) -> list[str]:

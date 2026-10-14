@@ -66,6 +66,30 @@ def remove_background_simple(img: Image.Image, threshold: int = 245) -> Image.Im
     return img
 
 
+def remove_background_auto(img: Image.Image, thresh: int = 42) -> Image.Image:
+    """Xoá nền theo vùng liền kề từ 4 góc (flood fill) -> PNG trong suốt."""
+    img = img.convert("RGBA")
+    w, h = img.size
+    if w < 3 or h < 3:
+        return img
+    for xy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
+        try:
+            ImageDraw.floodfill(img, xy, (0, 0, 0, 0), thresh=thresh)
+        except Exception:
+            continue
+    return img
+
+
+def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Image.Image | None:
+    """Mở 1 ảnh sản phẩm, tuỳ chọn xoá nền."""
+    img = _load_rgba(path)
+    if img is None:
+        return None
+    if remove_bg:
+        img = remove_background_auto(img, thresh)
+    return img
+
+
 def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 18) -> None:
     if not text:
         return
@@ -93,9 +117,12 @@ def compose(
     brand_logo: str = "",
     products: list[str] | None = None,
     footer_bar: str = "",
+    frame: str = "",
     watermark: str = "",
     watermark_opacity: int = 18,
     transparent_bg: bool = False,
+    remove_bg: bool = False,
+    remove_bg_thresh: int = 42,
 ) -> Image.Image:
     products = [p for p in (products or []) if p]
     bg = (255, 255, 255, 0) if transparent_bg else (255, 255, 255, 255)
@@ -117,7 +144,7 @@ def compose(
     bottom = size - footer_h - PAD
     area_h = max(100, bottom - top)
 
-    prods = [im for im in (_load_rgba(p) for p in products) if im is not None]
+    prods = [im for im in (prepare_product(p, remove_bg, remove_bg_thresh) for p in products) if im is not None]
     if prods:
         n = min(len(prods), 3)
         prods = prods[:n]
@@ -147,6 +174,12 @@ def compose(
     if brand is not None:
         brand = _fit(brand, int(size * 0.34), int(size * 0.13))
         base.alpha_composite(brand, (size - PAD - brand.size[0], PAD))
+
+    # --- khung viền (frame overlay) ---
+    fr = _load_rgba(frame)
+    if fr is not None:
+        fr2 = fr.resize((size, size), Image.LANCZOS)
+        base.alpha_composite(fr2)
 
     # --- watermark chéo ---
     _draw_diagonal_watermark(base, watermark, watermark_opacity)

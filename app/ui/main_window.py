@@ -21,16 +21,26 @@ from ..storage.models import (
     STATUS_GENERATING,
     STATUS_POSTING,
     STATUS_REVIEW,
+    Script,
+    ScriptStep,
 )
 from ..storage.store import Store
 from .pages.config_page import ConfigPage
+from .pages.error_log_page import ErrorLogPage
 from .pages.history_page import HistoryPage
 from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
 from .style import app_font
-from .workers import ContentWorker, FieldWorker, ImagesWorker, PostWorker
+from .workers import (
+    ContentWorker,
+    FieldWorker,
+    ImageEditWorker,
+    ImagesWorker,
+    PostRecordWorker,
+    PostWorker,
+)
 
-NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Lịch sử"]
+NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Lịch sử", "Log lỗi"]
 
 
 class MainWindow(QMainWindow):
@@ -41,6 +51,7 @@ class MainWindow(QMainWindow):
         self.resize(1240, 820)
         self.setFont(app_font())
         self._workers: list = []
+        self.record_worker = None
         self._build()
 
     # ------------------------------------------------------------------ #
@@ -89,7 +100,9 @@ class MainWindow(QMainWindow):
         self.config_page = ConfigPage(self.store)
         self.jobs_page = JobsPage(self.store)
         self.history_page = HistoryPage(self.store)
-        for page in (self.post_page, self.config_page, self.jobs_page, self.history_page):
+        self.error_log_page = ErrorLogPage(self.store)
+        for page in (self.post_page, self.config_page, self.jobs_page,
+                     self.history_page, self.error_log_page):
             self.stack.addWidget(page)
         v.addWidget(self.stack, 1)
 
@@ -102,6 +115,9 @@ class MainWindow(QMainWindow):
         self.jobs_page.regenerate_images.connect(self._on_regenerate_images)
         self.jobs_page.delete_task.connect(self._on_delete_task)
         self.jobs_page.post.connect(self._on_post_task)
+        self.jobs_page.post_and_record.connect(self._on_post_and_record)
+        self.jobs_page.stop_record.connect(self._on_stop_record)
+        self.jobs_page.ai_edit.connect(self._on_ai_edit)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -124,6 +140,8 @@ class MainWindow(QMainWindow):
             self.jobs_page.refresh()
         elif index == 3:
             self.history_page.refresh()
+        elif index == 4:
+            self.error_log_page.refresh()
         elif index == 0:
             self.post_page.reload_sites()
 
@@ -185,6 +203,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.refresh()
         self.jobs_page.select_task(fresh.id)
         self._refresh_count()
+        self._log_err("Tạo nội dung", err)
         self.status("Lỗi tạo nội dung — xem chi tiết trong panel bên phải.")
 
     def _on_delete_task(self, task_id: str) -> None:
@@ -269,6 +288,19 @@ class MainWindow(QMainWindow):
         if not site:
             return
         self.jobs_page._save()
+
+        if not (site.script and site.script.steps):
+            ans = QMessageBox.question(
+                self,
+                "Chưa có kịch bản",
+                "Website này chưa có kịch bản đăng bài.\nBạn muốn tạo kịch bản ngay bây giờ?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if ans == QMessageBox.Yes:
+                self._on_post_and_record(task)
+                return
+
         task.status = STATUS_POSTING
         self.store.upsert_task(task)
         self.store.save()
@@ -299,6 +331,7 @@ class MainWindow(QMainWindow):
         fresh.message = err
         self.store.upsert_task(fresh)
         self.store.save()
+        self._log_err("Đăng bài", err)
         self.jobs_page.refresh()
         QMessageBox.warning(self, "Lỗi đăng bài", err)
 
@@ -313,6 +346,87 @@ class MainWindow(QMainWindow):
             self.status("Đã ghi kết quả vào Google Sheets.")
         except Exception as exc:
             self.status(f"Không ghi được Google Sheets: {exc}")
+
+    # ------------------------------------------------------------------ #
+    def _log_err(self, source: str, message: str) -> None:
+        self.store.log_error(source, message)
+        self.error_log_page.refresh()
+
+    def _on_post_and_record(self, task) -> None:
+        site = self.store.get_site(task.site_id)
+        if not site:
+            return
+        self.jobs_page._save()
+        if self.record_worker and self.record_worker.isRunning():
+            self.status("Đang ghi kịch bản rồi…")
+            return
+
+        worker = PostRecordWorker(site, task)
+        self.record_worker = worker
+        worker.log.connect(lambda m: (self.status(m), self.jobs_page.set_recording(True, m)))
+        worker.step.connect(
+            lambda _s: self.jobs_page.set_recording(True, f"Đã ghi {len(worker.steps)} bước…")
+        )
+        worker.ok.connect(lambda steps: self._on_record_done(site, steps))
+        worker.failed.connect(self._on_record_failed)
+        worker.finished.connect(lambda: self._cleanup(worker))
+        self._workers.append(worker)
+        self.jobs_page.set_recording(True, "Đang mở trình duyệt…")
+        worker.start()
+
+    def _on_stop_record(self) -> None:
+        if self.record_worker:
+            self.status("Đang dừng ghi…")
+            self.record_worker.stop()
+
+    def _on_record_done(self, site, steps) -> None:
+        self.jobs_page.set_recording(False)
+        self.record_worker = None
+        if not steps:
+            self.status("Không ghi được bước nào — kịch bản giữ nguyên.")
+            return
+        site.script = Script(steps=[ScriptStep.from_dict(s) for s in steps])
+        self.store.upsert_site(site)
+        self.store.save()
+        self.status(f"Đã lưu kịch bản ({len(steps)} bước) cho {site.name}.")
+        QMessageBox.information(
+            self, "Đã lưu kịch bản",
+            f"Đã ghi và lưu {len(steps)} bước vào cấu hình của {site.name}.",
+        )
+
+    def _on_record_failed(self, err: str) -> None:
+        self.jobs_page.set_recording(False)
+        self.record_worker = None
+        self._log_err("Ghi kịch bản", err)
+        self.status("Lỗi ghi kịch bản — xem tab Log lỗi.")
+
+    def _on_ai_edit(self, task, index: int, prompt: str) -> None:
+        if not self.store.get_site(task.site_id):
+            return
+        worker = ImageEditWorker(self.store, task, index, prompt)
+        worker.log.connect(self.status)
+        worker.ok.connect(lambda path: self._on_ai_edit_ok(task, index, path))
+        worker.failed.connect(self._on_ai_edit_failed)
+        worker.finished.connect(lambda: self._cleanup(worker))
+        self._workers.append(worker)
+        worker.start()
+        self.status("Đang sửa ảnh bằng AI…")
+
+    def _on_ai_edit_failed(self, err: str) -> None:
+        self._log_err("AI sửa ảnh", err)
+        self.status("Lỗi AI sửa ảnh — xem tab Log lỗi.")
+
+    def _on_ai_edit_ok(self, task, index: int, path: str) -> None:
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        images = fresh.result.setdefault("images", [])
+        while len(images) <= index:
+            images.append({"path": "", "footer": ""})
+        images[index] = {**images[index], "path": path}
+        self.store.upsert_task(fresh)
+        self.store.save()
+        self.jobs_page.current = fresh
+        self.jobs_page._load(fresh)
+        self.status("Đã sửa ảnh bằng AI.")
 
     # ------------------------------------------------------------------ #
     def _cleanup(self, worker) -> None:

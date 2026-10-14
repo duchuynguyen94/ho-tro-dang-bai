@@ -104,6 +104,7 @@ class Site:
     username: str = ""
     password_enc: str = ""
     logo_path: str = ""
+    frame_path: str = ""
     footer_bars: list[str] = field(default_factory=list)   # 2 hình thanh thông tin
     footer_mode: str = "random"                            # random|bar1|bar2
     watermark: str = ""                                    # https://site.com
@@ -136,6 +137,7 @@ class Site:
             "username": self.username,
             "password_enc": self.password_enc,
             "logo_path": self.logo_path,
+            "frame_path": self.frame_path,
             "footer_bars": list(self.footer_bars),
             "footer_mode": self.footer_mode,
             "watermark": self.watermark,
@@ -154,6 +156,7 @@ class Site:
             username=d.get("username", ""),
             password_enc=d.get("password_enc", ""),
             logo_path=d.get("logo_path", ""),
+            frame_path=d.get("frame_path", ""),
             footer_bars=list(d.get("footer_bars") or []),
             footer_mode=d.get("footer_mode", "random"),
             watermark=d.get("watermark", ""),
@@ -242,7 +245,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "remove_bg": {"mode": "local", "threshold": 0.5},
         "active": "gemini",
         "providers": {
-            "gemini": {"api_key_enc": "", "model": "gemini-2.5-flash-image"},
+            "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash-image"},
             "fal": {"api_key_enc": "", "model": "flux-kontext/dev"},
             "openai": {"api_key_enc": "", "model": "gpt-image-1"},
             "off": {},

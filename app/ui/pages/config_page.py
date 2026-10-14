@@ -30,7 +30,7 @@ from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
 from ..style import Card
 from ..toast import show_toast
-from ..workers import LoginWorker, RecordWorker
+from ..workers import LoginWorker
 
 IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
 FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.pdf *.doc *.docx);;Tất cả (*.*)"
@@ -138,12 +138,10 @@ class ConfigPage(QWidget):
         ai_c = AIContentPanel(self.store)
         ai_i = AIImagePanel(self.store)
         fmt = FormatPanel(self.store, self.changed.emit)
-        sheets = SheetsPanel(self.store)
         for key, panel, label in [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
             ("format", fmt, "Format Rule"),
-            ("sheets", sheets, "Google Sheets"),
         ]:
             self._panels[key] = panel
             self.stack.addWidget(panel)
@@ -221,7 +219,6 @@ class SitePanel(QWidget):
         self.site = store.get_site(site.id) or site
         self._steps: list[dict] = [s.to_dict() for s in (self.site.script.steps if self.site.script else [])]
         self.login_worker: LoginWorker | None = None
-        self.record_worker: RecordWorker | None = None
         self._build()
         self._load()
 
@@ -297,33 +294,29 @@ class SitePanel(QWidget):
         v.setContentsMargins(12, 12, 12, 12)
 
         bar = QHBoxLayout()
-        self.rec_btn = QPushButton("● Bắt đầu ghi")
-        self.rec_btn.setStyleSheet(
-            "background:#dc2626;color:#fff;border:none;border-radius:16px;padding:8px 18px;font-weight:700;"
-        )
-        self.rec_btn.clicked.connect(self._toggle_record)
-        bar.addWidget(self.rec_btn)
-        bar.addStretch(1)
         for label, slot in [
-            ("⬇ Export kịch bản", self._export),
-            ("⬆ Import kịch bản", self._import),
+            ("⬇ Export", self._export),
+            ("⬆ Import", self._import),
+            ("🗑 Xoá kịch bản", self._clear_script),
         ]:
             b = QPushButton(label)
             b.setProperty("class", "ghost")
             b.clicked.connect(slot)
             bar.addWidget(b)
+        bar.addStretch(1)
+        save = QPushButton("Lưu thay đổi")
+        save.setProperty("class", "primary")
+        save.clicked.connect(self._save_steps)
+        bar.addWidget(save)
         v.addLayout(bar)
 
         self.script_table = QTableWidget(0, 4)
-        self.script_table.setHorizontalHeaderLabels(["#", "Hành động", "Selector ưu tiên (HTML)", "Nguồn"])
+        self.script_table.setHorizontalHeaderLabels(
+            ["#", "Hành động", "Selector ưu tiên (HTML)", "Nguồn"]
+        )
         self.script_table.horizontalHeader().setStretchLastSection(True)
-        self.script_table.setColumnWidth(2, 460)
+        self.script_table.setColumnWidth(2, 420)
         v.addWidget(self.script_table, 1)
-
-        self.rec_status = QLabel("Chưa ghi kịch bản.")
-        self.rec_status.setProperty("class", "hint")
-        self.rec_status.setWordWrap(True)
-        v.addWidget(self.rec_status)
         return w
 
     # ---------------- Logo / Khung / Watermark ---------------- #
@@ -356,6 +349,15 @@ class SitePanel(QWidget):
         grid.addWidget(QLabel("Thanh thông tin dưới — hình 2"), 2, 0)
         grid.addWidget(self.bar2_edit, 2, 1)
         grid.addWidget(c2, 2, 2)
+
+        self.frame_edit = QLineEdit()
+        self.frame_edit.setReadOnly(True)
+        c3 = QPushButton("Chọn khung")
+        c3.setProperty("class", "ghost")
+        c3.clicked.connect(lambda: self._pick_into(self.frame_edit, "Khung viền (PNG trong suốt, phủ lên ảnh)"))
+        grid.addWidget(QLabel("Khung viền (frame)"), 3, 0)
+        grid.addWidget(self.frame_edit, 3, 1)
+        grid.addWidget(c3, 3, 2)
         return w
 
     # ------------------------------------------------------------------ #
@@ -367,6 +369,7 @@ class SitePanel(QWidget):
         self.user_edit.setText(s.username)
         self.pass_edit.setText(s.get_password())
         self.logo_edit.setText(s.logo_path)
+        self.frame_edit.setText(s.frame_path)
         self.bar1_edit.setText(s.footer_bars[0] if len(s.footer_bars) > 0 else "")
         self.bar2_edit.setText(s.footer_bars[1] if len(s.footer_bars) > 1 else "")
         self._refresh_steps()
@@ -391,38 +394,42 @@ class SitePanel(QWidget):
         edit.setText(Store.import_file(path, dest_dir))
 
     # ------------------------------------------------------------------ #
-    def _toggle_record(self) -> None:
+    def _save_steps(self) -> None:
+        steps: list[dict] = []
+        for i in range(self.script_table.rowCount()):
+            old = dict(self._steps[i]) if i < len(self._steps) else {}
+            old["note"] = self._cell(i, 1)
+            old["selector"] = self._cell(i, 2)
+            old.setdefault("action", "click")
+            old.setdefault("value", "")
+            old.setdefault("selectors", [])
+            old.setdefault("source", "recorded")
+            steps.append(old)
+        self._steps = steps
+        self.site.script = Script(steps=[ScriptStep.from_dict(x) for x in steps]) if steps else None
+        self.store.upsert_site(self.site)
+        self.store.save()
+        show_toast(self, "Đã lưu kịch bản")
+
+    def _cell(self, row: int, col: int) -> str:
+        item = self.script_table.item(row, col)
+        return item.text() if item else ""
+
+    def _clear_script(self) -> None:
         from PySide6.QtWidgets import QMessageBox
 
-        if self.record_worker and self.record_worker.isRunning():
-            self.record_worker.stop()
-            self.record_worker = None
-            self.rec_btn.setText("● Bắt đầu ghi")
-            self.rec_status.setText(f"Đã dừng ghi. Có {len(self._steps)} bước — bấm Lưu để lưu kịch bản.")
+        ans = QMessageBox.question(
+            self, "Xoá kịch bản", "Xoá toàn bộ kịch bản của website này?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if ans != QMessageBox.Yes:
             return
-
-        # Lưu cấu hình trước để dùng đúng URL/tài khoản (không hiện toast)
-        self._save(silent=True)
         self._steps = []
+        self.site.script = None
+        self.store.upsert_site(self.site)
+        self.store.save()
         self._refresh_steps()
-
-        self.rec_status.setText("Đang mở trình duyệt… nếu Chrome không mở được, hãy đóng các cửa sổ Chrome khác của website này rồi thử lại.")
-        worker = RecordWorker(self.site)
-        worker.step.connect(self._on_step)
-        worker.log.connect(self.rec_status.setText)
-        worker.failed.connect(lambda err: self.rec_status.setText("Lỗi ghi kịch bản: " + err))
-        worker.finished.connect(self._on_record_finished)
-        self.record_worker = worker
-        worker.start()
-        self.rec_btn.setText("■ Dừng ghi")
-
-    def _on_record_finished(self) -> None:
-        self.rec_btn.setText("● Bắt đầu ghi")
-
-    def _on_step(self, payload: dict) -> None:
-        self._steps.append(payload)
-        self._refresh_steps()
-        self.rec_status.setText(f"Đang ghi… đã bắt {len(self._steps)} bước. Bấm Dừng ghi khi xong.")
+        show_toast(self, "Đã xoá kịch bản")
 
     def _export(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -475,6 +482,7 @@ class SitePanel(QWidget):
             "Xoá website",
             f"Xoá website “{self.site.name}” và toàn bộ cấu hình của nó?",
             QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
         )
         if ans != QMessageBox.Yes:
             return
@@ -493,6 +501,7 @@ class SitePanel(QWidget):
         if self.pass_edit.text():
             s.set_password(self.pass_edit.text())
         s.logo_path = self.logo_edit.text()
+        s.frame_path = self.frame_edit.text()
         s.footer_bars = [self.bar1_edit.text(), self.bar2_edit.text()]
         if self._steps:
             s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
