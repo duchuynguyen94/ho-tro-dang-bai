@@ -79,6 +79,13 @@ class WPBrowser:
         try:
             page.fill("#user_login", site.username or "")
             page.fill("#user_pass", site.get_password() or "")
+            # tick "Ghi nhớ tài khoản" để Chrome lưu phiên đăng nhập
+            try:
+                remember = page.locator("#rememberme")
+                if remember.count() > 0:
+                    remember.check()
+            except Exception:
+                pass
             page.click("#wp-submit")
             page.wait_for_load_state("domcontentloaded")
             time.sleep(1.5)

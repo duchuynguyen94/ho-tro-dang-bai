@@ -28,7 +28,7 @@ from .pages.history_page import HistoryPage
 from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
 from .style import app_font
-from .workers import ContentWorker, FieldWorker, PostWorker
+from .workers import ContentWorker, FieldWorker, ImagesWorker, PostWorker
 
 NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Lịch sử"]
 
@@ -99,6 +99,7 @@ class MainWindow(QMainWindow):
         # signals
         self.post_page.create_task.connect(self._on_create_task)
         self.jobs_page.regenerate.connect(self._on_regenerate)
+        self.jobs_page.regenerate_images.connect(self._on_regenerate_images)
         self.jobs_page.post.connect(self._on_post_task)
         self.config_page.changed.connect(self._on_config_changed)
 
@@ -176,6 +177,33 @@ class MainWindow(QMainWindow):
         QMessageBox.warning(self, "Lỗi tạo nội dung", err)
 
     # ------------------------------------------------------------------ #
+    def _on_regenerate_images(self, task, footer_mode: str) -> None:
+        site = self.store.get_site(task.site_id)
+        if not site:
+            return
+        self.jobs_page._save()
+        task.footer_mode = footer_mode
+        self.store.upsert_task(task)
+        self.store.save()
+
+        worker = ImagesWorker(site, task, footer_mode)
+        worker.log.connect(lambda m: self.status(m))
+        worker.ok.connect(lambda images: self._on_images_ok(task, images))
+        worker.failed.connect(lambda err: self.status("Lỗi tạo ảnh: " + err[:80]))
+        worker.finished.connect(lambda: self._cleanup(worker))
+        self._workers.append(worker)
+        worker.start()
+        self.status("Đang tạo lại ảnh…")
+
+    def _on_images_ok(self, task, images: list) -> None:
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh.result["images"] = images
+        self.store.upsert_task(fresh)
+        self.store.save()
+        self.jobs_page.current = fresh
+        self.jobs_page._load(fresh)
+        self.status("Đã tạo lại ảnh.")
+
     def _on_regenerate(self, task, field: str) -> None:
         site = self.store.get_site(task.site_id)
         if not site:

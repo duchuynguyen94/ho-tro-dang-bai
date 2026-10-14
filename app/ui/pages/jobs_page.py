@@ -44,8 +44,9 @@ STATUS_COLORS = {
 
 
 class JobsPage(QWidget):
-    regenerate = Signal(object, str)   # (task, field)  field="" -> toàn bộ
-    post = Signal(object)              # (task)
+    regenerate = Signal(object, str)        # (task, field)  field="" -> toàn bộ
+    regenerate_images = Signal(object, str)  # (task, footer_mode)
+    post = Signal(object)                    # (task)
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -106,7 +107,20 @@ class JobsPage(QWidget):
         ev.addLayout(self._field("Nội dung (HTML)", self.content_edit, "content_html"))
 
         # Ảnh
-        ev.addWidget(QLabel("Ảnh (thumbnail + slider)"))
+        img_head = QHBoxLayout()
+        img_lab = QLabel("Ảnh (thumbnail + slider)")
+        img_lab.setStyleSheet("font-weight:600;")
+        img_head.addWidget(img_lab)
+        img_head.addStretch(1)
+        img_head.addWidget(QLabel("Thanh thông tin:"))
+        self.footer_combo = QComboBox()
+        self.footer_combo.addItems(["Random (mặc định)", "Chỉ dùng hình 1", "Chỉ dùng hình 2"])
+        img_head.addWidget(self.footer_combo)
+        regen = QPushButton("↻ Tạo lại ảnh")
+        regen.setProperty("class", "ghost")
+        regen.clicked.connect(self._regen_images)
+        img_head.addWidget(regen)
+        ev.addLayout(img_head)
         self.images_row = QHBoxLayout()
         ev.addLayout(self.images_row)
 
@@ -213,6 +227,7 @@ class JobsPage(QWidget):
         self.desc_edit.setPlainText(r.get("description", ""))
         self.tags_edit.setText(r.get("tags", ""))
         self.content_edit.setPlainText(r.get("content_html", ""))
+        self.footer_combo.setCurrentIndex({"random": 0, "bar1": 1, "bar2": 2}.get(task.footer_mode, 0))
 
         while self.images_row.count():
             it = self.images_row.takeAt(0)
@@ -248,6 +263,13 @@ class JobsPage(QWidget):
             bl.addLayout(bts)
             self.images_row.addWidget(box)
         self.images_row.addStretch(1)
+
+    def _regen_images(self) -> None:
+        if not self.current:
+            return
+        mode = ["random", "bar1", "bar2"][self.footer_combo.currentIndex()]
+        self.current.footer_mode = mode
+        self.regenerate_images.emit(self.current, mode)
 
     def _upload_image(self, index: int) -> None:
         path, _ = QFileDialog.getOpenFileName(self, "Chọn ảnh", "", "Ảnh (*.png *.jpg *.jpeg *.webp)")

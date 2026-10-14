@@ -12,15 +12,41 @@ from ..config import output_dir
 from ..images import compose, save_composed
 
 
-def pick_footer(site) -> str:
+def pick_footer(site, mode: str = "") -> str:
     bars = [b for b in (site.footer_bars or []) if b]
     if not bars:
         return ""
-    if site.footer_mode == "bar1":
+    mode = mode or site.footer_mode or "random"
+    if mode == "bar1":
         return bars[0]
-    if site.footer_mode == "bar2":
+    if mode == "bar2":
         return bars[1] if len(bars) > 1 else bars[0]
     return random.choice(bars)
+
+
+def build_template_images(site, task, brand_logo: str, product_paths: list[str],
+                          footer_mode: str = "", log=None) -> list[dict]:
+    """Ghép ảnh theo mẫu (dùng cho cả tạo mới và tạo lại ảnh)."""
+    images: list[dict] = []
+    count = max(1, int(task.image_count or 3))
+    mode = footer_mode or task.footer_mode or "random"
+    for i in range(count):
+        footer = pick_footer(site, mode)
+        prods = product_paths[i:] + product_paths[:i] if product_paths else []
+        img = compose(
+            size=1080,
+            site_logo=site.logo_path,
+            brand_logo=brand_logo,
+            products=prods[:3],
+            footer_bar=footer,
+            watermark=site.watermark_text,
+        )
+        out = output_dir() / f"{task.id}_{i + 1}.png"
+        save_composed(img, str(out))
+        images.append({"path": str(out), "footer": footer})
+    if log:
+        log(f"Đã ghép {len(images)} ảnh.")
+    return images
 
 
 class ContentWorker(QThread):
@@ -55,7 +81,7 @@ class ContentWorker(QThread):
                     self.log.emit(f"  bỏ qua 1 ảnh: {exc}")
             self.progress.emit(45)
 
-            data = generate_content(self.store, site, page, log=self.log.emit)
+            data = generate_content(self.store, page, log=self.log.emit)
             self.progress.emit(70)
 
             # Logo thương hiệu: ưu tiên file dự phòng, nếu trống thì thử tìm trên trang nguồn.
@@ -72,24 +98,9 @@ class ContentWorker(QThread):
                 self.log.emit("Không tìm được logo thương hiệu — bỏ qua (có thể thêm ở Cấu hình).")
 
             # Ghép ảnh theo mẫu
-            images = []
-            count = max(1, int(t.image_count or 3))
-            self.log.emit(f"Đang ghép {count} ảnh theo mẫu…")
-            for i in range(count):
-                footer = pick_footer(site)
-                # luân phiên thứ tự ảnh sản phẩm giữa các ảnh
-                prods = product_paths[i:] + product_paths[:i] if product_paths else []
-                img = compose(
-                    size=1080,
-                    site_logo=site.logo_path,
-                    brand_logo=brand_logo,
-                    products=prods[:3],
-                    footer_bar=footer,
-                    watermark=site.watermark,
-                )
-                out = output_dir() / f"{t.id}_{i + 1}.png"
-                save_composed(img, str(out))
-                images.append({"path": str(out), "footer": footer})
+            self.log.emit(f"Đang ghép {t.image_count} ảnh theo mẫu…")
+            images = build_template_images(site, t, brand_logo, product_paths,
+                                           t.footer_mode, log=self.log.emit)
             self.progress.emit(100)
 
             result = dict(data)
@@ -123,14 +134,40 @@ class FieldWorker(QThread):
         self.current = current
 
     def run(self) -> None:
-        from ..ai import generate_content  # noqa: F401  (giữ import tổng)
         from ..ai.manager import generate_field
 
         try:
             self.log.emit(f"Đang tạo lại: {self.field}…")
             page = src.fetch_source(self.task.source_url)
-            value = generate_field(self.store, self.site, page, self.field, self.current, log=self.log.emit)
+            value = generate_field(self.store, page, self.field, self.current, log=self.log.emit)
             self.ok.emit(self.field, value)
+        except Exception as exc:
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
+class ImagesWorker(QThread):
+    """Tạo lại ảnh theo mẫu (đổi thanh thông tin) mà không cần gọi lại AI."""
+
+    log = Signal(str)
+    ok = Signal(list)
+    failed = Signal(str)
+
+    def __init__(self, site, task, footer_mode: str = "") -> None:
+        super().__init__()
+        self.site = site
+        self.task = task
+        self.footer_mode = footer_mode
+
+    def run(self) -> None:
+        try:
+            r = self.task.result or {}
+            images = build_template_images(
+                self.site, self.task,
+                r.get("brand_logo", ""), list(r.get("product_images") or []),
+                self.footer_mode, log=self.log.emit,
+            )
+            self.ok.emit(images)
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))

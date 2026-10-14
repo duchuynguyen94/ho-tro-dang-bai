@@ -121,6 +121,11 @@ class Site:
     def has_format_content(self) -> bool:
         return bool(self.formats.content)
 
+    @property
+    def watermark_text(self) -> str:
+        """Watermark chéo: dùng URL website (không cần nhập riêng)."""
+        return (self.watermark or self.url or self.name or "").strip()
+
     # --- serialize ---
     def to_dict(self) -> dict:
         return {
@@ -186,6 +191,7 @@ class Task:
     source_url: str = ""
     brand_logo_fallback: str = ""
     image_count: int = 3
+    footer_mode: str = "random"      # random | bar1 | bar2 (chọn ở trình sửa ảnh)
     status: str = STATUS_QUEUED
     progress: int = 0
     message: str = ""
@@ -206,6 +212,7 @@ class Task:
             source_url=d.get("source_url", ""),
             brand_logo_fallback=d.get("brand_logo_fallback", ""),
             image_count=int(d.get("image_count", 3)),
+            footer_mode=d.get("footer_mode", "random"),
             status=d.get("status", STATUS_QUEUED),
             progress=int(d.get("progress", 0)),
             message=d.get("message", ""),
@@ -254,4 +261,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "sites": [],
     "tasks": [],
+    "formats": {          # format & rule dùng chung cho MỌI website
+        "title": "",
+        "content": "",
+        "description": "",
+        "tags": "",
+    },
 }

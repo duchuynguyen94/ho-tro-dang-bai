@@ -135,10 +135,12 @@ class ConfigPage(QWidget):
         section("Thiết lập chung")
         ai_c = AIContentPanel(self.store)
         ai_i = AIImagePanel(self.store)
+        fmt = FormatPanel(self.store, self.changed.emit)
         sheets = SheetsPanel(self.store)
         for key, panel, label in [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
+            ("format", fmt, "Format & rule bài viết"),
             ("sheets", sheets, "Google Sheets"),
         ]:
             self._panels[key] = panel
@@ -232,7 +234,6 @@ class SitePanel(QWidget):
         self.tabs.addTab(_wrap_scroll(self._account_tab()), "Tài khoản đăng nhập")
         self.tabs.addTab(_wrap_scroll(self._script_tab()), "Kịch bản đăng bài")
         self.tabs.addTab(_wrap_scroll(self._media_tab()), "Logo / Khung / Watermark")
-        self.tabs.addTab(_wrap_scroll(self._format_tab()), "Format bài viết")
 
     # ---------------- Thông tin ---------------- #
     def _info_tab(self) -> QWidget:
@@ -241,13 +242,11 @@ class SitePanel(QWidget):
         self.name_edit = QLineEdit()
         self.url_edit = QLineEdit()
         self.newpost_edit = QLineEdit()
-        self.watermark_edit = QLineEdit()
         f.addRow("Tên gọi", self.name_edit)
         f.addRow("URL website", self.url_edit)
         f.addRow("Link trang tạo bài viết", self.newpost_edit)
-        f.addRow("Watermark chéo", self.watermark_edit)
 
-        hint = QLabel("Thanh thông tin dùng cho ảnh được chọn ở tab <b>Logo / Khung / Watermark</b>.")
+        hint = QLabel("Watermark chéo trên ảnh lấy tự động theo URL website.")
         hint.setProperty("class", "hint")
         hint.setWordWrap(True)
         f.addRow(hint)
@@ -313,6 +312,11 @@ class SitePanel(QWidget):
         self.script_table.setColumnWidth(2, 460)
         v.addWidget(self.script_table, 1)
 
+        self.rec_status = QLabel("Chưa ghi kịch bản.")
+        self.rec_status.setProperty("class", "hint")
+        self.rec_status.setWordWrap(True)
+        v.addWidget(self.rec_status)
+
         help_lbl = QLabel(
             "Khi ghi, phần mềm bắt đúng phần tử và tự sinh selector: "
             "<b>id → name/data-*/aria → text nút → CSS → nth-child</b>. "
@@ -354,50 +358,13 @@ class SitePanel(QWidget):
         grid.addWidget(self.bar2_edit, 2, 1)
         grid.addWidget(c2, 2, 2)
 
-        self.footer_mode = QComboBox()
-        self.footer_mode.addItems(["Random (mặc định)", "Chỉ dùng hình 1", "Chỉ dùng hình 2"])
-        grid.addWidget(QLabel("Ảnh dùng thanh thông tin"), 3, 0)
-        grid.addWidget(self.footer_mode, 3, 1)
-
         note = QLabel(
-            "Thanh thông tin dưới là <b>1 hình ảnh</b>; mặc định mỗi ảnh sẽ random 1 trong 2 hình. "
-            "Watermark chéo (nhập ở tab Thông tin site) lấy theo URL website."
+            "Thanh thông tin dưới là <b>1 hình ảnh</b>; chọn dùng hình nào trong "
+            "<b>trình sửa ảnh</b> ở màn Kết quả (Công việc đang làm)."
         )
         note.setProperty("class", "hint")
         note.setWordWrap(True)
-        grid.addWidget(note, 4, 0, 1, 3)
-        return w
-
-    # ---------------- Format ---------------- #
-    def _format_tab(self) -> QWidget:
-        w = QWidget()
-        f = _form(w)
-        self.fmt_title = QLineEdit()
-        self.fmt_content = QLineEdit()
-        self.fmt_desc = QLineEdit()
-        self.fmt_tags = QLineEdit()
-        rows = [
-            ("Quy định tiêu đề", self.fmt_title),
-            ("Quy định nội dung", self.fmt_content),
-            ("Quy định description", self.fmt_desc),
-            ("Quy định search tags", self.fmt_tags),
-        ]
-        for label, edit in rows:
-            edit.setReadOnly(True)
-            h = QHBoxLayout()
-            h.addWidget(edit, 1)
-            b = QPushButton("Chọn file")
-            b.setProperty("class", "ghost")
-            b.clicked.connect(lambda _=False, e=edit, l=label: self._pick_into(e, l, FORMAT_FILTER))
-            h.addWidget(b)
-            f.addRow(label, h)
-        note = QLabel(
-            "File <b>.txt / .html / .doc</b> chứa <b>cả yêu cầu và format</b> để AI tạo nội dung theo quy định. "
-            "Chưa có file quy định nội dung thì không tạo được bài."
-        )
-        note.setProperty("class", "hint")
-        note.setWordWrap(True)
-        f.addRow(note)
+        grid.addWidget(note, 3, 0, 1, 3)
         return w
 
     # ------------------------------------------------------------------ #
@@ -406,17 +373,11 @@ class SitePanel(QWidget):
         self.name_edit.setText(s.name)
         self.url_edit.setText(s.url)
         self.newpost_edit.setText(s.new_post_url)
-        self.watermark_edit.setText(s.watermark)
-        self.footer_mode.setCurrentIndex({"random": 0, "bar1": 1, "bar2": 2}.get(s.footer_mode, 0))
         self.user_edit.setText(s.username)
         self.pass_edit.setText(s.get_password())
         self.logo_edit.setText(s.logo_path)
         self.bar1_edit.setText(s.footer_bars[0] if len(s.footer_bars) > 0 else "")
         self.bar2_edit.setText(s.footer_bars[1] if len(s.footer_bars) > 1 else "")
-        self.fmt_title.setText(s.formats.title)
-        self.fmt_content.setText(s.formats.content)
-        self.fmt_desc.setText(s.formats.description)
-        self.fmt_tags.setText(s.formats.tags)
         self._refresh_steps()
 
     def _refresh_steps(self) -> None:
@@ -440,21 +401,37 @@ class SitePanel(QWidget):
 
     # ------------------------------------------------------------------ #
     def _toggle_record(self) -> None:
+        from PySide6.QtWidgets import QMessageBox
+
         if self.record_worker and self.record_worker.isRunning():
             self.record_worker.stop()
             self.record_worker = None
             self.rec_btn.setText("● Bắt đầu ghi")
+            self.rec_status.setText(f"Đã dừng ghi. Có {len(self._steps)} bước — bấm Lưu để lưu kịch bản.")
             return
+
+        # Lưu cấu hình trước để dùng đúng URL/tài khoản
+        self._save()
         self._steps = []
         self._refresh_steps()
-        self.record_worker = RecordWorker(self.site)
-        self.record_worker.step.connect(self._on_step)
-        self.record_worker.start()
+
+        self.rec_status.setText("Đang mở trình duyệt… nếu Chrome không mở được, hãy đóng các cửa sổ Chrome khác của website này rồi thử lại.")
+        worker = RecordWorker(self.site)
+        worker.step.connect(self._on_step)
+        worker.log.connect(self.rec_status.setText)
+        worker.failed.connect(lambda err: self.rec_status.setText("Lỗi ghi kịch bản: " + err))
+        worker.finished.connect(self._on_record_finished)
+        self.record_worker = worker
+        worker.start()
         self.rec_btn.setText("■ Dừng ghi")
+
+    def _on_record_finished(self) -> None:
+        self.rec_btn.setText("● Bắt đầu ghi")
 
     def _on_step(self, payload: dict) -> None:
         self._steps.append(payload)
         self._refresh_steps()
+        self.rec_status.setText(f"Đang ghi… đã bắt {len(self._steps)} bước. Bấm Dừng ghi khi xong.")
 
     def _export(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -520,17 +497,12 @@ class SitePanel(QWidget):
         s.name = self.name_edit.text().strip()
         s.url = self.url_edit.text().strip()
         s.new_post_url = self.newpost_edit.text().strip()
-        s.watermark = self.watermark_edit.text().strip()
-        s.footer_mode = ["random", "bar1", "bar2"][self.footer_mode.currentIndex()]
+        s.watermark = s.url
         s.username = self.user_edit.text().strip()
         if self.pass_edit.text():
             s.set_password(self.pass_edit.text())
         s.logo_path = self.logo_edit.text()
         s.footer_bars = [self.bar1_edit.text(), self.bar2_edit.text()]
-        s.formats.title = self.fmt_title.text()
-        s.formats.content = self.fmt_content.text()
-        s.formats.description = self.fmt_desc.text()
-        s.formats.tags = self.fmt_tags.text()
         if self._steps:
             s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
         self.store.upsert_site(s)
@@ -771,3 +743,88 @@ class SheetsPanel(QScrollArea):
         cfg["col_result"] = self.col_res.text().strip() or "B"
         cfg["mode"] = "append" if self.mode.currentIndex() == 0 else "update"
         self.store.save()
+
+
+# ======================================================================= #
+# Panel "Format & rule bài viết" (dùng chung cho mọi website)
+# ======================================================================= #
+class FormatPanel(QScrollArea):
+    def __init__(self, store, on_saved=None, parent=None) -> None:
+        super().__init__(parent)
+        self.store = store
+        self.on_saved = on_saved
+        self.setWidgetResizable(True)
+        self._edits: dict[str, QLineEdit] = {}
+        self._build()
+
+    def _build(self) -> None:
+        root = QWidget()
+        v = QVBoxLayout(root)
+        v.setContentsMargins(20, 18, 20, 20)
+
+        t = QLabel("Format & rule bài viết")
+        t.setProperty("class", "h2")
+        v.addWidget(t)
+        sub = QLabel(
+            "Dùng chung cho <b>tất cả website</b>. File <b>.txt / .html / .pdf / .doc</b> "
+            "chứa cả <b>yêu cầu</b> và <b>format</b> để AI tạo nội dung theo quy định."
+        )
+        sub.setProperty("class", "sub")
+        sub.setWordWrap(True)
+        v.addWidget(sub)
+
+        card = Card("File quy định cho AI")
+        f = _form()
+        rows = [
+            ("title", "Quy định tiêu đề"),
+            ("content", "Quy định nội dung"),
+            ("description", "Quy định description"),
+            ("tags", "Quy định search tags"),
+        ]
+        for key, label in rows:
+            edit = QLineEdit()
+            edit.setReadOnly(True)
+            h = QHBoxLayout()
+            h.addWidget(edit, 1)
+            b = QPushButton("Chọn file")
+            b.setProperty("class", "ghost")
+            b.clicked.connect(lambda _=False, k=key, e=edit, l=label: self._pick(k, e, l))
+            h.addWidget(b)
+            f.addRow(label, h)
+            self._edits[key] = edit
+        card.body.addLayout(f)
+
+        note = QLabel("Chưa có file <b>quy định nội dung</b> thì không tạo được bài.")
+        note.setProperty("class", "hint")
+        note.setWordWrap(True)
+        card.body.addWidget(note)
+
+        save = QPushButton("Lưu")
+        save.setProperty("class", "primary")
+        save.clicked.connect(self._save)
+        card.body.addWidget(save, alignment=Qt.AlignRight)
+
+        v.addWidget(card)
+        v.addStretch(1)
+        self.setWidget(root)
+        self._load()
+
+    def _load(self) -> None:
+        fmt = self.store.formats
+        for key, edit in self._edits.items():
+            edit.setText(getattr(fmt, key, ""))
+
+    def _pick(self, key: str, edit: QLineEdit, label: str) -> None:
+        path, _ = QFileDialog.getOpenFileName(self, label, "", FORMAT_FILTER)
+        if not path:
+            return
+        edit.setText(Store.import_file(path, formats_dir()))
+
+    def _save(self) -> None:
+        fmt = self.store.formats
+        for key, edit in self._edits.items():
+            setattr(fmt, key, edit.text())
+        self.store.set_formats(fmt)
+        self.store.save()
+        if self.on_saved:
+            self.on_saved()

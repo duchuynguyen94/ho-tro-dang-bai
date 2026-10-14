@@ -201,16 +201,17 @@ class PostPage(QWidget):
             row.set_selected(bool(site and sid == site.id))
 
         has_link = bool(self.source_url.text().strip())
-        ok = bool(site and has_link and site.has_format_content())
+        has_rule = self.store.has_format_content()
+        ok = bool(site and has_link and has_rule)
         self.create_btn.setEnabled(ok)
 
         problems: list[str] = []
         if not site:
             problems.append("chưa chọn website")
-        elif not site.has_format_content():
+        if not has_rule:
             problems.append(
-                f"website <b>{site.name}</b> chưa có file quy định nội dung "
-                "(vào <b>Cấu hình → Format bài viết</b> để thêm)"
+                "chưa có file quy định nội dung "
+                "(vào <b>Cấu hình → Format &amp; rule bài viết</b> để thêm)"
             )
         if not has_link:
             problems.append("chưa nhập link bài viết nguồn")
@@ -232,7 +233,7 @@ class PostPage(QWidget):
     def _create(self) -> None:
         site = self._selected_site()
         url = self.source_url.text().strip()
-        if not site or not url or not site.has_format_content():
+        if not site or not url or not self.store.has_format_content():
             self._validate()
             return
         count = int(self.image_count.currentText().split()[0])

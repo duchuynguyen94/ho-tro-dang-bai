@@ -37,10 +37,25 @@ class Store:
             try:
                 raw = json.loads(p.read_text(encoding="utf-8"))
                 self.data = _deep_merge(DEFAULT_CONFIG, raw)
+                self._migrate()
                 return
             except (json.JSONDecodeError, OSError):
                 pass
         self.data = copy.deepcopy(DEFAULT_CONFIG)
+
+    def _migrate(self) -> None:
+        """Chuyển format của site cũ sang format dùng chung (nếu chưa có)."""
+        fmt = self.data.setdefault("formats", {"title": "", "content": "", "description": "", "tags": ""})
+        if not fmt.get("content"):
+            for s in self.data.get("sites", []):
+                sf = s.get("formats") or {}
+                if sf.get("content"):
+                    fmt.update({k: sf.get(k, "") or "" for k in ("title", "content", "description", "tags")})
+                    break
+        # watermark chéo lấy theo URL website
+        for s in self.data.get("sites", []):
+            if not s.get("watermark"):
+                s["watermark"] = s.get("url", "")
 
     def save(self) -> None:
         p = config.config_path()
@@ -98,6 +113,21 @@ class Store:
         else:
             tasks.append(task)
         self.set_tasks(tasks)
+
+    # ------------------------------------------------------------------ #
+    # Format & rule dùng chung cho mọi website
+    # ------------------------------------------------------------------ #
+    @property
+    def formats(self) -> "Formats":
+        from .models import Formats as _F
+
+        return _F.from_dict(self.data.get("formats"))
+
+    def set_formats(self, fmt) -> None:
+        self.data["formats"] = fmt.to_dict()
+
+    def has_format_content(self) -> bool:
+        return bool((self.data.get("formats") or {}).get("content"))
 
     # ------------------------------------------------------------------ #
     # Phần cấu hình con

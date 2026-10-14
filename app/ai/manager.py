@@ -22,12 +22,11 @@ def read_rule(path: str, limit: int = 8000) -> str:
         return ""
 
 
-def build_prompt(site, source: dict) -> str:
-    f = site.formats
-    rules_title = read_rule(f.title)
-    rules_content = read_rule(f.content)
-    rules_desc = read_rule(f.description)
-    rules_tags = read_rule(f.tags)
+def build_prompt(rules, source: dict) -> str:
+    rules_title = read_rule(getattr(rules, "title", ""))
+    rules_content = read_rule(getattr(rules, "content", ""))
+    rules_desc = read_rule(getattr(rules, "description", ""))
+    rules_tags = read_rule(getattr(rules, "tags", ""))
 
     images_hint = "\n".join(f"- {u}" for u in source.get("images", [])[:6])
 
@@ -84,13 +83,13 @@ FIELD_RULES = {
 }
 
 
-def build_field_prompt(site, source: dict, field: str, current: str = "") -> str:
+def build_field_prompt(rules, source: dict, field: str, current: str = "") -> str:
     label, rule_key = FIELD_RULES.get(field, ("Nội dung", None))
-    rules = read_rule(getattr(site.formats, rule_key, "") if rule_key else "")
+    rules_text = read_rule(getattr(rules, rule_key, "") if rule_key else "")
     return f"""Bạn là chuyên gia content SEO tiếng Việt. Hãy tạo lại DUY NHẤT trường "{label}" cho bài viết.
 
 === QUY ĐỊNH ===
-{rules or "(Không có quy định riêng.)"}
+{rules_text or "(Không có quy định riêng.)"}
 
 === BÀI VIẾT NGUỒN ===
 Tiêu đề gốc: {source.get('title', '')}
@@ -105,8 +104,8 @@ CHỈ trả về đúng nội dung của trường "{label}", không thêm nhãn
 """
 
 
-def generate_field(store, site, source: dict, field: str, current: str = "", log=None) -> str:
-    prompt = build_field_prompt(site, source, field, current)
+def generate_field(store, source: dict, field: str, current: str = "", log=None) -> str:
+    prompt = build_field_prompt(store.formats, source, field, current)
     cfg = store.ai_content
     errors: list[str] = []
     for provider in _active_chain(cfg):
@@ -122,8 +121,8 @@ def generate_field(store, site, source: dict, field: str, current: str = "", log
     raise providers.AIError("Không tạo được trường này. " + " | ".join(errors[-4:]))
 
 
-def generate_content(store, site, source: dict, log=None) -> dict:
-    prompt = build_prompt(site, source)
+def generate_content(store, source: dict, log=None) -> dict:
+    prompt = build_prompt(store.formats, source)
     cfg = store.ai_content
     errors: list[str] = []
 
