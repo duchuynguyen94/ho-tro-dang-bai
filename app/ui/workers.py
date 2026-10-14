@@ -187,6 +187,64 @@ class PostWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class LoginWorker(QThread):
+    """Mở trình duyệt (có hiển thị) để đăng nhập và cho người dùng xem."""
+
+    log = Signal(str)
+    ok = Signal(bool)
+    failed = Signal(str)
+
+    def __init__(self, site, keep_open_seconds: int = 180) -> None:
+        super().__init__()
+        self.site = site
+        self.keep_open = keep_open_seconds
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        from ..wp import WPBrowser
+
+        site = self.site
+        try:
+            self.log.emit("Đang mở trình duyệt…")
+            br = WPBrowser(headless=False, site_id=site.id)
+            page = br.open()
+            self.log.emit(f"Trình duyệt đã mở ({br.channel_used}). Đang đăng nhập…")
+
+            logged = br.login(site)
+            if logged:
+                self.log.emit("Đăng nhập thành công — bạn xem trang quản trị WordPress.")
+                if site.new_post_url:
+                    try:
+                        page.goto(site.new_post_url, wait_until="domcontentloaded")
+                    except Exception:
+                        pass
+            else:
+                self.log.emit("Chưa đăng nhập tự động được — bạn thử đăng nhập trực tiếp trên cửa sổ trình duyệt.")
+            self.ok.emit(logged)
+
+            # Giữ cửa sổ mở cho người dùng xem cho tới khi họ đóng trình duyệt.
+            waited = 0
+            limit = self.keep_open * 5  # 200ms * 5 = 1s
+            while not self._stop and waited < limit:
+                try:
+                    if page.is_closed():
+                        break
+                    page.wait_for_timeout(200)
+                except Exception:
+                    break
+                waited += 1
+            try:
+                br.close()
+            except Exception:
+                pass
+        except Exception as exc:
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
 class RecordWorker(QThread):
     """Ghi lại thao tác người dùng thành các bước kịch bản."""
 

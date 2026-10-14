@@ -29,9 +29,10 @@ from ...config import formats_dir, media_dir
 from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
 from ..style import Card
-from ..workers import RecordWorker
+from ..workers import LoginWorker, RecordWorker
 
-FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.doc *.docx);;Tất cả (*.*)"
+IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
+FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.pdf *.doc *.docx);;Tất cả (*.*)"
 
 
 def _pick_file(parent, caption, filt) -> str:
@@ -159,9 +160,32 @@ class ConfigPage(QWidget):
 
     # ------------------------------------------------------------------ #
     def _add_site(self) -> None:
-        site = Site(name="website-moi.com", url="https://website-moi.com",
-                    new_post_url="https://website-moi.com/wp-admin/post-new.php",
-                    watermark="https://website-moi.com")
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+
+        name, ok = QInputDialog.getText(
+            self, "Thêm website", "Nhập tên website (ví dụ: demo.com):"
+        )
+        if not ok:
+            return
+        name = (name or "").strip()
+        if not name:
+            QMessageBox.warning(self, "Thiếu thông tin", "Vui lòng nhập tên website.")
+            return
+        if any((s.name or "").strip().lower() == name.lower() for s in self.store.sites):
+            QMessageBox.warning(self, "Trùng website", f"Website “{name}” đã tồn tại.")
+            return
+        if any((s.url or "").strip().lower().rstrip("/") in (f"https://{name}".lower(), name.lower())
+               for s in self.store.sites):
+            QMessageBox.warning(self, "Trùng website", f"Website “{name}” đã tồn tại.")
+            return
+
+        base = name if name.startswith(("http://", "https://")) else f"https://{name}"
+        site = Site(
+            name=name,
+            url=base,
+            new_post_url=f"{base.rstrip('/')}/wp-admin/post-new.php",
+            watermark=base.rstrip("/"),
+        )
         self.store.upsert_site(site)
         self.store.save()
         self.reload()
@@ -182,6 +206,7 @@ class SitePanel(QWidget):
         self.store = store
         self.site = store.get_site(site.id) or site
         self._steps: list[dict] = [s.to_dict() for s in (self.site.script.steps if self.site.script else [])]
+        self.login_worker: LoginWorker | None = None
         self._build()
         self._load()
 
@@ -194,13 +219,9 @@ class SitePanel(QWidget):
         self.title.setProperty("class", "h2")
         head.addWidget(self.title)
         head.addStretch(1)
-        test = QPushButton("Kiểm tra kết nối")
-        test.setProperty("class", "ghost")
-        test.clicked.connect(self._test)
         save = QPushButton("Lưu")
         save.setProperty("class", "primary")
         save.clicked.connect(self._save)
-        head.addWidget(test)
         head.addWidget(save)
         outer.addLayout(head)
 
@@ -221,13 +242,20 @@ class SitePanel(QWidget):
         self.url_edit = QLineEdit()
         self.newpost_edit = QLineEdit()
         self.watermark_edit = QLineEdit()
-        self.footer_mode = QComboBox()
-        self.footer_mode.addItems(["Random (mặc định)", "Chỉ hình 1", "Chỉ hình 2"])
         f.addRow("Tên gọi", self.name_edit)
         f.addRow("URL website", self.url_edit)
         f.addRow("Link trang tạo bài viết", self.newpost_edit)
         f.addRow("Watermark chéo", self.watermark_edit)
-        f.addRow("Mặc định dùng thanh thông tin", self.footer_mode)
+
+        hint = QLabel("Thanh thông tin dùng cho ảnh được chọn ở tab <b>Logo / Khung / Watermark</b>.")
+        hint.setProperty("class", "hint")
+        hint.setWordWrap(True)
+        f.addRow(hint)
+
+        del_btn = QPushButton("Xoá website này")
+        del_btn.setProperty("class", "danger")
+        del_btn.clicked.connect(self._delete_site)
+        f.addRow(del_btn)
         return w
 
     # ---------------- Tài khoản ---------------- #
@@ -241,11 +269,18 @@ class SitePanel(QWidget):
         f.addRow("Mật khẩu", self.pass_edit)
         note = QLabel("Mật khẩu được mã hoá khi lưu. Session đăng nhập được giữ lại cho lần sau.")
         note.setProperty("class", "hint")
+        note.setWordWrap(True)
         f.addRow(note)
-        login = QPushButton("Đăng nhập thử")
-        login.setProperty("class", "ghost")
-        login.clicked.connect(self._test)
-        f.addRow(login)
+
+        self.login_btn = QPushButton("Đăng nhập thử (mở trình duyệt xem)")
+        self.login_btn.setProperty("class", "ghost")
+        self.login_btn.clicked.connect(self._test)
+        f.addRow(self.login_btn)
+
+        self.login_status = QLabel("")
+        self.login_status.setProperty("class", "hint")
+        self.login_status.setWordWrap(True)
+        f.addRow(self.login_status)
         return w
 
     # ---------------- Kịch bản ---------------- #
@@ -319,13 +354,18 @@ class SitePanel(QWidget):
         grid.addWidget(self.bar2_edit, 2, 1)
         grid.addWidget(c2, 2, 2)
 
+        self.footer_mode = QComboBox()
+        self.footer_mode.addItems(["Random (mặc định)", "Chỉ dùng hình 1", "Chỉ dùng hình 2"])
+        grid.addWidget(QLabel("Ảnh dùng thanh thông tin"), 3, 0)
+        grid.addWidget(self.footer_mode, 3, 1)
+
         note = QLabel(
-            "Thanh thông tin dưới là <b>1 hình ảnh</b>; mỗi ảnh sẽ random 1 trong 2 hình. "
-            "Watermark chéo (nhập ở tab Thông tin site) tự lấy từ URL website."
+            "Thanh thông tin dưới là <b>1 hình ảnh</b>; mặc định mỗi ảnh sẽ random 1 trong 2 hình. "
+            "Watermark chéo (nhập ở tab Thông tin site) lấy theo URL website."
         )
         note.setProperty("class", "hint")
         note.setWordWrap(True)
-        grid.addWidget(note, 3, 0, 1, 3)
+        grid.addWidget(note, 4, 0, 1, 3)
         return w
 
     # ---------------- Format ---------------- #
@@ -348,7 +388,7 @@ class SitePanel(QWidget):
             h.addWidget(edit, 1)
             b = QPushButton("Chọn file")
             b.setProperty("class", "ghost")
-            b.clicked.connect(lambda _=False, e=edit, l=label: self._pick_into(e, l))
+            b.clicked.connect(lambda _=False, e=edit, l=label: self._pick_into(e, l, FORMAT_FILTER))
             h.addWidget(b)
             f.addRow(label, h)
         note = QLabel(
@@ -390,12 +430,13 @@ class SitePanel(QWidget):
             )
             self.script_table.setItem(i, 3, QTableWidgetItem(src))
 
-    def _pick_into(self, edit: QLineEdit, caption: str, filt: str = "Ảnh (*.png *.jpg *.jpeg *.webp)") -> None:
+    def _pick_into(self, edit: QLineEdit, caption: str, filt: str = IMAGE_FILTER) -> None:
         path, _ = QFileDialog.getOpenFileName(self, caption, "", filt)
-        if path:
-            dest_dir = formats_dir() if edit in (self.fmt_title, self.fmt_content, self.fmt_desc, self.fmt_tags) else media_dir()
-            saved = Store.import_file(path, dest_dir)
-            edit.setText(saved)
+        if not path:
+            return
+        is_format = edit in (self.fmt_title, self.fmt_content, self.fmt_desc, self.fmt_tags)
+        dest_dir = formats_dir() if is_format else media_dir()
+        edit.setText(Store.import_file(path, dest_dir))
 
     # ------------------------------------------------------------------ #
     def _toggle_record(self) -> None:
@@ -436,18 +477,42 @@ class SitePanel(QWidget):
             pass
 
     def _test(self) -> None:
+        if self.login_worker and self.login_worker.isRunning():
+            self.login_worker.stop()
+            self.login_worker = None
+            self.login_btn.setText("Đăng nhập thử (mở trình duyệt xem)")
+            self.login_status.setText("Đã dừng.")
+            return
+
+        self._save()
+        self.login_worker = LoginWorker(self.site)
+        self.login_worker.log.connect(self.login_status.setText)
+        self.login_worker.ok.connect(
+            lambda good: self.login_status.setText(
+                "✓ Đăng nhập thành công!" if good else "✗ Chưa đăng nhập được — thử lại trên cửa sổ trình duyệt."
+            )
+        )
+        self.login_worker.failed.connect(lambda err: self.login_status.setText("Lỗi: " + err))
+        self.login_worker.finished.connect(lambda: self.login_btn.setText("Đăng nhập thử (mở trình duyệt xem)"))
+        self.login_worker.start()
+        self.login_btn.setText("■ Dừng")
+        self.login_status.setText("Đang mở trình duyệt…")
+
+    # ------------------------------------------------------------------ #
+    def _delete_site(self) -> None:
         from PySide6.QtWidgets import QMessageBox
 
-        try:
-            from ...wp import WPBrowser
-
-            br = WPBrowser(headless=True, site_id=self.site.id)
-            br.open()
-            ok = br.login(self.site)
-            br.close()
-            QMessageBox.information(self, "Kết nối", "Đăng nhập thành công!" if ok else "Chưa đăng nhập được — kiểm tra lại tài khoản.")
-        except Exception as exc:
-            QMessageBox.warning(self, "Kết nối", f"Lỗi: {exc}")
+        ans = QMessageBox.question(
+            self,
+            "Xoá website",
+            f"Xoá website “{self.site.name}” và toàn bộ cấu hình của nó?",
+            QMessageBox.Yes | QMessageBox.No,
+        )
+        if ans != QMessageBox.Yes:
+            return
+        self.store.remove_site(self.site.id)
+        self.store.save()
+        self.saved.emit()
 
     # ------------------------------------------------------------------ #
     def _save(self) -> None:
