@@ -102,7 +102,9 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         product_positions = o.get("product_pos") or None
         if product_positions:
             product_positions = [tuple(p) for p in product_positions]
-        wm_opacity = int(o.get("watermark_opacity", 18) or 18)
+        wm_opacity = int(o.get("watermark_opacity", 20) or 0)
+        wm_size = float(o.get("watermark_size", 1.0) or 1.0)
+        product_scales = o.get("product_scales") or None
         rb = remove_bg if o.get("remove_bg") is None else bool(o["remove_bg"])
         mode_i = o.get("footer_mode") or footer_mode or mode
         footer = pick_footer_by_index(site, i, mode_i)
@@ -116,6 +118,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             frame=site.frame_path,
             watermark=site.watermark_text,
             watermark_opacity=wm_opacity,
+            watermark_size=wm_size,
             remove_bg=rb,
             remove_bg_thresh=remove_bg_thresh,
             logo_pos=logo_pos,
@@ -124,6 +127,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             brand_scale=brand_scale,
             product_scale=product_scale,
             product_positions=product_positions,
+            product_scales=product_scales,
             uploads=uploads,
         )
         # Rule đặt tên ảnh (nếu có)

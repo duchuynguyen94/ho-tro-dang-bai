@@ -91,17 +91,21 @@ def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Ima
     return img
 
 
-def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 18) -> None:
+def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 20,
+                             scale: float = 1.0) -> None:
     if not text:
+        return
+    alpha = max(0, min(255, int(opacity * 255 / 100)))     # 0..100 -> 0..255
+    if alpha <= 0:
         return
     layer = Image.new("RGBA", base.size, (255, 255, 255, 0))
     draw = ImageDraw.Draw(layer)
-    font = _find_font(max(28, base.size[0] // 18))
+    font = _find_font(max(18, int((base.size[0] // 18) * max(0.3, scale))))
     tmp = Image.new("RGBA", (10, 10))
     tw = draw.textlength(text, font=font)
     text_img = Image.new("RGBA", (int(tw) + 20, int(font.size * 1.6)), (0, 0, 0, 0))
     td = ImageDraw.Draw(text_img)
-    td.text((10, 10), text, font=font, fill=(15, 23, 42, opacity))
+    td.text((10, 10), text, font=font, fill=(15, 23, 42, alpha))
     text_img = text_img.rotate(34, expand=True, resample=Image.BICUBIC)
     x = (base.size[0] - text_img.size[0]) // 2
     y = (base.size[1] - text_img.size[1]) // 2
@@ -136,7 +140,8 @@ def compose(
     footer_bar: str = "",
     frame: str = "",
     watermark: str = "",
-    watermark_opacity: int = 18,
+    watermark_opacity: int = 20,
+    watermark_size: float = 1.0,
     transparent_bg: bool = False,
     remove_bg: bool = False,
     remove_bg_thresh: int = 42,
@@ -146,6 +151,7 @@ def compose(
     brand_scale: float = 1.0,
     product_scale: float = 1.0,
     product_positions: list | None = None,
+    product_scales: list | None = None,
     uploads: list | None = None,
 ) -> Image.Image:
     products = [p for p in (products or []) if p]
@@ -176,8 +182,11 @@ def compose(
         pos = list(product_positions or [])
         if len(pos) < n:
             pos += default_product_positions(n, size, product_scale)[len(pos):]
+        scales = list(product_scales or [])
         for i, im in enumerate(prods):
-            im = _fit(im, box, box)
+            sc = float(scales[i]) if i < len(scales) else 1.0
+            box_i = product_box(size, sc)
+            im = _fit(im, box_i, box_i)
             fx, fy = pos[i]
             px = int(fx * size)
             py = int(fy * size)
@@ -192,7 +201,8 @@ def compose(
         im = prepare_product(path, remove_bg, remove_bg_thresh)
         if im is None:
             continue
-        box = product_box(size, product_scale)
+        sc = float(up.get("scale", 1.0)) if isinstance(up, dict) else 1.0
+        box = product_box(size, sc)
         im = _fit(im, box, box)
         px = int(pos[0] * size - im.size[0] / 2)
         py = int(pos[1] * size - im.size[1] / 2)
@@ -227,7 +237,7 @@ def compose(
         base.alpha_composite(fr2)
 
     # --- watermark chéo ---
-    _draw_diagonal_watermark(base, watermark, watermark_opacity)
+    _draw_diagonal_watermark(base, watermark, watermark_opacity, watermark_size)
     return base
 
 

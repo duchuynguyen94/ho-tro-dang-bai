@@ -211,7 +211,8 @@ class ImageEditorPanel(QFrame):
         self.s_product = self._slider(grid, 0, "Ảnh sản phẩm — kích thước", 50, 180, 100)
         self.s_logo = self._slider(grid, 1, "Logo website — kích thước", 50, 180, 100)
         self.s_brand = self._slider(grid, 2, "Logo thương hiệu — kích thước", 50, 180, 100)
-        self.s_wm = self._slider(grid, 3, "Watermark — độ mờ", 0, 40, 18)
+        self.s_wm = self._slider(grid, 3, "Watermark — độ mờ", 0, 100, 20)
+        self.s_wm_size = self._slider(grid, 4, "Watermark — kích thước", 50, 200, 100)
         right.addLayout(grid)
 
         self.remove_bg = QCheckBox("Xoá nền ảnh sản phẩm → trong suốt")
@@ -227,7 +228,7 @@ class ImageEditorPanel(QFrame):
         right.addStretch(1)
         body.addLayout(right, 1)
 
-        self.s_product.valueChanged.connect(lambda _v: self._layout_products())
+        self.s_product.valueChanged.connect(self._on_product_slider)
         self.s_logo.valueChanged.connect(lambda _v: self._layout_items())
         self.s_brand.valueChanged.connect(lambda _v: self._layout_items())
 
@@ -236,7 +237,7 @@ class ImageEditorPanel(QFrame):
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(700)
         self._autosave.timeout.connect(self._emit_opts)
-        for w in (self.s_product, self.s_logo, self.s_brand, self.s_wm):
+        for w in (self.s_product, self.s_logo, self.s_brand, self.s_wm, self.s_wm_size):
             w.valueChanged.connect(self._schedule_save)
         self.remove_bg.toggled.connect(self._schedule_save)
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
@@ -282,7 +283,8 @@ class ImageEditorPanel(QFrame):
         self.s_product.setValue(int(float(self._opts.get("product_scale", 1.0)) * 100))
         self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0)) * 100))
         self.s_brand.setValue(int(float(self._opts.get("brand_scale", 1.0)) * 100))
-        self.s_wm.setValue(int(self._opts.get("watermark_opacity", 18) or 18))
+        self.s_wm.setValue(int(self._opts.get("watermark_opacity", 20) or 0))
+        self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
         self.remove_bg.setChecked(bool(self._opts.get("remove_bg", False)))
         mode = self._opts.get("footer_mode") or footer_mode or "bar1"
         self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
@@ -327,6 +329,18 @@ class ImageEditorPanel(QFrame):
         )
 
     # ---------------- sản phẩm ---------------- #
+    def _on_product_slider(self, _v: int) -> None:
+        """Thanh kích thước chung: áp cho mọi thành phần."""
+        val = self.s_product.value() / 100.0
+        self._opts["product_scales"] = [val] * len(self._preview.get("products") or [])
+        ups = list(self._opts.get("uploads") or [])
+        for u in ups:
+            if isinstance(u, dict):
+                u["scale"] = val
+        self._opts["uploads"] = ups
+        self._layout_products()
+        self._layout_uploads()
+
     def _layout_products(self) -> None:
         paths = list(self._preview.get("products") or [])[:3]
         for it in self._product_items:
@@ -337,13 +351,14 @@ class ImageEditorPanel(QFrame):
         if not paths:
             return
         scale = self.s_product.value() / 100.0
-        box_src = product_box(SRC, scale)
-        disp = max(24, int(box_src * CANVAS / SRC))
+        scales = list(self._opts.get("product_scales") or [])
         positions = list(self._opts.get("product_pos") or [])
         if len(positions) < len(paths):
             positions += default_product_positions(len(paths), SRC, scale)[len(positions):]
 
         for i, path in enumerate(paths):
+            sc = float(scales[i]) if i < len(scales) else scale
+            disp = max(24, int(product_box(SRC, sc) * CANVAS / SRC))
             it = DraggableImage(self.canvas)
             it.index = i
             pm = QPixmap(path) if Path(path).exists() else QPixmap()
@@ -373,9 +388,9 @@ class ImageEditorPanel(QFrame):
         self._upload_items = []
 
         scale = self.s_product.value() / 100.0
-        box_src = product_box(SRC, scale)
-        disp = max(24, int(box_src * CANVAS / SRC))
         for i, up in enumerate(ups):
+            sc = float(up.get("scale", scale)) if isinstance(up, dict) else scale
+            disp = max(24, int(product_box(SRC, sc) * CANVAS / SRC))
             path = up.get("path") if isinstance(up, dict) else str(up)
             pos = (up.get("pos") if isinstance(up, dict) else None) or [0.5, 0.5]
             it = DraggableImage(self.canvas)
@@ -411,10 +426,11 @@ class ImageEditorPanel(QFrame):
 
     def _on_upload_resized(self, index: int, width: int) -> None:
         base = product_box(SRC, 1.0) * CANVAS / SRC
-        scale = max(0.5, min(1.8, width / max(1.0, base)))
-        self.s_product.blockSignals(True)
-        self.s_product.setValue(int(scale * 100))
-        self.s_product.blockSignals(False)
+        scale = max(0.3, min(2.5, width / max(1.0, base)))
+        ups = list(self._opts.get("uploads") or [])
+        if index < len(ups) and isinstance(ups[index], dict):
+            ups[index]["scale"] = round(scale, 3)
+        self._opts["uploads"] = ups
         self._on_upload_moved()
 
     # ---------------- watermark nằm TRÊN các thành phần ---------------- #
@@ -431,10 +447,13 @@ class ImageEditorPanel(QFrame):
         painter = QPainter(pm)
         painter.setRenderHint(QPainter.Antialiasing)
         font = QFont()
-        font.setPixelSize(13)
         font.setBold(True)
+        font.setPixelSize(max(6, int(13 * self.s_wm_size.value() / 100)))
         painter.setFont(font)
-        painter.setPen(QColor(15, 23, 42, 56))
+        alpha = max(0, min(255, int(self.s_wm.value() * 255 / 100)))
+        painter.setPen(QColor(15, 23, 42, alpha))
+        font.setPixelSize(max(6, int(13 * self.s_wm_size.value() / 100)))
+        painter.setFont(font)
         painter.translate(CANVAS / 2, CANVAS / 2)
         painter.rotate(-34)                       # chéo như ảnh thật
         w = painter.fontMetrics().horizontalAdvance(text)
@@ -458,10 +477,12 @@ class ImageEditorPanel(QFrame):
 
     def _on_product_resized(self, index: int, width: int) -> None:
         base = product_box(SRC, 1.0) * CANVAS / SRC
-        scale = max(0.5, min(1.8, width / max(1.0, base)))
-        self.s_product.blockSignals(True)
-        self.s_product.setValue(int(scale * 100))
-        self.s_product.blockSignals(False)
+        scale = max(0.3, min(2.5, width / max(1.0, base)))
+        scales = list(self._opts.get("product_scales") or [])
+        while len(scales) < index + 1:
+            scales.append(1.0)
+        scales[index] = round(scale, 3)
+        self._opts["product_scales"] = scales
         self._on_product_moved()
 
     # ---------------- chung ---------------- #
@@ -490,7 +511,8 @@ class ImageEditorPanel(QFrame):
         self.s_product.setValue(100)
         self.s_logo.setValue(100)
         self.s_brand.setValue(100)
-        self.s_wm.setValue(18)
+        self.s_wm.setValue(20)
+        self.s_wm_size.setValue(100)
         self.remove_bg.setChecked(False)
         self._layout_items()
         self._layout_products()
@@ -508,6 +530,7 @@ class ImageEditorPanel(QFrame):
             "logo_scale": self.s_logo.value() / 100.0,
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
+            "watermark_size": self.s_wm_size.value() / 100.0,
             "remove_bg": self.remove_bg.isChecked(),
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
@@ -524,6 +547,7 @@ class ImageEditorPanel(QFrame):
             "logo_scale": self.s_logo.value() / 100.0,
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
+            "watermark_size": self.s_wm_size.value() / 100.0,
             "remove_bg": self.remove_bg.isChecked(),
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
