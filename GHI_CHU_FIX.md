@@ -72,8 +72,9 @@
     - **Giữ lại TỐI THIỂU 1 ẢNH** (người dùng đã chốt) → không cho xoá ảnh cuối cùng (nút Xoá ẩn/khoá khi chỉ còn 1 ảnh).
   - **Sắp xếp ảnh (bổ sung — người dùng yêu cầu):** cho phép **đổi thứ tự ảnh** bằng **kéo–thả thumbnail**.
     - Kéo thumbnail này sang vị trí khác → đổi thứ tự trong `images` + `image_opts_list` (tuỳ chọn **đi kèm ảnh**), **đánh số lại** caption.
-    - **Thứ tự xuất file theo Rule ảnh** (`{index}` / thứ tự dòng Rule ảnh) **bám theo thứ tự mới**.
-    - ⚠️ Lưu ý: thanh thông tin đang **luân phiên 1→2→1→2 theo từng ảnh**; sau khi sắp xếp lại, thứ tự luân phiên có thể **không còn đúng** — *(chờ chốt)* có **tự động gán lại luân phiên 1→2 theo vị trí mới** hay **giữ nguyên như từng ảnh đang có**.
+    - **Thứ tự xuất file theo Rule ảnh bám theo VỊ TRÍ SAU KHI SẮP XẾP (người dùng đã chốt):** ảnh ở **vị trí 1** dùng **dòng Rule ảnh số 1**, vị trí 2 dùng dòng 2… (`{index}` = số thứ tự mới).
+    - → Rule ảnh **gán theo số đã sắp xếp**, **không** đi theo ảnh gốc.
+    - **Thanh thông tin:** gán lại **luân phiên 1→2→1→2 theo vị trí mới** (vị trí 1 = thanh 1, vị trí 2 = thanh 2…) — thống nhất với cách Rule ảnh gán theo vị trí.
 
 ---
 
