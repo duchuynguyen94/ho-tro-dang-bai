@@ -31,12 +31,25 @@ def pick_footer(site, mode: str = "") -> str:
     bars = [b for b in (site.footer_bars or []) if b]
     if not bars:
         return ""
-    mode = mode or site.footer_mode or "random"
+    mode = mode or site.footer_mode or "bar1"
     if mode == "bar1":
         return bars[0]
     if mode == "bar2":
         return bars[1] if len(bars) > 1 else bars[0]
     return random.choice(bars)
+
+
+def pick_footer_by_index(site, index: int, mode: str = "") -> str:
+    """Luân phiên 1 -> 2 -> 1 -> 2 (trừ khi người dùng chọn cứng)."""
+    bars = [b for b in (site.footer_bars or []) if b]
+    if not bars:
+        return ""
+    mode = mode or site.footer_mode or ""
+    if mode == "bar1":
+        return bars[0]
+    if mode == "bar2":
+        return bars[1] if len(bars) > 1 else bars[0]
+    return bars[index % len(bars)]
 
 
 def build_template_images(site, task, brand_logo: str, product_paths: list[str],
@@ -73,7 +86,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         mode = opts["footer_mode"]
 
     for i in range(count):
-        footer = pick_footer(site, mode)
+        footer = pick_footer_by_index(site, i, footer_mode or "")
         prods = product_paths[i:] + product_paths[:i] if product_paths else []
         img = compose(
             size=1080,
@@ -155,11 +168,14 @@ class ContentWorker(QThread):
             if self._stopped():
                 raise _Cancelled()
             # chèn 1 link external vào tên sản phẩm + link cho tên miền www.
+            raw_html = data.get("content_html", "")
             pname = extract_product_name(
-                data.get("raw_content", ""), page.get("title", "") or data.get("title", "")
+                raw_html, page.get("title", "") or data.get("title", "")
             )
             data["content_html"] = autolink_html(
-                data.get("content_html", ""), site.url or "", site.name or "", pname
+                raw_html, site.url or "", site.name or "", pname,
+                keywords=[data.get("focus_keyword", ""), data.get("title", ""),
+                          page.get("title", "")],
             )
             self.progress.emit(70)
 

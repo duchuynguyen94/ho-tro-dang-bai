@@ -309,8 +309,8 @@ def extract_product_name(raw_content: str, fallback: str = "") -> str:
 
 
 def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
-                  product_name: str = "") -> str:
-    """Chèn link external: (1) một lần vào TÊN SẢN PHẨM, (2) cho tên miền dạng www."""
+                  product_name: str = "", keywords: list[str] | None = None) -> str:
+    """Chèn 1 link external vào từ khoá đầu tiên tìm thấy, + link cho tên miền dạng www."""
     if not html_text:
         return html_text
     base = (site_url or "").strip().rstrip("/")
@@ -319,12 +319,17 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
     if not base:
         return html_text
 
+    candidates: list[str] = []
+    for cand in [product_name, *list(keywords or [])]:
+        c = (cand or "").strip()
+        if len(c) >= 3 and c not in candidates:
+            candidates.append(c)
+
     tokens = _site_tokens(site_url, site_name)
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
     in_a = False
     product_done = False
-    pname = (product_name or "").strip()
 
     for part in parts:
         if part.startswith("<"):
@@ -340,13 +345,15 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
             continue
 
         text = part
-        # (1) chèn 1 lần link external vào tên sản phẩm
-        if pname and not product_done:
-            idx = text.find(pname)
-            if idx >= 0:
-                text = (text[:idx] + f'<a href="{base}">{pname}</a>'
-                        + text[idx + len(pname):])
-                product_done = True
+        # (1) chèn 1 lần link external vào từ khoá đầu tiên tìm thấy
+        if candidates and not product_done:
+            for cand in candidates:
+                idx = text.find(cand)
+                if idx >= 0:
+                    text = (text[:idx] + f'<a href="{base}">{cand}</a>'
+                            + text[idx + len(cand):])
+                    product_done = True
+                    break
         # (2) chèn link cho tên miền dạng www.
         for tok in tokens:
             pattern = re.compile(rf"(?<![\w./-])({re.escape(tok)})(?![\w/-])", re.I)

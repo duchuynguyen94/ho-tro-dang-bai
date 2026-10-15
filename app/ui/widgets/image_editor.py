@@ -23,9 +23,11 @@ SRC = 1080
 
 
 class DraggableImage(QLabel):
-    """Ảnh (logo) kéo được trên canvas."""
+    """Ảnh (logo) kéo được + kéo góc để đổi kích thước (kiểu Canva)."""
 
     moved = Signal()
+    resized = Signal(int)
+    RESIZE_ZONE = 18
 
     def __init__(self, parent: QWidget, dashed: bool = False):
         super().__init__(parent)
@@ -35,25 +37,59 @@ class DraggableImage(QLabel):
             self.setStyleSheet("border:1px dashed rgba(37,99,235,0.8);")
         self._press: QPoint | None = None
         self._start: QPoint | None = None
+        self._mode = ""
+        self._start_size = None
+        self._src: QPixmap | None = None
+
+        self.grip = QLabel(self)
+        self.grip.setFixedSize(11, 11)
+        self.grip.setStyleSheet("background:#2563eb;border-radius:3px;")
+        self.grip.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        self.grip.hide()
+
+    def set_source(self, pm: QPixmap) -> None:
+        self._src = pm
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        self.grip.move(max(0, self.width() - 11), max(0, self.height() - 11))
+        super().resizeEvent(event)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        if event.button() == Qt.LeftButton:
-            self._press = event.globalPosition().toPoint()
-            self._start = self.pos()
-            self.setCursor(Qt.ClosedHandCursor)
+        if event.button() != Qt.LeftButton:
+            return
+        pos = event.position().toPoint()
+        near = (pos.x() >= self.width() - self.RESIZE_ZONE
+                and pos.y() >= self.height() - self.RESIZE_ZONE)
+        self._mode = "resize" if near else "move"
+        self._press = event.globalPosition().toPoint()
+        self._start = self.pos()
+        self._start_size = self.size()
+        self.setCursor(Qt.SizeFDiagCursor if near else Qt.ClosedHandCursor)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
-        if self._press is None or self._start is None:
+        if not self._mode or self._press is None or self._start is None:
             return
         delta = event.globalPosition().toPoint() - self._press
-        pos = self._start + delta
-        par = self.parentWidget()
-        x = max(0, min(par.width() - self.width(), pos.x()))
-        y = max(0, min(par.height() - self.height(), pos.y()))
-        self.move(x, y)
-        self.moved.emit()
+        if self._mode == "move":
+            par = self.parentWidget()
+            x = max(0, min(par.width() - self.width(), self._start.x() + delta.x()))
+            y = max(0, min(par.height() - self.height(), self._start.y() + delta.y()))
+            self.move(x, y)
+            self.moved.emit()
+            return
+        # resize giữ tỉ lệ
+        new_w = max(24, self._start_size.width() + delta.x())
+        ratio = self._start_size.height() / max(1, self._start_size.width())
+        new_h = max(12, int(new_w * ratio))
+        self.setFixedSize(new_w, new_h)
+        if self._src is not None and not self._src.isNull():
+            self.setPixmap(self._src.scaled(new_w, new_h, Qt.KeepAspectRatio,
+                                            Qt.SmoothTransformation))
+        self.move(self._start)
+        self.resized.emit(new_w)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        self._mode = ""
         self._press = None
         self._start = None
         self.setCursor(Qt.OpenHandCursor)
@@ -101,6 +137,8 @@ class ImageEditorPanel(QFrame):
         self.brand_item = DraggableImage(self.canvas)
         self.logo_item.moved.connect(self._on_moved)
         self.brand_item.moved.connect(self._on_moved)
+        self.logo_item.resized.connect(lambda w: self._on_resized("logo", w))
+        self.brand_item.resized.connect(lambda w: self._on_resized("brand", w))
         self.logo_item.hide()
         self.brand_item.hide()
         body.addLayout(left)
@@ -123,7 +161,7 @@ class ImageEditorPanel(QFrame):
         foot_row = QHBoxLayout()
         foot_row.addWidget(QLabel("Thanh thông tin:"))
         self.footer_combo = QComboBox()
-        self.footer_combo.addItems(["Random (mặc định)", "Chỉ dùng hình 1", "Chỉ dùng hình 2"])
+        self.footer_combo.addItems(["Hình 1", "Hình 2"])
         foot_row.addWidget(self.footer_combo, 1)
         right.addLayout(foot_row)
 
@@ -184,8 +222,8 @@ class ImageEditorPanel(QFrame):
         self.s_brand.setValue(int(float(self._opts.get("brand_scale", 1.0)) * 100))
         self.s_wm.setValue(int(self._opts.get("watermark_opacity", 18) or 18))
         self.remove_bg.setChecked(bool(self._opts.get("remove_bg", False)))
-        mode = self._opts.get("footer_mode") or footer_mode or "random"
-        self.footer_combo.setCurrentIndex({"random": 0, "bar1": 1, "bar2": 2}.get(mode, 0))
+        mode = self._opts.get("footer_mode") or footer_mode or "bar1"
+        self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
         self._layout_items()
 
     def _logo_pixmap(self, path: str, base_w: float, scale: float) -> tuple[QPixmap, int, int]:
@@ -209,8 +247,10 @@ class ImageEditorPanel(QFrame):
         for item, pm, w, h in ((self.logo_item, logo_pm, lw, lh),
                                (self.brand_item, brand_pm, bw, bh)):
             item.setPixmap(pm)
+            item.set_source(pm)
             item.setFixedSize(max(1, w), max(1, h))
             item.setVisible(not pm.isNull())
+            item.grip.setVisible(not pm.isNull())
 
         lp = self._opts.get("logo_pos") or [0.035, 0.035]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
@@ -219,6 +259,15 @@ class ImageEditorPanel(QFrame):
             max(0, min(CANVAS - self.brand_item.width(), int(bp[0] * CANVAS) - self.brand_item.width())),
             int(bp[1] * CANVAS),
         )
+
+    def _on_resized(self, which: str, width: int) -> None:
+        base = (0.26 if which == "logo" else 0.34) * CANVAS
+        scale = max(0.5, min(1.8, width / max(1.0, base)))
+        slider = self.s_logo if which == "logo" else self.s_brand
+        slider.blockSignals(True)
+        slider.setValue(int(scale * 100))
+        slider.blockSignals(False)
+        self._opts["logo_scale" if which == "logo" else "brand_scale"] = round(scale, 3)
 
     def _on_moved(self) -> None:
         lp = self.logo_item.pos()
@@ -248,7 +297,7 @@ class ImageEditorPanel(QFrame):
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "remove_bg": self.remove_bg.isChecked(),
-            "footer_mode": ["random", "bar1", "bar2"][self.footer_combo.currentIndex()],
+            "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
         self._opts = opts
         self.apply_opts.emit(opts)

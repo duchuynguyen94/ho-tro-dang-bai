@@ -292,14 +292,7 @@ class JobsPage(QWidget):
         img_lab.setStyleSheet("font-weight:600;")
         img_head.addWidget(img_lab)
         img_head.addStretch(1)
-        img_head.addWidget(QLabel("Thanh thông tin:"))
-        self.footer_combo = QComboBox()
-        self.footer_combo.addItems(["Random (mặc định)", "Chỉ dùng hình 1", "Chỉ dùng hình 2"])
-        img_head.addWidget(self.footer_combo)
-        regen = QPushButton("↻ Tạo lại ảnh")
-        regen.setProperty("class", "ghost")
-        regen.clicked.connect(self._regen_images)
-        img_head.addWidget(regen)
+        img_head.addWidget(QLabel("Bấm vào ảnh để sửa trực tiếp"))
         ev2.addLayout(img_head)
 
         self.images_row = QHBoxLayout()
@@ -486,7 +479,6 @@ class JobsPage(QWidget):
         self.desc_edit.setPlainText(r.get("description", ""))
         self.tags_edit.setText(r.get("tags", ""))
         self.content_edit.set_html(r.get("content_html", ""))
-        self.footer_combo.setCurrentIndex({"random": 0, "bar1": 1, "bar2": 2}.get(task.footer_mode, 0))
 
         while self.images_row.count():
             it = self.images_row.takeAt(0)
