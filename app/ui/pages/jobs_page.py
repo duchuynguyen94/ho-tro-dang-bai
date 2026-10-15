@@ -1,6 +1,7 @@
 """Màn hình 'Công việc đang làm'."""
 from __future__ import annotations
 
+import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt, QUrl, Signal
@@ -614,6 +615,20 @@ class JobsPage(QWidget):
         self._load(task)
 
     def _load(self, task) -> None:
+        """Hiển thị kết quả — có chốt an toàn: lỗi thì báo rõ, KHÔNG kẹt ở màn hình chờ."""
+        try:
+            self._load_inner(task)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.error_label.setText(
+                "<b>Không hiển thị được kết quả.</b><br><br>"
+                f"{type(exc).__name__}: {exc}"
+                "<br><br><span style='color:#64748b'>Bấm “Thử tạo lại”, hoặc xem tab Log lỗi.</span>"
+            )
+            self.stack.setCurrentWidget(self.page_error)
+            self.footer.show()
+
+    def _load_inner(self, task) -> None:
         r = task.result or {}
         self.title_edit.setText(r.get("title", ""))
         self.kw_edit.setText(r.get("focus_keyword", ""))
@@ -624,6 +639,8 @@ class JobsPage(QWidget):
         while self.images_row.count():
             it = self.images_row.takeAt(0)
             w = it.widget()
+            if w is self.add_img_btn:
+                continue                      # GIỮ LẠI nút "+ Thêm hình" (không xoá)
             if w:
                 w.deleteLater()
 

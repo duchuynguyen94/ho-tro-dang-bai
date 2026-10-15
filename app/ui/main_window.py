@@ -1,6 +1,8 @@
 """Cửa sổ chính."""
 from __future__ import annotations
 
+import traceback
+
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QFrame,
@@ -190,15 +192,26 @@ class MainWindow(QMainWindow):
         self.jobs_page.set_loading_message(msg)
 
     def _on_content_ok(self, task, result: dict) -> None:
-        from ..storage.models import Task
-
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        fresh.result = result
-        fresh.status = STATUS_REVIEW
-        fresh.progress = 100
-        self.store.upsert_task(fresh)
-        self.store.save()
-        self.jobs_page.refresh()
+        try:
+            fresh.result = result
+            fresh.status = STATUS_REVIEW
+            fresh.progress = 100
+            self.store.upsert_task(fresh)
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Lưu kết quả AI", str(exc))
+            self.status("Lỗi khi lưu kết quả — xem tab Log lỗi.")
+            return
+        try:
+            self.jobs_page.refresh()
+            self.jobs_page.select_task(fresh.id)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Hiển thị kết quả AI", str(exc))
+            self.status("Lỗi khi hiển thị kết quả — xem tab Log lỗi.")
+            return
         self._refresh_count()
         self.status("Xong — vào tab Công việc đang làm để duyệt.")
 
@@ -216,8 +229,12 @@ class MainWindow(QMainWindow):
         fresh.message = "Đã dừng theo yêu cầu"
         self.store.upsert_task(fresh)
         self.store.save()
-        self.jobs_page.refresh()
-        self.jobs_page.select_task(fresh.id)
+        try:
+            self.jobs_page.refresh()
+            self.jobs_page.select_task(fresh.id)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Hiển thị kết quả", str(exc))
         self.status("Đã dừng tạo nội dung.")
 
     def _on_content_failed(self, task, err: str) -> None:
@@ -226,10 +243,14 @@ class MainWindow(QMainWindow):
         fresh.message = err
         self.store.upsert_task(fresh)
         self.store.save()
-        self.jobs_page.refresh()
-        self.jobs_page.select_task(fresh.id)
-        self._refresh_count()
         self._log_err("Tạo nội dung", err)
+        try:
+            self.jobs_page.refresh()
+            self.jobs_page.select_task(fresh.id)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Hiển thị lỗi", str(exc))
+        self._refresh_count()
         self.status("Sẵn sàng")
 
     def _on_delete_task(self, task_id: str) -> None:

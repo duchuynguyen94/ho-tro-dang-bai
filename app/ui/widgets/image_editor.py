@@ -327,7 +327,7 @@ class ImageEditorPanel(QFrame):
             self.canvas.clear()
             self.canvas.setText("(chưa có ảnh)")
 
-        self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0)) * 100))
+        self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0) or 1.0) * 100))
         self.s_wm.setValue(int(self._opts.get("watermark_opacity", 7) or 0))
         self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
         mode = self._opts.get("footer_mode") or footer_mode or "bar1"

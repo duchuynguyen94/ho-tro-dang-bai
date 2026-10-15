@@ -334,6 +334,7 @@ class ContentWorker(QThread):
                                            rules=self.store.image_rules,
                                            remove_bg=rb, remove_bg_thresh=th)
             self.progress.emit(100)
+            self.log.emit("Đang hiển thị kết quả…")
 
             result = dict(data)
             result.update(
