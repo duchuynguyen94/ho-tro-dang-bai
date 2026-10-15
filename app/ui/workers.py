@@ -37,7 +37,8 @@ def pick_footer(site, mode: str = "") -> str:
 
 def build_template_images(site, task, brand_logo: str, product_paths: list[str],
                           footer_mode: str = "", log=None, rules: list[str] | None = None,
-                          remove_bg: bool = False, remove_bg_thresh: int = 42) -> list[dict]:
+                          remove_bg: bool = False, remove_bg_thresh: int = 42,
+                          opts: dict | None = None) -> list[dict]:
     """Ghép ảnh theo mẫu (dùng cho cả tạo mới và tạo lại ảnh)."""
     import re as _re
 
@@ -55,6 +56,17 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         "description": result.get("description", ""),
     }
     rules = list(rules or [])
+    opts = dict(opts or (result.get("image_opts") or {}))
+    logo_pos = tuple(opts.get("logo_pos") or (0.035, 0.035))
+    brand_pos = tuple(opts.get("brand_pos") or (0.965, 0.035))
+    logo_scale = float(opts.get("logo_scale", 1.0) or 1.0)
+    brand_scale = float(opts.get("brand_scale", 1.0) or 1.0)
+    product_scale = float(opts.get("product_scale", 1.0) or 1.0)
+    wm_opacity = int(opts.get("watermark_opacity", 18) or 18)
+    if opts.get("remove_bg") is not None:
+        remove_bg = bool(opts["remove_bg"])
+    if opts.get("footer_mode"):
+        mode = opts["footer_mode"]
 
     for i in range(count):
         footer = pick_footer(site, mode)
@@ -67,8 +79,14 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             footer_bar=footer,
             frame=site.frame_path,
             watermark=site.watermark_text,
+            watermark_opacity=wm_opacity,
             remove_bg=remove_bg,
             remove_bg_thresh=remove_bg_thresh,
+            logo_pos=logo_pos,
+            brand_pos=brand_pos,
+            logo_scale=logo_scale,
+            brand_scale=brand_scale,
+            product_scale=product_scale,
         )
         # Rule đặt tên ảnh (nếu có)
         rule = (rules[i] if i < len(rules) else "").strip()
@@ -198,12 +216,14 @@ class ImagesWorker(QThread):
     ok = Signal(list)
     failed = Signal(str)
 
-    def __init__(self, store, site, task, footer_mode: str = "") -> None:
+    def __init__(self, store, site, task, footer_mode: str = "",
+                 opts: dict | None = None) -> None:
         super().__init__()
         self.store = store
         self.site = site
         self.task = task
         self.footer_mode = footer_mode
+        self.opts = dict(opts or {})
 
     def run(self) -> None:
         try:
@@ -215,6 +235,7 @@ class ImagesWorker(QThread):
                 self.footer_mode, log=self.log.emit,
                 rules=self.store.image_rules,
                 remove_bg=rb, remove_bg_thresh=th,
+                opts=self.opts,
             )
             self.ok.emit(images)
         except Exception as exc:

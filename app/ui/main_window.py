@@ -112,6 +112,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.create_script.connect(self._on_create_script)
         self.jobs_page.stop_record.connect(self._on_stop_record)
         self.jobs_page.ai_edit.connect(self._on_ai_edit)
+        self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -396,6 +397,27 @@ class MainWindow(QMainWindow):
         self.record_worker = None
         self._log_err("Ghi kịch bản", err)
         self.status("Sẵn sàng")
+
+    def _on_apply_image_opts(self, task, opts: dict) -> None:
+        site = self.store.get_site(task.site_id)
+        if not site:
+            return
+        self.jobs_page._save()
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh.result.setdefault("image_opts", {}).update(opts)
+        if opts.get("footer_mode"):
+            fresh.footer_mode = opts["footer_mode"]
+        self.store.upsert_task(fresh)
+        self.store.save()
+
+        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts)
+        worker.log.connect(lambda m: self.status(m))
+        worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
+        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err), self.status("Sẵn sàng")))
+        worker.finished.connect(lambda: self._cleanup(worker))
+        self._workers.append(worker)
+        worker.start()
+        self.status("Đang ghép lại ảnh theo thiết lập…")
 
     def _on_ai_edit(self, task, index: int, prompt: str) -> None:
         if not self.store.get_site(task.site_id):

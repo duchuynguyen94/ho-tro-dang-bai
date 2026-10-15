@@ -37,6 +37,7 @@ from ...storage.models import (
     STATUS_REVIEW,
 )
 from ..style import Card
+from ..widgets.image_editor import ImageEditorPanel
 from ..widgets.rich_editor import RichEditor
 from ..toast import show_toast
 
@@ -135,6 +136,7 @@ class JobsPage(QWidget):
     stop_record = Signal()                   # dừng ghi & lưu
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
+    apply_image_opts = Signal(object, dict)  # (task, tuỳ chọn ảnh)
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -269,6 +271,10 @@ class JobsPage(QWidget):
 
         self.images_row = QHBoxLayout()
         ev2.addLayout(self.images_row)
+
+        self.img_editor = ImageEditorPanel()
+        self.img_editor.apply_opts.connect(self._apply_image_opts)
+        ev2.addWidget(self.img_editor)
         ev2.addStretch(1)
 
         self.editor_scroll = QScrollArea()
@@ -451,6 +457,9 @@ class JobsPage(QWidget):
             self.images_row.addWidget(self._image_box(i, im))
         self.images_row.addStretch(1)
 
+        first = images[0].get("path", "") if images else ""
+        self.img_editor.load(first, r.get("image_opts") or {}, task.footer_mode)
+
         self.stack.setCurrentWidget(self.editor_scroll)
         self.footer.show()
 
@@ -507,6 +516,10 @@ class JobsPage(QWidget):
         self.ai_edit.emit(self.current, index, prompt.strip())
 
     # ------------------------------------------------------------------ #
+    def _apply_image_opts(self, opts: dict) -> None:
+        if self.current:
+            self.apply_image_opts.emit(self.current, opts)
+
     def _regen_images(self) -> None:
         if not self.current:
             return

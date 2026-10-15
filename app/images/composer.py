@@ -123,6 +123,11 @@ def compose(
     transparent_bg: bool = False,
     remove_bg: bool = False,
     remove_bg_thresh: int = 42,
+    logo_pos: tuple[float, float] = (0.035, 0.035),
+    brand_pos: tuple[float, float] = (0.965, 0.035),
+    logo_scale: float = 1.0,
+    brand_scale: float = 1.0,
+    product_scale: float = 1.0,
 ) -> Image.Image:
     products = [p for p in (products or []) if p]
     bg = (255, 255, 255, 0) if transparent_bg else (255, 255, 255, 255)
@@ -157,7 +162,9 @@ def compose(
             for c in range(cols):
                 if slot >= n:
                     break
-                im = _fit(prods[slot], int(cell_w * 0.9), int(cell_h * 0.9))
+                im = _fit(prods[slot],
+                          int(cell_w * 0.9 * product_scale),
+                          int(cell_h * 0.9 * product_scale))
                 cx = PAD + c * cell_w + (cell_w - im.size[0]) // 2
                 cy = top + r * cell_h + (cell_h - im.size[1]) // 2
                 base.alpha_composite(im, (cx, cy))
@@ -166,14 +173,22 @@ def compose(
     # --- logo website (trên-trái) ---
     logo = _load_rgba(site_logo)
     if logo is not None:
-        logo = _fit(logo, int(size * 0.26), int(size * 0.12))
-        base.alpha_composite(logo, (PAD, PAD))
+        logo = _fit(logo, int(size * 0.26 * logo_scale), int(size * 0.12 * logo_scale))
+        lx = int(logo_pos[0] * size)
+        ly = int(logo_pos[1] * size)
+        lx = max(0, min(size - logo.size[0], lx))
+        ly = max(0, min(size - logo.size[1], ly))
+        base.alpha_composite(logo, (lx, ly))
 
     # --- logo thương hiệu (trên-phải) ---
     brand = _load_rgba(brand_logo)
     if brand is not None:
-        brand = _fit(brand, int(size * 0.34), int(size * 0.13))
-        base.alpha_composite(brand, (size - PAD - brand.size[0], PAD))
+        brand = _fit(brand, int(size * 0.34 * brand_scale), int(size * 0.13 * brand_scale))
+        bx = int(brand_pos[0] * size) - brand.size[0]
+        by = int(brand_pos[1] * size)
+        bx = max(0, min(size - brand.size[0], bx))
+        by = max(0, min(size - brand.size[1], by))
+        base.alpha_composite(brand, (bx, by))
 
     # --- khung viền (frame overlay) ---
     fr = _load_rgba(frame)
