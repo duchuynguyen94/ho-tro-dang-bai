@@ -1,4 +1,4 @@
-"""Trình chỉnh sửa ảnh trực tiếp (kéo logo, chỉnh kích thước, xoá nền…)."""
+"""Trình chỉnh sửa ảnh trực tiếp: kéo trực tiếp logo thật, chỉnh kích thước, xoá nền."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -19,22 +19,20 @@ from PySide6.QtWidgets import (
 )
 
 CANVAS = 380
+SRC = 1080
 
 
-class DragMarker(QLabel):
-    """Ô đánh dấu kéo được trên canvas."""
+class DraggableImage(QLabel):
+    """Ảnh (logo) kéo được trên canvas."""
 
     moved = Signal()
 
-    def __init__(self, text: str, parent: QWidget, color: str, width: int = 64, height: int = 24):
-        super().__init__(text, parent)
-        self.setFixedSize(width, height)
-        self.setAlignment(Qt.AlignCenter)
+    def __init__(self, parent: QWidget, dashed: bool = False):
+        super().__init__(parent)
         self.setCursor(Qt.OpenHandCursor)
-        self.setStyleSheet(
-            f"background:rgba(255,255,255,0.75); border:2px dashed {color};"
-            f"border-radius:5px; color:{color}; font-size:10px; font-weight:700;"
-        )
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        if dashed:
+            self.setStyleSheet("border:1px dashed rgba(37,99,235,0.8);")
         self._press: QPoint | None = None
         self._start: QPoint | None = None
 
@@ -59,10 +57,11 @@ class DragMarker(QLabel):
         self._press = None
         self._start = None
         self.setCursor(Qt.OpenHandCursor)
+        self.moved.emit()
 
 
 class ImageEditorPanel(QFrame):
-    """Panel chỉnh sửa ảnh: canvas + điều khiển."""
+    """Panel chỉnh sửa ảnh: canvas (kéo logo thật) + điều khiển."""
 
     apply_opts = Signal(dict)
 
@@ -70,14 +69,21 @@ class ImageEditorPanel(QFrame):
         super().__init__(parent)
         self.setObjectName("imgEditor")
         self._opts: dict = {}
+        self._preview: dict = {}
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
         root.setSpacing(10)
 
-        head = QLabel("Trình sửa ảnh trực tiếp")
-        head.setStyleSheet("font-weight:700;")
-        root.addWidget(head)
+        head = QHBoxLayout()
+        self.title = QLabel("Trình sửa ảnh trực tiếp")
+        self.title.setStyleSheet("font-weight:700;")
+        head.addWidget(self.title)
+        head.addStretch(1)
+        self.hint = QLabel("Kéo trực tiếp logo trên ảnh để đổi vị trí")
+        self.hint.setObjectName("taskMeta")
+        head.addWidget(self.hint)
+        root.addLayout(head)
 
         body = QHBoxLayout()
         body.setSpacing(14)
@@ -91,15 +97,12 @@ class ImageEditorPanel(QFrame):
         self.canvas.setAlignment(Qt.AlignCenter)
         left.addWidget(self.canvas)
 
-        self.logo_marker = DragMarker("Logo site", self.canvas, "#2563eb")
-        self.brand_marker = DragMarker("Logo brand", self.canvas, "#16a34a", 76, 24)
-        self.logo_marker.moved.connect(self._on_marker_moved)
-        self.brand_marker.moved.connect(self._on_marker_moved)
-
-        note = QLabel("Kéo ô xanh để đổi vị trí logo. Bấm “Lưu & áp dụng” để ghép lại ảnh.")
-        note.setObjectName("taskMeta")
-        note.setWordWrap(True)
-        left.addWidget(note)
+        self.logo_item = DraggableImage(self.canvas, dashed=True)
+        self.brand_item = DraggableImage(self.canvas)
+        self.logo_item.moved.connect(self._on_moved)
+        self.brand_item.moved.connect(self._on_moved)
+        self.logo_item.hide()
+        self.brand_item.hide()
         body.addLayout(left)
 
         # ---------- điều khiển ----------
@@ -138,7 +141,9 @@ class ImageEditorPanel(QFrame):
         right.addLayout(actions)
         body.addLayout(right, 1)
 
-        self._image_path = ""
+        # cập nhật preview khi kéo size
+        self.s_logo.valueChanged.connect(lambda _v: self._layout_items())
+        self.s_brand.valueChanged.connect(lambda _v: self._layout_items())
 
     # ------------------------------------------------------------------ #
     def _slider(self, grid: QGridLayout, row: int, label: str,
@@ -157,56 +162,85 @@ class ImageEditorPanel(QFrame):
         return sl
 
     # ------------------------------------------------------------------ #
-    def load(self, image_path: str, opts: dict | None = None, footer_mode: str = "random") -> None:
-        self._image_path = image_path or ""
+    def load(self, preview: dict, opts: dict | None = None,
+             footer_mode: str = "random", title: str = "") -> None:
+        """preview = {background, logo, brand}; opts = tuỳ chọn hiện tại."""
+        self._preview = dict(preview or {})
         self._opts = dict(opts or {})
-        self._show_image()
-        self._apply_opts_to_widgets(footer_mode)
+        if title:
+            self.title.setText(f"Trình sửa ảnh trực tiếp — {title}")
 
-    def _apply_opts_to_widgets(self, footer_mode: str = "random") -> None:
-        o = self._opts
-        self.s_product.setValue(int(float(o.get("product_scale", 1.0)) * 100))
-        self.s_logo.setValue(int(float(o.get("logo_scale", 1.0)) * 100))
-        self.s_brand.setValue(int(float(o.get("brand_scale", 1.0)) * 100))
-        self.s_wm.setValue(int(o.get("watermark_opacity", 18) or 18))
-        self.remove_bg.setChecked(bool(o.get("remove_bg", False)))
-        mode = o.get("footer_mode") or footer_mode or "random"
+        # ảnh nền (đã ghép, KHÔNG có logo)
+        bg = Path(self._preview.get("background", ""))
+        if bg.exists():
+            self.canvas.setPixmap(
+                QPixmap(str(bg)).scaled(CANVAS, CANVAS, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+        else:
+            self.canvas.setText("(chưa có ảnh)")
+
+        self.s_product.setValue(int(float(self._opts.get("product_scale", 1.0)) * 100))
+        self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0)) * 100))
+        self.s_brand.setValue(int(float(self._opts.get("brand_scale", 1.0)) * 100))
+        self.s_wm.setValue(int(self._opts.get("watermark_opacity", 18) or 18))
+        self.remove_bg.setChecked(bool(self._opts.get("remove_bg", False)))
+        mode = self._opts.get("footer_mode") or footer_mode or "random"
         self.footer_combo.setCurrentIndex({"random": 0, "bar1": 1, "bar2": 2}.get(mode, 0))
-        self._place_markers()
+        self._layout_items()
 
-    def _place_markers(self) -> None:
+    def _logo_pixmap(self, path: str, base_w: float, scale: float) -> tuple[QPixmap, int, int]:
+        p = Path(path or "")
+        if not p.exists():
+            return QPixmap(), 0, 0
+        src = QPixmap(str(p))
+        if src.isNull():
+            return QPixmap(), 0, 0
+        target_w = max(20, int(SRC * base_w * scale))
+        disp_w = max(16, int(target_w * CANVAS / SRC))
+        disp_h = max(10, int(disp_w * src.height() / max(1, src.width())))
+        return src.scaled(disp_w, disp_h, Qt.KeepAspectRatio, Qt.SmoothTransformation), disp_w, disp_h
+
+    def _layout_items(self) -> None:
+        logo_pm, lw, lh = self._logo_pixmap(
+            self._preview.get("logo", ""), 0.26, self.s_logo.value() / 100.0)
+        brand_pm, bw, bh = self._logo_pixmap(
+            self._preview.get("brand", ""), 0.34, self.s_brand.value() / 100.0)
+
+        for item, pm, w, h in ((self.logo_item, logo_pm, lw, lh),
+                               (self.brand_item, brand_pm, bw, bh)):
+            item.setPixmap(pm)
+            item.setFixedSize(max(1, w), max(1, h))
+            item.setVisible(not pm.isNull())
+
         lp = self._opts.get("logo_pos") or [0.035, 0.035]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
-        self.logo_marker.move(int(lp[0] * CANVAS), int(lp[1] * CANVAS))
-        self.brand_marker.move(
-            max(0, int(bp[0] * CANVAS) - self.brand_marker.width()), int(bp[1] * CANVAS)
+        self.logo_item.move(int(lp[0] * CANVAS), int(lp[1] * CANVAS))
+        self.brand_item.move(
+            max(0, min(CANVAS - self.brand_item.width(), int(bp[0] * CANVAS) - self.brand_item.width())),
+            int(bp[1] * CANVAS),
         )
 
-    def _on_marker_moved(self) -> None:
-        lp = self.logo_marker.pos()
-        bp = self.brand_marker.pos()
+    def _on_moved(self) -> None:
+        lp = self.logo_item.pos()
+        bp = self.brand_item.pos()
         self._opts["logo_pos"] = [round(lp.x() / CANVAS, 4), round(lp.y() / CANVAS, 4)]
         self._opts["brand_pos"] = [
-            round((bp.x() + self.brand_marker.width()) / CANVAS, 4),
+            round((bp.x() + self.brand_item.width()) / CANVAS, 4),
             round(bp.y() / CANVAS, 4),
         ]
-
-    def _show_image(self) -> None:
-        p = Path(self._image_path)
-        if p.exists():
-            pm = QPixmap(str(p)).scaled(CANVAS, CANVAS, Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.canvas.setPixmap(pm)
-        else:
-            self.canvas.setPixmap(QPixmap())
-            self.canvas.setText("(chưa có ảnh)")
 
     # ------------------------------------------------------------------ #
     def _reset(self) -> None:
         self._opts = {}
-        self._apply_opts_to_widgets()
+        self.s_product.setValue(100)
+        self.s_logo.setValue(100)
+        self.s_brand.setValue(100)
+        self.s_wm.setValue(18)
+        self.remove_bg.setChecked(False)
+        self._layout_items()
 
     def _apply(self) -> None:
-        self._on_marker_moved()
+        self._on_moved()
         opts = dict(self._opts)
         opts.update({
             "product_scale": self.s_product.value() / 100.0,

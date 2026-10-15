@@ -94,6 +94,7 @@ QLabel#chipGray  {{ color: #475569; background: #f1f5f9; border: 1px solid #e2e8
 QLabel#chipBlue  {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #bfdbfe; }}
 QLabel#metaText  {{ color: {MUTED}; font-size: 11px; }}
 QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9px; }}
+QFrame#imgBox[selected="true"] {{ border: 2px solid {ACCENT}; background: #eff6ff; }}
 QFrame#imgEditor {{ background: #f8fafc; border: 1px solid {LINE}; border-radius: 9px; }}
 QLabel#imgCanvas {{ background: #ffffff; border: 1px dashed #b6c2d1; border-radius: 8px; color: #94a3b8; }}
 #rteBar {{ background: #f8fafc; border: 1px solid #cbd5e1; border-bottom: none;

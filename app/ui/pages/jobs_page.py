@@ -37,7 +37,10 @@ from ...storage.models import (
     STATUS_QUEUED,
     STATUS_REVIEW,
 )
+from ...config import output_dir
+from ...images import compose, save_composed
 from ..style import Card
+from ..workers import _remove_bg_opts
 from ..widgets.image_editor import ImageEditorPanel
 from ..widgets.rich_editor import RichEditor
 from ..toast import show_toast
@@ -50,6 +53,28 @@ STATUS_OBJECTS = {
     STATUS_DONE: "chipGreen",
     STATUS_ERROR: "chipRed",
 }
+
+
+class ThumbBox(QFrame):
+    """Thumbnail ảnh, bấm vào để chọn sửa."""
+
+    clicked = Signal(int)
+
+    def __init__(self, index: int, parent=None) -> None:
+        super().__init__(parent)
+        self.index = index
+        self.setObjectName("imgBox")
+
+    def set_selected(self, on: bool) -> None:
+        self.setProperty("selected", "true" if on else "false")
+        st = self.style()
+        st.unpolish(self)
+        st.polish(self)
+        self.update()
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        self.clicked.emit(self.index)
+        super().mousePressEvent(event)
 
 
 class TaskRow(QFrame):
@@ -145,6 +170,8 @@ class JobsPage(QWidget):
         self.store = store
         self.current = None
         self._rows: dict[str, TaskRow] = {}
+        self._thumbs: list = []
+        self._sel_index = 0
         self._build()
         self.refresh()
 
@@ -468,19 +495,23 @@ class JobsPage(QWidget):
                 w.deleteLater()
 
         images = r.get("images", [])
+        self._thumbs = []
         for i, im in enumerate(images, 1):
-            self.images_row.addWidget(self._image_box(i, im))
+            box = self._image_box(i, im)
+            self.images_row.addWidget(box)
+            self._thumbs.append(box)
         self.images_row.addStretch(1)
 
-        first = images[0].get("path", "") if images else ""
-        self.img_editor.load(first, r.get("image_opts") or {}, task.footer_mode)
+        if getattr(self, "_sel_index", 0) >= len(images):
+            self._sel_index = 0
+        self._refresh_preview(task)
 
         self.stack.setCurrentWidget(self.editor_scroll)
         self.footer.show()
 
-    def _image_box(self, index: int, im: dict) -> QWidget:
-        box = QFrame()
-        box.setObjectName("imgBox")
+    def _image_box(self, index: int, im: dict) -> ThumbBox:
+        box = ThumbBox(index - 1)
+        box.clicked.connect(self._select_image)
         bl = QVBoxLayout(box)
         bl.setContentsMargins(6, 6, 6, 6)
         bl.setSpacing(6)
@@ -531,6 +562,48 @@ class JobsPage(QWidget):
         self.ai_edit.emit(self.current, index, prompt.strip())
 
     # ------------------------------------------------------------------ #
+    def _select_image(self, index: int) -> None:
+        self._sel_index = index
+        if self.current:
+            self._refresh_preview(self.current)
+
+    def _build_preview(self, task, index: int) -> dict:
+        site = self.store.get_site(task.site_id)
+        r = task.result or {}
+        images = r.get("images") or []
+        footer = images[index].get("footer", "") if index < len(images) else ""
+        opts = r.get("image_opts") or {}
+        remove_bg, th = _remove_bg_opts(self.store)
+        base = compose(
+            size=1080,
+            site_logo="", brand_logo="",
+            products=list(r.get("product_images") or []),
+            footer_bar=footer,
+            frame=site.frame_path if site else "",
+            watermark=site.watermark_text if site else "",
+            watermark_opacity=int(opts.get("watermark_opacity", 18) or 18),
+            remove_bg=remove_bg,
+            remove_bg_thresh=th,
+            product_scale=float(opts.get("product_scale", 1.0) or 1.0),
+        )
+        out = output_dir() / f"preview_{task.id}_{index + 1}.png"
+        save_composed(base, str(out))
+        return {
+            "background": str(out),
+            "logo": site.logo_path if site else "",
+            "brand": r.get("brand_logo", ""),
+        }
+
+    def _refresh_preview(self, task) -> None:
+        r = task.result or {}
+        images = r.get("images") or []
+        idx = getattr(self, "_sel_index", 0)
+        for box in getattr(self, "_thumbs", []):
+            box.set_selected(box.index == idx)
+        title = f"Ảnh {idx + 1}" if images else ""
+        preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
+        self.img_editor.load(preview, r.get("image_opts") or {}, task.footer_mode, title)
+
     def _apply_image_opts(self, opts: dict) -> None:
         if self.current:
             self.apply_image_opts.emit(self.current, opts)

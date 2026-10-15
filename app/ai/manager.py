@@ -273,6 +273,20 @@ def _site_tokens(site_url: str, site_name: str) -> list[str]:
     return sorted(tokens, key=len, reverse=True)
 
 
+def clean_content_html(html_text: str) -> str:
+    """Bỏ chữ rác đầu (Writing…), bỏ ký hiệu đầu dòng trùng trong <li>."""
+    t = html_text or ""
+    # chữ rác ở đầu do giao diện ChatGPT hoặc AI thêm vào
+    for _ in range(3):
+        t = re.sub(r"^\s*(Writing|Đang viết|Đang soạn|ChatGPT said|ChatGPT)\s*[:.\-–]?\s*",
+                   "", t, flags=re.I)
+    t = re.sub(r"^\s*<p>\s*(Writing|Đang viết)\s*</p>\s*", "", t, flags=re.I)
+    # ký hiệu đầu dòng trùng trong <li> (rule dùng ● nhưng <ul> đã tự có bullet)
+    t = re.sub(r"(<li[^>]*>)\s*[●•▪◦‣·►▶]\s*", r"\1", t, flags=re.I)
+    t = re.sub(r"(<li[^>]*>)\s*[-*+]\s+", r"\1", t)
+    return t.strip()
+
+
 def _looks_like_html(text: str) -> bool:
     """True nếu nội dung đã là HTML (có thẻ khối)."""
     return bool(re.search(r"<\s*(h[1-6]|p|ul|ol|table|div|figure)\b", text or "", re.I))
@@ -387,7 +401,7 @@ def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
             inner = str(seo.get("content_html", "") or "").strip()
             if inner and not _is_placeholder(inner) and _looks_like_html(inner):
                 content = inner        # AI để nội dung trong JSON -> dùng luôn
-            seo["content_html"] = (
+            seo["content_html"] = clean_content_html(
                 content if _looks_like_html(content) else text_to_html(content)
             )
             seo["raw_content"] = content
