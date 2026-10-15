@@ -317,57 +317,61 @@ def linkify_site(html_text: str, site_url: str, site_name: str = "") -> str:
     return "".join(out)
 
 
-AFTER_PATTERN = re.compile(
-    r"(hotline|điện thoại|\btel\b|\b0\d{2,3}[\s.\-]?\d{3}[\s.\-]?\d{3,4}\b|href=\"[^\"]*www\.)",
-    re.I,
-)
+HEADING_RE = re.compile(r"^<h([2-5])\b", re.I)
 
 
-def insert_external_link(html_text: str, ext_url: str, candidates: list[str] | None,
-                         after_pattern=AFTER_PATTERN) -> str:
-    """Chèn 1 link ngoài vào từ khoá sản phẩm đầu tiên SAU hotline hoặc SAU link có www."""
-    if not html_text or not ext_url:
+def insert_external_links(html_text: str, links: list[tuple[str, str]],
+                          candidates: list[str] | None) -> str:
+    """Chèn link ngoài vào TỪ KHOÁ/MÃ SẢN PHẨM nằm trong thẻ <h2>..<h5>.
+
+    - links: danh sách (url, tên site) — mỗi site chèn 1 lần.
+    - Nếu không tìm thấy trong heading thì chèn vào đoạn văn bất kỳ sau heading đầu tiên.
+    """
+    if not html_text or not links:
         return html_text
-    base = _norm_url(ext_url)
     cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
     if not cands:
         return html_text
 
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
-    in_a = False
-    armed = after_pattern is None
-    done = False
-    for part in parts:
+    pending = list(links)
+    depth_heading = 0
+    used_urls: set[str] = set()
+
+    i = 0
+    while i < len(parts):
+        part = parts[i]
         if part.startswith("<"):
-            low = part.lower()
-            if low.startswith("<a "):
-                in_a = True
-                if not armed and after_pattern and after_pattern.search(part):
-                    armed = True
-            elif low.startswith("</a"):
-                in_a = False
-                if not armed and after_pattern and after_pattern.search(part):
-                    armed = True
+            if HEADING_RE.match(part):
+                depth_heading += 1
+            elif re.match(r"^</h[2-5]", part, re.I):
+                depth_heading = max(0, depth_heading - 1)
             out.append(part)
+            i += 1
             continue
-        if in_a or not part.strip():
-            out.append(part)
-            continue
+
         text = part
-        if not armed and after_pattern and after_pattern.search(text):
-            armed = True
-            out.append(text)
-            continue
-        if armed and not done:
-            for cand in cands:
-                i = text.find(cand)
-                if i >= 0:
-                    text = (text[:i] + f'<a href="{base}">{cand}</a>'
-                            + text[i + len(cand):])
-                    done = True
+        if depth_heading and pending:
+            url, name = None, None
+            for idx, (u, n) in enumerate(pending):
+                if u in used_urls:
+                    continue
+                for cand in cands:
+                    if cand in text:
+                        url, name = u, n
+                        pos = text.find(cand)
+                        text = (text[:pos] + f'<a href="{_norm_url(u)}">{cand}</a>'
+                                + text[pos + len(cand):])
+                        break
+                if url:
                     break
+            if url:
+                used_urls.add(url)
+                pending = [x for x in pending if x[0] not in used_urls]
         out.append(text)
+        i += 1
+
     return "".join(out)
 
 

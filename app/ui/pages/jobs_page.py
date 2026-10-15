@@ -333,7 +333,6 @@ class JobsPage(QWidget):
         img_lab.setStyleSheet("font-weight:600;")
         img_head.addWidget(img_lab)
         img_head.addStretch(1)
-        img_head.addWidget(QLabel("Bấm vào ảnh để sửa trực tiếp"))
         ev2.addLayout(img_head)
 
         self.images_row = QHBoxLayout()
@@ -341,6 +340,13 @@ class JobsPage(QWidget):
 
         self.img_editor = ImageEditorPanel()
         self.img_editor.apply_opts.connect(self._apply_image_opts)
+        self.img_editor.request_upload.connect(
+            lambda: self._upload_image(getattr(self, "_sel_index", 0)))
+        self.img_editor.request_ai_edit.connect(
+            lambda: self._ai_edit(getattr(self, "_sel_index", 0)))
+        self.img_editor.request_refetch.connect(
+            lambda: self.current and self.refetch_image.emit(self.current,
+                                                             getattr(self, "_sel_index", 0)))
         ev2.addWidget(self.img_editor)
         ev2.addStretch(1)
 
@@ -570,22 +576,6 @@ class JobsPage(QWidget):
         cap.setAlignment(Qt.AlignCenter)
         pad.addWidget(cap)
 
-        bts = QHBoxLayout()
-        up = QPushButton("Tải lên")
-        up.setProperty("class", "ghost")
-        up.clicked.connect(lambda _=False, idx=index - 1: self._upload_image(idx))
-        ai = QPushButton("AI sửa")
-        ai.setProperty("class", "ghost")
-        ai.clicked.connect(lambda _=False, idx=index - 1: self._ai_edit(idx))
-        rnd = QPushButton("Lấy hình")
-        rnd.setProperty("class", "ghost")
-        rnd.setToolTip("Tự động lấy lại ảnh sản phẩm từ link nguồn")
-        rnd.clicked.connect(lambda _=False, idx=index - 1: self.current and
-                            self.refetch_image.emit(self.current, idx))
-        bts.addWidget(up)
-        bts.addWidget(ai)
-        bts.addWidget(rnd)
-        pad.addLayout(bts)
         return box
 
     def _ai_edit(self, index: int) -> None:
@@ -616,7 +606,7 @@ class JobsPage(QWidget):
         base = compose(
             size=1080,
             site_logo="", brand_logo="",
-            products=list(r.get("product_images") or []),
+            products=[],
             footer_bar=footer,
             frame=site.frame_path if site else "",
             watermark=site.watermark_text if site else "",
@@ -631,6 +621,7 @@ class JobsPage(QWidget):
             "background": str(out),
             "logo": site.logo_path if site else "",
             "brand": r.get("brand_logo", ""),
+            "products": [p for p in (r.get("product_images") or []) if p],
         }
 
     def _refresh_preview(self, task) -> None:

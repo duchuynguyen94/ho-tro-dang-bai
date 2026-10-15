@@ -8,7 +8,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import extract_product_name, insert_external_link, linkify_site
+from ..ai.manager import extract_product_name, insert_external_links, linkify_site
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -98,6 +98,9 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         logo_scale = float(o.get("logo_scale", 1.0) or 1.0)
         brand_scale = float(o.get("brand_scale", 1.0) or 1.0)
         product_scale = float(o.get("product_scale", 1.0) or 1.0)
+        product_positions = o.get("product_pos") or None
+        if product_positions:
+            product_positions = [tuple(p) for p in product_positions]
         wm_opacity = int(o.get("watermark_opacity", 18) or 18)
         rb = remove_bg if o.get("remove_bg") is None else bool(o["remove_bg"])
         mode_i = o.get("footer_mode") or footer_mode or mode
@@ -119,6 +122,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             logo_scale=logo_scale,
             brand_scale=brand_scale,
             product_scale=product_scale,
+            product_positions=product_positions,
         )
         # Rule đặt tên ảnh (nếu có)
         rule = (rules[i] if i < len(rules) else "").strip()
@@ -186,19 +190,19 @@ class ContentWorker(QThread):
             raw_html = data.get("content_html", "")
             html_out = linkify_site(raw_html, site.url or "", site.name or "")
 
-            # 2) 1 link NGOÀI (site khác trong danh sách) chèn vào từ khoá sau "Giới thiệu"
-            others = [x for x in self.store.sites if x.id != site.id and (x.url or "").strip()]
+            # 2) link NGOÀI: mỗi site khác trong danh sách chèn 1 lần vào heading (h2..h5)
+            others = [(x.url or "", x.name or "") for x in self.store.sites
+                      if x.id != site.id and (x.url or "").strip()]
             if others:
-                ext = others[0]
                 pname = extract_product_name(
                     raw_html, page.get("title", "") or data.get("title", "")
                 )
-                html_out = insert_external_link(
-                    html_out, ext.url or "",
+                html_out = insert_external_links(
+                    html_out, others,
                     [pname, data.get("focus_keyword", ""), data.get("title", ""),
                      page.get("title", "")],
                 )
-                self.log.emit(f"Chèn liên kết ngoài tới {ext.name}.")
+                self.log.emit(f"Chèn {len(others)} liên kết ngoài vào tiêu đề mục.")
             else:
                 self.log.emit("Chỉ có 1 website trong danh sách — không chèn liên kết ngoài.")
             data["content_html"] = html_out
@@ -484,15 +488,31 @@ class ImageRefetchWorker(QThread):
         try:
             self.log.emit("Đang lấy ảnh sản phẩm từ link nguồn…")
             page = src.fetch_source(self.task.source_url)
-            urls = page.get("images", [])[:3]
+            urls = list(page.get("images", []) or [])[:3]
             paths: list[str] = []
             for u in urls:
                 try:
                     paths.append(src.download_image(u))
                 except Exception:
                     continue
+
             if not paths:
-                raise RuntimeError("Không tìm thấy ảnh sản phẩm nào từ link nguồn.")
+                query = (extract_product_name(
+                    (self.task.result or {}).get("content_html", ""),
+                    page.get("title", "") or (self.task.result or {}).get("title", ""),
+                ) or (self.task.result or {}).get("focus_keyword", "")
+                    or (self.task.result or {}).get("title", ""))
+                if query:
+                    self.log.emit(f"Không thấy ảnh ở nguồn — tìm ảnh trên mạng: “{query[:60]}”…")
+                    for u in src.search_images(query, 4):
+                        try:
+                            paths.append(src.download_image(u, prefix="web"))
+                        except Exception:
+                            continue
+                        if len(paths) >= 3:
+                            break
+            if not paths:
+                raise RuntimeError("Không lấy được ảnh sản phẩm (cả từ link nguồn và tìm trên mạng).")
             r = self.task.result or {}
             r["product_images"] = paths
             rb, th = _remove_bg_opts(self.store)

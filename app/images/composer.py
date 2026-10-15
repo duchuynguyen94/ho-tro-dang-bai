@@ -8,6 +8,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 DEFAULT_SIZE = 1080
 PAD = 40
+PRODUCT_BOX = 0.30      # tỉ lệ cạnh hộp sản phẩm so với khổ ảnh
 
 
 # --------------------------------------------------------------------------- #
@@ -111,6 +112,22 @@ def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 18) ->
 # --------------------------------------------------------------------------- #
 # Ghép ảnh chính
 # --------------------------------------------------------------------------- #
+def product_box(size: int, scale: float = 1.0) -> int:
+    return max(60, int(size * PRODUCT_BOX * (scale or 1.0)))
+
+
+def default_product_positions(n: int, size: int,
+                              scale: float = 1.0) -> list[tuple[float, float]]:
+    """Vị trí mặc định cho n ảnh sản phẩm (một hàng, canh giữa)."""
+    n = max(1, n)
+    box = product_box(size, scale)
+    gap = int(size * 0.03)
+    total = n * box + (n - 1) * gap
+    x0 = max(PAD, (size - total) // 2)
+    y = int(size * 0.36)
+    return [((x0 + i * (box + gap)) / size, y / size) for i in range(n)]
+
+
 def compose(
     size: int = DEFAULT_SIZE,
     site_logo: str = "",
@@ -128,6 +145,7 @@ def compose(
     logo_scale: float = 1.0,
     brand_scale: float = 1.0,
     product_scale: float = 1.0,
+    product_positions: list | None = None,
 ) -> Image.Image:
     products = [p for p in (products or []) if p]
     bg = (255, 255, 255, 0) if transparent_bg else (255, 255, 255, 255)
@@ -151,24 +169,20 @@ def compose(
 
     prods = [im for im in (prepare_product(p, remove_bg, remove_bg_thresh) for p in products) if im is not None]
     if prods:
-        n = min(len(prods), 3)
-        prods = prods[:n]
-        cols = 1 if n == 1 else (2 if n == 2 else 3)
-        rows = 1 if n <= 3 else 2
-        cell_w = (size - 2 * PAD) // cols
-        cell_h = area_h // rows
-        slot = 0
-        for r in range(rows):
-            for c in range(cols):
-                if slot >= n:
-                    break
-                im = _fit(prods[slot],
-                          int(cell_w * 0.9 * product_scale),
-                          int(cell_h * 0.9 * product_scale))
-                cx = PAD + c * cell_w + (cell_w - im.size[0]) // 2
-                cy = top + r * cell_h + (cell_h - im.size[1]) // 2
-                base.alpha_composite(im, (cx, cy))
-                slot += 1
+        prods = prods[:3]
+        n = len(prods)
+        box = product_box(size, product_scale)
+        pos = list(product_positions or [])
+        if len(pos) < n:
+            pos += default_product_positions(n, size, product_scale)[len(pos):]
+        for i, im in enumerate(prods):
+            im = _fit(im, box, box)
+            fx, fy = pos[i]
+            px = int(fx * size)
+            py = int(fy * size)
+            px = max(0, min(size - im.size[0], px))
+            py = max(0, min(size - im.size[1], py))
+            base.alpha_composite(im, (px, py))
 
     # --- logo website (trên-trái) ---
     logo = _load_rgba(site_logo)

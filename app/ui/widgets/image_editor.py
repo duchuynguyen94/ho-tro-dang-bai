@@ -1,4 +1,4 @@
-"""Trình chỉnh sửa ảnh trực tiếp: kéo trực tiếp logo thật, chỉnh kích thước, xoá nền."""
+"""Trình chỉnh sửa ảnh trực tiếp: kéo logo + ảnh sản phẩm, resize 4 góc, xoá nền."""
 from __future__ import annotations
 
 from pathlib import Path
@@ -18,17 +18,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from ...images.composer import default_product_positions, product_box
+
 CANVAS = 380
 SRC = 1080
 
 
 class DraggableImage(QLabel):
-    """Ảnh (logo) kéo được + kéo góc để đổi kích thước (kiểu Canva)."""
+    """Ảnh kéo được + kéo 4 góc để đổi kích thước (kiểu Canva)."""
 
     moved = Signal()
     resized = Signal(int)
     RESIZE_ZONE = 18
-    CORNERS = ("tl", "tr", "bl", "br")
 
     def __init__(self, parent: QWidget, dashed: bool = False):
         super().__init__(parent)
@@ -57,8 +58,7 @@ class DraggableImage(QLabel):
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         w, h = self.width(), self.height()
-        pos = [(0, 0), (w - 11, 0), (0, h - 11), (w - 11, h - 11)]
-        for g, (x, y) in zip(self.grips, pos):
+        for g, (x, y) in zip(self.grips, [(0, 0), (w - 11, 0), (0, h - 11), (w - 11, h - 11)]):
             g.move(max(0, x), max(0, y))
         super().resizeEvent(event)
 
@@ -66,8 +66,7 @@ class DraggableImage(QLabel):
         if event.button() != Qt.LeftButton:
             return
         pos = event.position().toPoint()
-        w, h = self.width(), self.height()
-        z = self.RESIZE_ZONE
+        w, h, z = self.width(), self.height(), self.RESIZE_ZONE
         corner = ""
         if pos.x() <= z and pos.y() <= z:
             corner = "tl"
@@ -93,14 +92,13 @@ class DraggableImage(QLabel):
         if not self._mode or self._press is None or self._start is None:
             return
         delta = event.globalPosition().toPoint() - self._press
+        par = self.parentWidget()
         if self._mode == "move":
-            par = self.parentWidget()
             x = max(0, min(par.width() - self.width(), self._start.x() + delta.x()))
             y = max(0, min(par.height() - self.height(), self._start.y() + delta.y()))
             self.move(x, y)
             self.moved.emit()
             return
-        # resize giữ tỉ lệ, giữ cạnh/góc đối diện cố định
         sw, sh = self._start_size.width(), self._start_size.height()
         dx = delta.x() if self._corner in ("tr", "br") else -delta.x()
         ratio = sh / max(1, sw)
@@ -115,7 +113,6 @@ class DraggableImage(QLabel):
             nx = self._start.x() + (sw - new_w)
         if self._corner in ("tl", "tr"):
             ny = self._start.y() + (sh - new_h)
-        par = self.parentWidget()
         nx = max(0, min(par.width() - new_w, nx))
         ny = max(0, min(par.height() - new_h, ny))
         self.move(nx, ny)
@@ -131,15 +128,19 @@ class DraggableImage(QLabel):
 
 
 class ImageEditorPanel(QFrame):
-    """Panel chỉnh sửa ảnh: canvas (kéo logo thật) + điều khiển."""
+    """Panel chỉnh sửa ảnh: canvas (logo + ảnh sản phẩm) + điều khiển."""
 
     apply_opts = Signal(dict)
+    request_upload = Signal()
+    request_ai_edit = Signal()
+    request_refetch = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("imgEditor")
         self._opts: dict = {}
         self._preview: dict = {}
+        self._product_items: list[DraggableImage] = []
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -150,7 +151,7 @@ class ImageEditorPanel(QFrame):
         self.title.setStyleSheet("font-weight:700;")
         head.addWidget(self.title)
         head.addStretch(1)
-        self.hint = QLabel("Kéo trực tiếp logo trên ảnh để đổi vị trí")
+        self.hint = QLabel("Kéo ảnh để di chuyển · kéo 4 góc để đổi kích thước")
         self.hint.setObjectName("taskMeta")
         head.addWidget(self.hint)
         root.addLayout(head)
@@ -173,30 +174,42 @@ class ImageEditorPanel(QFrame):
         self.brand_item.moved.connect(self._on_moved)
         self.logo_item.resized.connect(lambda w: self._on_resized("logo", w))
         self.brand_item.resized.connect(lambda w: self._on_resized("brand", w))
-        self.logo_item.hide()
-        self.brand_item.hide()
+        for it in (self.logo_item, self.brand_item):
+            it.hide()
         body.addLayout(left)
 
         # ---------- điều khiển ----------
         right = QVBoxLayout()
         right.setSpacing(8)
 
-        # hàng nút: Đặt lại + Lưu (đặt TRÊN các điều khiển)
-        actions = QHBoxLayout()
+        # hàng nút thao tác ảnh (3 nút cũ chuyển vào đây)
+        tools = QHBoxLayout()
+        up = QPushButton("Tải lên")
+        up.setProperty("class", "ghost")
+        up.clicked.connect(self.request_upload.emit)
+        ai = QPushButton("AI sửa")
+        ai.setProperty("class", "ghost")
+        ai.clicked.connect(self.request_ai_edit.emit)
+        fetch = QPushButton("Lấy hình")
+        fetch.setProperty("class", "ghost")
+        fetch.setToolTip("Lấy lại ảnh sản phẩm từ link nguồn (hoặc tìm trên mạng)")
+        fetch.clicked.connect(self.request_refetch.emit)
+        tools.addWidget(up)
+        tools.addWidget(ai)
+        tools.addWidget(fetch)
+        tools.addStretch(1)
         reset = QPushButton("Đặt lại")
         reset.setProperty("class", "ghost")
         reset.clicked.connect(self._reset)
         apply_btn = QPushButton("Lưu && áp dụng")
         apply_btn.setProperty("class", "primary")
         apply_btn.clicked.connect(self._apply)
-        actions.addWidget(reset)
-        actions.addStretch(1)
-        actions.addWidget(apply_btn)
-        right.addLayout(actions)
+        tools.addWidget(reset)
+        tools.addWidget(apply_btn)
+        right.addLayout(tools)
 
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
-
         self.s_product = self._slider(grid, 0, "Ảnh sản phẩm — kích thước", 50, 180, 100)
         self.s_logo = self._slider(grid, 1, "Logo website — kích thước", 50, 180, 100)
         self.s_brand = self._slider(grid, 2, "Logo thương hiệu — kích thước", 50, 180, 100)
@@ -216,7 +229,7 @@ class ImageEditorPanel(QFrame):
         right.addStretch(1)
         body.addLayout(right, 1)
 
-        # cập nhật preview khi kéo size
+        self.s_product.valueChanged.connect(lambda _v: self._layout_products())
         self.s_logo.valueChanged.connect(lambda _v: self._layout_items())
         self.s_brand.valueChanged.connect(lambda _v: self._layout_items())
 
@@ -239,19 +252,18 @@ class ImageEditorPanel(QFrame):
     # ------------------------------------------------------------------ #
     def load(self, preview: dict, opts: dict | None = None,
              footer_mode: str = "random", title: str = "") -> None:
-        """preview = {background, logo, brand}; opts = tuỳ chọn hiện tại."""
         self._preview = dict(preview or {})
         self._opts = dict(opts or {})
         if title:
             self.title.setText(f"Trình sửa ảnh trực tiếp — {title}")
 
-        # ảnh nền (đã ghép, KHÔNG có logo)
         bg = Path(self._preview.get("background", ""))
         if bg.exists():
             self.canvas.setPixmap(
                 QPixmap(str(bg)).scaled(CANVAS, CANVAS, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             )
         else:
+            self.canvas.clear()
             self.canvas.setText("(chưa có ảnh)")
 
         self.s_product.setValue(int(float(self._opts.get("product_scale", 1.0)) * 100))
@@ -262,8 +274,10 @@ class ImageEditorPanel(QFrame):
         mode = self._opts.get("footer_mode") or footer_mode or "bar1"
         self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
         self._layout_items()
+        self._layout_products()
 
-    def _logo_pixmap(self, path: str, base_w: float, scale: float) -> tuple[QPixmap, int, int]:
+    # ---------------- logo ---------------- #
+    def _pixmap_for(self, path: str, base_w: float, scale: float) -> tuple[QPixmap, int, int]:
         p = Path(path or "")
         if not p.exists():
             return QPixmap(), 0, 0
@@ -276,11 +290,10 @@ class ImageEditorPanel(QFrame):
         return src.scaled(disp_w, disp_h, Qt.KeepAspectRatio, Qt.SmoothTransformation), disp_w, disp_h
 
     def _layout_items(self) -> None:
-        logo_pm, lw, lh = self._logo_pixmap(
-            self._preview.get("logo", ""), 0.26, self.s_logo.value() / 100.0)
-        brand_pm, bw, bh = self._logo_pixmap(
-            self._preview.get("brand", ""), 0.34, self.s_brand.value() / 100.0)
-
+        logo_pm, lw, lh = self._pixmap_for(self._preview.get("logo", ""), 0.26,
+                                           self.s_logo.value() / 100.0)
+        brand_pm, bw, bh = self._pixmap_for(self._preview.get("brand", ""), 0.34,
+                                            self.s_brand.value() / 100.0)
         for item, pm, w, h in ((self.logo_item, logo_pm, lw, lh),
                                (self.brand_item, brand_pm, bw, bh)):
             item.setPixmap(pm)
@@ -298,6 +311,58 @@ class ImageEditorPanel(QFrame):
             int(bp[1] * CANVAS),
         )
 
+    # ---------------- sản phẩm ---------------- #
+    def _layout_products(self) -> None:
+        paths = list(self._preview.get("products") or [])[:3]
+        for it in self._product_items:
+            it.setParent(None)
+            it.deleteLater()
+        self._product_items = []
+
+        if not paths:
+            return
+        scale = self.s_product.value() / 100.0
+        box_src = product_box(SRC, scale)
+        disp = max(24, int(box_src * CANVAS / SRC))
+        positions = list(self._opts.get("product_pos") or [])
+        if len(positions) < len(paths):
+            positions += default_product_positions(len(paths), SRC, scale)[len(positions):]
+
+        for i, path in enumerate(paths):
+            it = DraggableImage(self.canvas)
+            it.index = i
+            pm = QPixmap(path) if Path(path).exists() else QPixmap()
+            if pm.isNull():
+                it.deleteLater()
+                continue
+            pm = pm.scaled(disp, disp, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            it.setPixmap(pm)
+            it.set_source(pm)
+            it.setFixedSize(pm.size())
+            it.show()
+            for g in it.grips:
+                g.setVisible(True)
+            it.moved.connect(self._on_product_moved)
+            it.resized.connect(lambda w, idx=i: self._on_product_resized(idx, w))
+            fx, fy = positions[i]
+            it.move(max(0, min(CANVAS - it.width(), int(fx * CANVAS))),
+                    max(0, min(CANVAS - it.height(), int(fy * CANVAS))))
+            self._product_items.append(it)
+
+    def _on_product_moved(self) -> None:
+        self._opts["product_pos"] = [
+            [round(it.x() / CANVAS, 4), round(it.y() / CANVAS, 4)] for it in self._product_items
+        ]
+
+    def _on_product_resized(self, index: int, width: int) -> None:
+        base = product_box(SRC, 1.0) * CANVAS / SRC
+        scale = max(0.5, min(1.8, width / max(1.0, base)))
+        self.s_product.blockSignals(True)
+        self.s_product.setValue(int(scale * 100))
+        self.s_product.blockSignals(False)
+        self._on_product_moved()
+
+    # ---------------- chung ---------------- #
     def _on_resized(self, which: str, width: int) -> None:
         base = (0.26 if which == "logo" else 0.34) * CANVAS
         scale = max(0.5, min(1.8, width / max(1.0, base)))
@@ -316,7 +381,6 @@ class ImageEditorPanel(QFrame):
             round(bp.y() / CANVAS, 4),
         ]
 
-    # ------------------------------------------------------------------ #
     def _reset(self) -> None:
         self._opts = {}
         self.s_product.setValue(100)
@@ -325,9 +389,11 @@ class ImageEditorPanel(QFrame):
         self.s_wm.setValue(18)
         self.remove_bg.setChecked(False)
         self._layout_items()
+        self._layout_products()
 
     def _apply(self) -> None:
         self._on_moved()
+        self._on_product_moved()
         opts = dict(self._opts)
         opts.update({
             "product_scale": self.s_product.value() / 100.0,

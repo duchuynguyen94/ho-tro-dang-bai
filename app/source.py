@@ -115,6 +115,34 @@ def guess_brand_name(page_title: str) -> str:
     return ""
 
 
+def search_images(query: str, limit: int = 3) -> list[str]:
+    """Tìm ảnh trên mạng (Bing Images) — dùng khi link nguồn không có ảnh."""
+    q = (query or "").strip()
+    if not q:
+        return []
+    out: list[str] = []
+    try:
+        r = httpx.get(
+            "https://www.bing.com/images/search",
+            params={"q": q, "form": "HDRSC2"},
+            headers=UA, follow_redirects=True, timeout=40,
+        )
+        r.raise_for_status()
+        html = r.text
+        urls = re.findall(r'murl&quot;:&quot;(.*?)&quot;', html)
+        if not urls:
+            urls = re.findall(r'"murl":"(.*?)"', html)
+        for u in urls:
+            u = u.replace("\\/", "/").strip()
+            if u.startswith("http") and u not in out:
+                out.append(u)
+            if len(out) >= limit:
+                break
+    except Exception:
+        return out
+    return out
+
+
 def download_image(url: str, prefix: str = "sp") -> str:
     """Tải 1 ảnh về máy, trả về đường dẫn."""
     r = httpx.get(url, headers=UA, follow_redirects=True, timeout=60)
