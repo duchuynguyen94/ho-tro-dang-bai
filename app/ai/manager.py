@@ -110,9 +110,6 @@ Link bài viết nguồn: {source.get('url', '')}
 1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật** theo rule_content.pdf, đủ các mục:
 {CONTENT_OUTPUT_SPEC}
 
-Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <ul><li> cho danh sách;
-và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
-GIỮ ĐÚNG ĐỊNH DẠNG rule_content.pdf, kể cả các ký hiệu/icon đầu dòng (●, ▪, ►, ✅…).
 
 2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TRÍCH XUẤT TỪ CHÍNH NỘI DUNG TRÊN:
 {SEO_JSON_SPEC}
