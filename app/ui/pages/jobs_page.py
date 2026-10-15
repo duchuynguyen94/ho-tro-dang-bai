@@ -5,7 +5,7 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QDrag, QPixmap
+from PySide6.QtGui import QDesktopServices, QDrag, QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -56,6 +56,34 @@ STATUS_OBJECTS = {
 }
 
 MAX_IMAGES = 8      # số ảnh tối đa cho 1 bài (nút "+ Thêm hình")
+
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff")
+
+
+def clipboard_image_path() -> str:
+    """Lấy ảnh từ clipboard (ảnh copy từ web / máy tính) -> lưu vào media, trả về đường dẫn."""
+    from datetime import datetime
+
+    from ...config import media_dir
+
+    cb = QApplication.clipboard()
+    md = cb.mimeData()
+    if md is None:
+        return ""
+    if md.hasImage():
+        img = cb.image()
+        if not img.isNull():
+            d = media_dir()
+            d.mkdir(parents=True, exist_ok=True)
+            p = d / f"dan_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
+            if img.save(str(p), "PNG"):
+                return str(p)
+    if md.hasUrls():
+        for u in md.urls():
+            lp = u.toLocalFile()
+            if lp and Path(lp).suffix.lower() in IMAGE_EXTS:
+                return lp
+    return ""
 
 
 class ThumbImage(QLabel):
@@ -438,6 +466,12 @@ class JobsPage(QWidget):
             lambda: self.current and self.refetch_image.emit(self.current,
                                                              getattr(self, "_sel_index", 0)))
         ev2.addWidget(self.img_editor)
+
+        # Ctrl/Cmd + V: dán ảnh (copy từ web hoặc máy tính) vào canvas
+        self.paste_shortcut = QShortcut(QKeySequence.Paste, self)
+        self.paste_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
+        self.paste_shortcut.activated.connect(self._paste_clipboard_image)
+
         ev2.addStretch(1)
 
         self.editor_scroll = QScrollArea()
@@ -884,9 +918,32 @@ class JobsPage(QWidget):
         self.regenerate_images.emit(self.current, mode)
 
     def _upload_image(self, index: int) -> None:
-        """Ảnh tải lên trở thành MỘT THÀNH PHẦN ở giữa (như logo), không đè ảnh."""
+        """Chọn ảnh từ máy -> thành MỘT THÀNH PHẦN ở giữa canvas (như logo)."""
         path, _ = QFileDialog.getOpenFileName(self, "Chọn ảnh", "", "Ảnh (*.png *.jpg *.jpeg *.webp)")
-        if not path or not self.current:
+        if not path:
+            return
+        self._add_upload_component(path, index)
+
+    def _paste_clipboard_image(self) -> None:
+        """Ctrl/Cmd + V: dán ảnh copy từ web/máy tính vào canvas như thành phần tải lên."""
+        if not self.current:
+            return
+        fw = QApplication.focusWidget()
+        if isinstance(fw, (QLineEdit, QPlainTextEdit)) or (fw is not None and fw.inherits("QTextEdit")):
+            # đang gõ text -> dán text bình thường
+            try:
+                fw.paste()
+            except Exception:
+                pass
+            return
+        path = clipboard_image_path()
+        if not path:
+            return
+        self._add_upload_component(path, getattr(self, "_sel_index", 0))
+
+    def _add_upload_component(self, path: str, index: int) -> None:
+        """Thêm 1 ảnh (tải lên hoặc dán) thành thành phần ở giữa canvas."""
+        if not self.current or not path:
             return
         self._save()
         r = self.current.result

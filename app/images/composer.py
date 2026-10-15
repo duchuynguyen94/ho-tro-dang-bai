@@ -93,7 +93,7 @@ def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Ima
     return img
 
 
-def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 7,
+def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 10,
                              scale: float = 1.0) -> None:
     if not text:
         return
@@ -142,7 +142,7 @@ def compose(
     footer_bar: str = "",
     frame: str = "",
     watermark: str = "",
-    watermark_opacity: int = 7,
+    watermark_opacity: int = 10,
     watermark_size: float = 1.0,
     transparent_bg: bool = False,
     remove_bg: bool = False,
