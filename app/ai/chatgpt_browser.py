@@ -84,7 +84,14 @@ _REPLY_JS = r"""() => {
   for (const s of sels) {
     for (const el of document.querySelectorAll(s)) set.add(el);
   }
-  const arr = [...set].filter(el => (el.innerText || '').trim().length > 0);
+  const arr = [...set].filter(el => {
+    const t = (el.innerText || '').trim();
+    if (!t) return false;
+    // loại bỏ tin nhắn của NGƯỜI DÙNG (không được lấy prompt làm kết quả)
+    if (el.closest('[class*="user-message"]')) return false;
+    if (el.matches('[class*="user-message"]')) return false;
+    return true;
+  });
   if (!arr.length) return '';
   arr.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
   return arr[arr.length - 1].innerText || '';
@@ -110,23 +117,39 @@ LIMIT_MSG = (
 )
 
 
-def _reply_text(page) -> str:
+def _same_as_prompt(text: str, prompt: str) -> bool:
+    """True nếu 'câu trả lời' thực ra chính là prompt đã gửi."""
+    if not prompt:
+        return False
+    a = " ".join((text or "").split()).lower()
+    b = " ".join(prompt.split()).lower()
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    head = min(60, len(a), len(b))
+    return head > 20 and a[:head] == b[:head]
+
+
+def _reply_text(page, prompt: str = "") -> str:
     """Lấy nội dung tin nhắn trả lời mới nhất của ChatGPT."""
+    txt = ""
     try:
-        txt = page.evaluate(_REPLY_JS)
-        if txt and txt.strip():
-            return txt.strip()
+        txt = (page.evaluate(_REPLY_JS) or "").strip()
     except Exception:
-        pass
-    # dự phòng: lấy phần sau "ChatGPT said:"
-    try:
-        body = page.inner_text("body")
-        idx = body.rfind("ChatGPT said:")
-        if idx >= 0:
-            return body[idx + len("ChatGPT said:"):].strip()
-    except Exception:
-        pass
-    return ""
+        txt = ""
+    if not txt:
+        # dự phòng: lấy phần sau "ChatGPT said:"
+        try:
+            body = page.inner_text("body")
+            idx = body.rfind("ChatGPT said:")
+            if idx >= 0:
+                txt = body[idx + len("ChatGPT said:"):].strip()
+        except Exception:
+            txt = ""
+    if txt and _same_as_prompt(txt, prompt):
+        return ""      # chưa có trả lời thật, mới chỉ là tin nhắn của mình
+    return txt
 
 
 def _limit_reached(page, extra_text: str = "") -> str:
@@ -246,7 +269,7 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
         result_text = ""
         while time.time() < deadline:
             page.wait_for_timeout(1500)
-            text = _reply_text(page)
+            text = _reply_text(page, prompt)
             data = _try_extract_json(text)
             if data is not None:
                 result_text = json.dumps(data, ensure_ascii=False)
