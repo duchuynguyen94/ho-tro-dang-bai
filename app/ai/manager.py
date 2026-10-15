@@ -86,8 +86,11 @@ Nội dung:
 1) ĐẦU TIÊN: DUY NHẤT 1 khối JSON thông tin SEO (điền nội dung THẬT, không trả lại mẫu):
 {SEO_JSON_SPEC}
 
-2) NGAY SAU KHỐI JSON: TOÀN BỘ NỘI DUNG BÀI VIẾT theo Rule Content, đủ các mục:
+2) NGAY SAU KHỐI JSON: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật**, đủ các mục:
 {CONTENT_OUTPUT_SPEC}
+
+Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <ul><li> cho danh sách;
+và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
 
 Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 """
@@ -105,8 +108,11 @@ Link bài viết nguồn: {source.get('url', '')}
 1) ĐẦU TIÊN: DUY NHẤT 1 khối JSON thông tin SEO (điền nội dung THẬT, không trả lại mẫu):
 {SEO_JSON_SPEC}
 
-2) NGAY SAU KHỐI JSON: TOÀN BỘ NỘI DUNG BÀI VIẾT theo rule_content.pdf, đủ các mục:
+2) NGAY SAU KHỐI JSON: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật** theo rule_content.pdf, đủ các mục:
 {CONTENT_OUTPUT_SPEC}
+
+Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <ul><li> cho danh sách;
+và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
 
 Không giải thích gì thêm.
 """
@@ -225,7 +231,7 @@ def text_to_html(text: str) -> str:
         m = re.match(r"^(#{1,6})\s+(.*)$", s)
         if m:
             close_lists()
-            lvl = min(6, len(m.group(1)) + 1)
+            lvl = min(6, max(2, len(m.group(1))))
             out.append(f"<h{lvl}>{html.escape(m.group(2).strip())}</h{lvl}>")
             continue
         # gạch đầu dòng
@@ -264,9 +270,14 @@ def _site_tokens(site_url: str, site_name: str) -> list[str]:
     return sorted(tokens, key=len, reverse=True)
 
 
+def _looks_like_html(text: str) -> bool:
+    """True nếu nội dung đã là HTML (có thẻ khối)."""
+    return bool(re.search(r"<\s*(h[1-6]|p|ul|ol|table|div|figure)\b", text or "", re.I))
+
+
 def extract_product_name(raw_content: str, fallback: str = "") -> str:
-    """Lấy tên sản phẩm: dòng ngay sau 'Tiêu đề bài viết' (nếu có)."""
-    text = raw_content or ""
+    """Lấy tên sản phẩm: dòng ngay sau 'Tiêu đề bài viết' (chấp nhận cả HTML)."""
+    text = re.sub(r"<[^>]+>", "\n", raw_content or "")
     m = re.search(r"Tiêu đề bài viết[^\n]*\n+\s*([^\n]{3,200})", text, re.I)
     if m:
         name = m.group(1).strip(" •-*#\t")
@@ -360,7 +371,9 @@ def generate_content(store, source: dict, log=None) -> dict:
             if not content or len(content) < 50:
                 raise providers.AIError("AI không trả về nội dung bài viết.")
 
-            seo["content_html"] = text_to_html(content)
+            seo["content_html"] = (
+                content if _looks_like_html(content) else text_to_html(content)
+            )
             seo["raw_content"] = content
             if log:
                 log("Đã có kết quả (JSON SEO + nội dung).")
