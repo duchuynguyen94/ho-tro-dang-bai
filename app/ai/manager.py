@@ -25,12 +25,22 @@ def _fmt_errors(errors: list[str]) -> str:
 REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags", "content_html")
 
 
-def read_rule(path: str, limit: int = 8000) -> str:
+def read_rule(path: str, limit: int = 12000) -> str:
+    """Đọc file rule: .txt/.html/.md/.doc/.docx đọc thẳng, .pdf trích text."""
     if not path:
         return ""
     p = Path(path)
     if not p.exists():
         return ""
+    if p.suffix.lower() == ".pdf":
+        try:
+            from pypdf import PdfReader
+
+            reader = PdfReader(str(p))
+            text = "\n".join((pg.extract_text() or "") for pg in reader.pages)
+            return text[:limit]
+        except Exception:
+            return ""
     try:
         return p.read_text(encoding="utf-8", errors="ignore")[:limit]
     except OSError:
@@ -38,26 +48,22 @@ def read_rule(path: str, limit: int = 8000) -> str:
 
 
 def build_prompt(rules, source: dict) -> str:
-    rules_title = read_rule(getattr(rules, "title", ""))
-    rules_content = read_rule(getattr(rules, "content", ""))
-    rules_desc = read_rule(getattr(rules, "description", ""))
-    rules_tags = read_rule(getattr(rules, "tags", ""))
+    rule_content = read_rule(getattr(rules, "content", ""))
+    rule_seo = read_rule(getattr(rules, "seo", ""))
+    rule_extractor = read_rule(getattr(rules, "extractor", ""))
 
     images_hint = "\n".join(f"- {u}" for u in source.get("images", [])[:6])
 
     return f"""Bạn là chuyên gia content SEO tiếng Việt. Hãy tạo bài viết cho website WordPress dựa trên BÀI VIẾT NGUỒN và TUYỆT ĐỐI tuân thủ QUY ĐỊNH dưới đây.
 
-=== QUY ĐỊNH TIÊU ĐỀ ===
-{rules_title or "(Không có quy định riêng — viết tiêu đề hấp dẫn, có từ khóa chính.)"}
+=== QUY ĐỊNH NỘI DUNG (RULE CONTENT) ===
+{rule_content or "(Không có quy định riêng — viết nội dung rõ ràng, có thẻ <h2>, <p>, <ul>.)"}
 
-=== QUY ĐỊNH NỘI DUNG ===
-{rules_content or "(Không có quy định riêng — viết nội dung rõ ràng, có thẻ <h2>, <p>, <ul>.)"}
+=== QUY ĐỊNH SEO / ĐẦU RA (RULE SEO) ===
+{rule_seo or "(Không có quy định riêng — tiêu đề hấp dẫn có từ khóa, mô tả SEO dưới 160 ký tự, 4-8 thẻ.)"}
 
-=== QUY ĐỊNH DESCRIPTION ===
-{rules_desc or "(Không có quy định riêng — mô tả SEO dưới 160 ký tự.)"}
-
-=== QUY ĐỊNH SEARCH TAGS ===
-{rules_tags or "(Không có quy định riêng — 4-8 thẻ, cách nhau bởi dấu phẩy.)"}
+=== QUY ĐỊNH TRÍCH XUẤT MODEL (RULE MODEL EXTRACTOR) ===
+{rule_extractor or "(Không có quy định riêng.)"}
 
 === BÀI VIẾT NGUỒN ===
 Tiêu đề gốc: {source.get('title', '')}
@@ -96,10 +102,10 @@ def _active_chain(cfg: dict) -> list[str]:
 
 
 FIELD_RULES = {
-    "title": ("Tiêu đề", "title"),
-    "focus_keyword": ("Focus keyword (từ khóa chính)", None),
-    "description": ("Description (mô tả SEO)", "description"),
-    "tags": ("Search tags (thẻ, cách nhau bởi dấu phẩy)", "tags"),
+    "title": ("Tiêu đề", "seo"),
+    "focus_keyword": ("Focus keyword (từ khóa chính)", "seo"),
+    "description": ("Description (mô tả SEO)", "seo"),
+    "tags": ("Search tags (thẻ, cách nhau bởi dấu phẩy)", "seo"),
     "content_html": ("Nội dung dạng HTML", "content"),
 }
 

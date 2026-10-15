@@ -45,12 +45,15 @@ class Store:
 
     def _migrate(self) -> None:
         """Chuyển format của site cũ sang format dùng chung (nếu chưa có)."""
-        fmt = self.data.setdefault("formats", {"title": "", "content": "", "description": "", "tags": ""})
+        fmt = self.data.setdefault("formats", {})
+        for k in ("content", "seo", "extractor"):
+            fmt.setdefault(k, "")
         if not fmt.get("content"):
             for s in self.data.get("sites", []):
                 sf = s.get("formats") or {}
                 if sf.get("content"):
-                    fmt.update({k: sf.get(k, "") or "" for k in ("title", "content", "description", "tags")})
+                    fmt["content"] = sf.get("content", "") or ""
+                    fmt["seo"] = sf.get("seo") or sf.get("title") or ""
                     break
         if not isinstance(fmt.get("image_rules"), list) or not fmt.get("image_rules"):
             fmt["image_rules"] = ["", "", ""]

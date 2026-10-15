@@ -970,13 +970,20 @@ class FormatPanel(QScrollArea):
         v.addWidget(sub)
 
         # ---- File quy định ----
-        card = Card("File quy định cho AI")
+        card = Card("Rule quy định cho AI")
+        hint0 = QLabel(
+            "Chọn 3 file rule (PDF/DOC/TXT/HTML): <b>Content</b> (quy tắc viết bài), "
+            "<b>SEO</b> (title / keyword / mô tả / tags), <b>Model Extractor</b> (trích xuất Product Models). "
+            "Dùng chung cho mọi website."
+        )
+        hint0.setProperty("class", "hint")
+        hint0.setWordWrap(True)
+        card.body.addWidget(hint0)
         f = _form()
         rows = [
-            ("title", "Quy định tiêu đề"),
-            ("content", "Quy định nội dung"),
-            ("description", "Quy định description"),
-            ("tags", "Quy định search tags"),
+            ("content", "Rule Content"),
+            ("seo", "Rule SEO"),
+            ("extractor", "Rule Model Extractor"),
         ]
         for key, label in rows:
             edit = QLineEdit()

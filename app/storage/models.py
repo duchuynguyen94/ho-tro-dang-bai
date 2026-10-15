@@ -22,20 +22,34 @@ def now_iso() -> str:
 # --------------------------------------------------------------------------- #
 @dataclass
 class Formats:
-    title: str = ""
+    """3 file quy định dùng chung: nội dung, SEO/đầu ra, trích xuất model."""
+
     content: str = ""
+    seo: str = ""
+    extractor: str = ""
+    # giữ lại để tương thích cấu hình cũ
+    title: str = ""
     description: str = ""
     tags: str = ""
 
     def to_dict(self) -> dict:
-        return asdict(self)
+        return {
+            "content": self.content,
+            "seo": self.seo,
+            "extractor": self.extractor,
+            "title": self.title,
+            "description": self.description,
+            "tags": self.tags,
+        }
 
     @classmethod
     def from_dict(cls, d: dict | None) -> "Formats":
         d = d or {}
         return cls(
-            title=d.get("title", ""),
             content=d.get("content", ""),
+            seo=d.get("seo", ""),
+            extractor=d.get("extractor", ""),
+            title=d.get("title", ""),
             description=d.get("description", ""),
             tags=d.get("tags", ""),
         )
@@ -265,10 +279,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "sites": [],
     "tasks": [],
     "formats": {          # format & rule dùng chung cho MỌI website
-        "title": "",
-        "content": "",
-        "description": "",
-        "tags": "",
+        "content": "",     # Rule Content  – quy tắc viết bài
+        "seo": "",         # Rule SEO      – yêu cầu đầu ra (title, keyword, mô tả, tags)
+        "extractor": "",   # Rule Model Extractor – trích xuất Product Models
         "image_rules": ["", "", ""],   # rule đặt tên cho ảnh 1..6, vd: "Hello world {title}"
     },
 }

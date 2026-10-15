@@ -15,7 +15,8 @@ fi
 .venv/bin/pyinstaller --noconfirm --clean --windowed \
   --name "$APP_NAME" \
   --collect-all playwright \
-  --hidden-import app \
+  --hidden-import app
+  --hidden-import pypdf \
   --exclude-module PySide6.Qt3DCore \
   --exclude-module PySide6.Qt3DRender \
   --exclude-module PySide6.Qt3DAnimation \

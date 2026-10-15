@@ -6,4 +6,5 @@ gspread>=6.1
 google-auth>=2.35
 cryptography>=43.0
 beautifulsoup4>=4.12
+pypdf>=5.0
 lxml>=5.3
