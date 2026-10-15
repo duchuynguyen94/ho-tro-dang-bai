@@ -439,6 +439,11 @@ class ImageEditorPanel(QFrame):
         cache[key] = pm
         return pm
 
+    def _raise_watermark(self) -> None:
+        """Watermark luôn nằm TRÊN mọi thành phần khác."""
+        if self.wm_label is not None:
+            self.wm_label.raise_()
+
     def _layout_products(self) -> None:
         all_paths = list(self._preview.get("products") or [])
         hidden = set(self._opts.get("product_hidden") or [])
@@ -451,6 +456,7 @@ class ImageEditorPanel(QFrame):
         self._product_items = []
 
         if not paths:
+            self._raise_watermark()
             return
         scale = 1.0
         scales = list(self._opts.get("product_scales") or [])
@@ -487,6 +493,7 @@ class ImageEditorPanel(QFrame):
             it.move(max(0, min(CANVAS - it.width(), int(fx * CANVAS))),
                     max(0, min(CANVAS - it.height(), int(fy * CANVAS))))
             self._product_items.append(it)
+        self._raise_watermark()
 
     # ---------------- thành phần tải lên (per-image) ---------------- #
     def _layout_uploads(self) -> None:
@@ -526,8 +533,7 @@ class ImageEditorPanel(QFrame):
                     max(0, min(CANVAS - it.height(), int(pos[1] * CANVAS - it.height() / 2))))
             it.raise_()
             self._upload_items.append(it)
-        if self.wm_label is not None:
-            self.wm_label.raise_()      # watermark luôn nằm TRÊN thành phần
+        self._raise_watermark()
 
     def _on_upload_moved(self) -> None:  # noqa: D401
         ups = list(self._opts.get("uploads") or [])
