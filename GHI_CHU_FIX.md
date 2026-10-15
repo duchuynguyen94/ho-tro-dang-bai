@@ -1,4 +1,4 @@
-# Ghi chú — 9 mục cần fix (CHỜ LỆNH)
+# Ghi chú — 10 mục cần fix (CHỜ LỆNH)
 
 > Trạng thái: **CHƯA LÀM** — chỉ thực hiện khi người dùng nói **"fix"**.
 > Ngày ghi: 2026-10-16
@@ -81,7 +81,25 @@
 
 ---
 
-## Ghi chú phụ (ngoài 9 mục — bàn riêng, chưa chốt)
+## Mục 10 — Làm đẹp dropdown (select) — cả ô chọn lẫn danh sách xổ xuống
+- Vấn đề người dùng nêu: **ô select hiện hơi xấu**, và khi bấm mở ra thì **danh sách chọn hiển thị xấu**.
+- Hiện trạng code: `app/ui/style.py` đã có style cho `QComboBox` + `QComboBox QAbstractItemView` (nền trắng, viền `#cbd5e1`, bo 8px, item `padding: 6px 8px`) — nhưng **cửa sổ popup** (khung xổ xuống) **không được bo góc** vì QSS không áp cho **window** của popup trên macOS → trông vuông/vô duyệt; item **không có trạng thái hover**, chiều cao thấp, **scrollbar mặc định xấu**, chiều rộng popup không khớp ô chọn.
+- Hướng làm đẹp:
+  1. **Ô chọn:** viền + bo góc + padding đều hơn, có **hover** và **focus** rõ ràng, mũi tên (`ARROW`) căn giữa đẹp hơn.
+  2. **Danh sách xổ xuống:**
+     - Nền trắng, viền nhạt, **bo góc ~10px**, `padding: 6px`, `outline: none`.
+     - Item: **padding 8px 10px**, **bo 7px**, có **`:hover`** (nền nhạt `#f8fafc`) và **`:selected`** (nền `#eff6ff`, chữ accent đậm).
+     - **Scrollbar trong popup** style mảnh, bo tròn, màu dịu (không dùng thanh mặc định).
+  3. **Bo góc cả khung popup** (không chỉ phần view): set cho `combo.view().window()`:
+     - `Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint`
+     - `setAttribute(Qt.WA_TranslucentBackground)` + chừa margin để thấy viền bo.
+     - → Cần một helper (ví dụ `polish_combo(combo)`) áp cho **mọi QComboBox** trong app (gọi lúc tạo, hoặc quét toàn bộ khi khởi động).
+  4. **Kích thước popup:** rộng **tối thiểu bằng ô chọn** (`view().setMinimumWidth(combo.width())`), số dòng hiển thị hợp lý (`setMaxVisibleItems`), item cao ~28–30px cho dễ bấm.
+- Phạm vi: **toàn app** — mọi `QComboBox` (Đăng bài, Cấu hình, Format Rule, editor `#rteCombo`…).
+
+---
+
+## Ghi chú phụ (ngoài 10 mục — bàn riêng, chưa chốt)
 - **AI chỉnh ảnh free:** đã tư vấn. Nổi bật:
   - `rembg` (offline, free) → thay thuật toán xoá nền flood-fill hiện tại, chất lượng tốt hơn hẳn.
   - `IOPaint / LaMa` (offline, free) → xoá vật thể / thành phần.
