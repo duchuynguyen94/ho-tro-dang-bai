@@ -237,7 +237,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "groq": {"api_key_enc": "", "model": "llama-3.3-70b-versatile"},
             "openrouter": {"api_key_enc": "", "model": "meta-llama/llama-3.3-70b-instruct:free"},
             "deepseek": {"api_key_enc": "", "model": "deepseek-chat"},
-            "chatgpt": {"session_file": ""},
+            "chatgpt": {"session_file": "", "project": ""},
             "openai": {"api_key_enc": "", "model": "gpt-4o-mini"},
         },
     },

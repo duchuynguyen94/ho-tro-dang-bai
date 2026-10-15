@@ -706,6 +706,7 @@ class AIContentPanel(QScrollArea):
         body = card.body
         key_edit = None
         model_edit = None
+        project_edit = None
 
         if key == "chatgpt":
             note = QLabel(
@@ -715,6 +716,14 @@ class AIContentPanel(QScrollArea):
             note.setProperty("class", "hint")
             note.setWordWrap(True)
             body.addWidget(note)
+            body.addWidget(QLabel("Tên dự án (Project)"))
+            project_edit = QLineEdit(pcfg.get("project", ""))
+            project_edit.setPlaceholderText("vd: Đăng bài WordPress")
+            body.addWidget(project_edit)
+            pnote = QLabel("Để trống nếu dùng ChatGPT thường. Nếu có, phần mềm sẽ mở đúng Project này.")
+            pnote.setProperty("class", "hint")
+            pnote.setWordWrap(True)
+            body.addWidget(pnote)
             btn = QPushButton("Đăng nhập ChatGPT")
             btn.setProperty("class", "ghost")
             btn.clicked.connect(lambda _=False, b=btn: self._login_chatgpt(b))
@@ -729,7 +738,8 @@ class AIContentPanel(QScrollArea):
             model_edit = QLineEdit(pcfg.get("model", ""))
             body.addWidget(model_edit)
 
-        self._rows[key] = {"key": key_edit, "model": model_edit, "radio": radio}
+        self._rows[key] = {"key": key_edit, "model": model_edit,
+                           "project": project_edit, "radio": radio}
         return card, num
 
     def _save(self) -> None:
@@ -740,6 +750,8 @@ class AIContentPanel(QScrollArea):
                 p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
             if row.get("model") is not None and row["model"].text().strip():
                 p["model"] = row["model"].text().strip()
+            if row.get("project") is not None:
+                p["project"] = row["project"].text().strip()
             if row["radio"].isChecked():
                 cfg["active"] = key
         cfg["order"] = self.list.keys()
