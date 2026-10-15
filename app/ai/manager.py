@@ -253,21 +253,112 @@ def text_to_html(text: str) -> str:
     return "\n".join(out)
 
 
-def _site_tokens(site_url: str, site_name: str) -> list[str]:
-    """Các biến thể tên miền CÓ 'www.' để chèn link (tự thêm www nếu site chưa có)."""
-    tokens: list[str] = []
-    for raw in (site_name or "", site_url or ""):
-        t = (raw or "").strip().rstrip("/")
-        if not t:
+def _norm_url(url: str) -> str:
+    u = (url or "").strip().rstrip("/")
+    if u and not u.startswith("http"):
+        u = "https://" + u
+    return u
+
+
+def _domain_of(url_or_name: str) -> str:
+    d = re.sub(r"^https?://", "", (url_or_name or "").strip().rstrip("/")).lower()
+    return d
+
+
+def _dom_variants(url_or_name: str) -> list[str]:
+    d = _domain_of(url_or_name)
+    if not d:
+        return []
+    bare = d[4:] if d.startswith("www.") else d
+    out = [d]
+    if bare and bare != d:
+        out.append(bare)
+    w = f"www.{bare}"
+    if w not in out:
+        out.append(w)
+    # ưu tiên chuỗi dài trước để khớp 'www.x' trước 'x'
+    return sorted(set(out), key=len, reverse=True)
+
+
+def linkify_site(html_text: str, site_url: str, site_name: str = "") -> str:
+    """Chèn link cho MỌI lần xuất hiện tên miền của website -> URL của chính website đó."""
+    if not html_text:
+        return html_text
+    base = _norm_url(site_url)
+    variants: list[str] = []
+    for src in (site_name, site_url):
+        for v in _dom_variants(src):
+            if v not in variants:
+                variants.append(v)
+    variants = [v for v in variants if len(v) >= 4]
+    if not base or not variants:
+        return html_text
+
+    parts = re.split(r"(<[^>]+>)", html_text)
+    out: list[str] = []
+    in_a = False
+    for part in parts:
+        if part.startswith("<"):
+            low = part.lower()
+            if low.startswith("<a "):
+                in_a = True
+            elif low.startswith("</a"):
+                in_a = False
+            out.append(part)
             continue
-        t = re.sub(r"^https?://", "", t).lower()
-        if not t:
+        if in_a or not part.strip():
+            out.append(part)
             continue
-        bare = t[4:] if t.startswith("www.") else t
-        for cand in (t, f"www.{bare}"):
-            if cand.startswith("www.") and cand not in tokens:
-                tokens.append(cand)
-    return sorted(tokens, key=len, reverse=True)
+        text = part
+        for var in variants:
+            pattern = re.compile(rf"(?<![\w./-])({re.escape(var)})(?![\w/-])", re.I)
+            text = pattern.sub(lambda m: f'<a href="{base}">{m.group(1)}</a>', text)
+        out.append(text)
+    return "".join(out)
+
+
+def insert_external_link(html_text: str, ext_url: str, candidates: list[str] | None,
+                         after_marker: str = "giới thiệu") -> str:
+    """Chèn 1 link ngoài vào từ khoá đầu tiên xuất hiện SAU mục 'Giới thiệu'."""
+    if not html_text or not ext_url:
+        return html_text
+    base = _norm_url(ext_url)
+    cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
+    if not cands:
+        return html_text
+
+    parts = re.split(r"(<[^>]+>)", html_text)
+    out: list[str] = []
+    in_a = False
+    armed = not after_marker
+    done = False
+    for part in parts:
+        if part.startswith("<"):
+            low = part.lower()
+            if low.startswith("<a "):
+                in_a = True
+            elif low.startswith("</a"):
+                in_a = False
+            out.append(part)
+            continue
+        if in_a or not part.strip():
+            out.append(part)
+            continue
+        text = part
+        if not armed and after_marker and after_marker in text.lower():
+            armed = True
+            out.append(text)
+            continue
+        if armed and not done:
+            for cand in cands:
+                i = text.find(cand)
+                if i >= 0:
+                    text = (text[:i] + f'<a href="{base}">{cand}</a>'
+                            + text[i + len(cand):])
+                    done = True
+                    break
+        out.append(text)
+    return "".join(out)
 
 
 def clean_content_html(html_text: str) -> str:

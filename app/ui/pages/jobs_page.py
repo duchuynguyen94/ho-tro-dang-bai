@@ -61,10 +61,18 @@ class ThumbImage(QLabel):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("imgThumb")
-        self.setFixedHeight(200)
-        self.setMinimumWidth(60)
+        self.setMinimumWidth(80)
         self.setAlignment(Qt.AlignCenter)
         self._src = None
+        sp = self.sizePolicy()
+        sp.setHeightForWidth(True)
+        self.setSizePolicy(sp)
+
+    def hasHeightForWidth(self) -> bool:  # noqa: N802
+        return True
+
+    def heightForWidth(self, w: int) -> int:  # noqa: N802
+        return max(80, w)      # ảnh vuông 1:1
 
     def set_source(self, pm) -> None:
         self._src = pm
@@ -93,6 +101,9 @@ class ThumbBox(QFrame):
         super().__init__(parent)
         self.index = index
         self.setObjectName("imgBox")
+        self.pic = None
+
+
 
     def set_selected(self, on: bool) -> None:
         self.setProperty("selected", "true" if on else "false")
@@ -191,6 +202,7 @@ class JobsPage(QWidget):
     stop_record = Signal()                   # dừng ghi & lưu
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
+    refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
@@ -538,6 +550,7 @@ class JobsPage(QWidget):
         bl.setSpacing(0)
 
         pic = ThumbImage()
+        box.pic = pic
         p = Path(im.get("path", ""))
         if p.exists():
             pic.set_source(QPixmap(str(p)))
@@ -564,9 +577,11 @@ class JobsPage(QWidget):
         ai = QPushButton("AI sửa")
         ai.setProperty("class", "ghost")
         ai.clicked.connect(lambda _=False, idx=index - 1: self._ai_edit(idx))
-        rnd = QPushButton("↻ Random")
+        rnd = QPushButton("Lấy hình")
         rnd.setProperty("class", "ghost")
-        rnd.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, "images"))
+        rnd.setToolTip("Tự động lấy lại ảnh sản phẩm từ link nguồn")
+        rnd.clicked.connect(lambda _=False, idx=index - 1: self.current and
+                            self.refetch_image.emit(self.current, idx))
         bts.addWidget(up)
         bts.addWidget(ai)
         bts.addWidget(rnd)

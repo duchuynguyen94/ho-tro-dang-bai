@@ -8,7 +8,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import autolink_html, extract_product_name
+from ..ai.manager import extract_product_name, insert_external_link, linkify_site
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -182,23 +182,27 @@ class ContentWorker(QThread):
                                      should_stop=self._stopped)
             if self._stopped():
                 raise _Cancelled()
-            # chèn 1 link external vào tên sản phẩm + link cho tên miền www.
+            # 1) link nội bộ: mọi chỗ có tên miền của CHÍNH website này -> URL website
             raw_html = data.get("content_html", "")
-            pname = extract_product_name(
-                raw_html, page.get("title", "") or data.get("title", "")
-            )
-            # liên kết NGOÀI: lấy site khác trong danh sách (trừ site đang đăng)
+            html_out = linkify_site(raw_html, site.url or "", site.name or "")
+
+            # 2) 1 link NGOÀI (site khác trong danh sách) chèn vào từ khoá sau "Giới thiệu"
             others = [x for x in self.store.sites if x.id != site.id and (x.url or "").strip()]
-            link_site = others[0] if others else site
             if others:
-                self.log.emit(f"Chèn liên kết ngoài tới {link_site.name}.")
+                ext = others[0]
+                pname = extract_product_name(
+                    raw_html, page.get("title", "") or data.get("title", "")
+                )
+                html_out = insert_external_link(
+                    html_out, ext.url or "",
+                    [pname, data.get("focus_keyword", ""), data.get("title", ""),
+                     page.get("title", "")],
+                    "giới thiệu",
+                )
+                self.log.emit(f"Chèn liên kết ngoài tới {ext.name}.")
             else:
-                self.log.emit("Chỉ có 1 website trong danh sách — dùng chính site này để chèn link.")
-            data["content_html"] = autolink_html(
-                raw_html, link_site.url or "", link_site.name or "", pname,
-                keywords=[data.get("focus_keyword", ""), data.get("title", ""),
-                          page.get("title", "")],
-            )
+                self.log.emit("Chỉ có 1 website trong danh sách — không chèn liên kết ngoài.")
+            data["content_html"] = html_out
             self.progress.emit(70)
 
             # Logo thương hiệu: ưu tiên file dự phòng, nếu trống thì thử tìm trên trang nguồn.
@@ -458,6 +462,49 @@ class LoginWorker(QThread):
                 br.close()
             except Exception:
                 pass
+        except Exception as exc:
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
+class ImageRefetchWorker(QThread):
+    """Crawl lại ảnh sản phẩm từ link nguồn và ghép lại 1 ảnh."""
+
+    log = Signal(str)
+    ok = Signal(list)
+    failed = Signal(str)
+
+    def __init__(self, store, site, task, index: int) -> None:
+        super().__init__()
+        self.store = store
+        self.site = site
+        self.task = task
+        self.index = index
+
+    def run(self) -> None:
+        try:
+            self.log.emit("Đang lấy ảnh sản phẩm từ link nguồn…")
+            page = src.fetch_source(self.task.source_url)
+            urls = page.get("images", [])[:3]
+            paths: list[str] = []
+            for u in urls:
+                try:
+                    paths.append(src.download_image(u))
+                except Exception:
+                    continue
+            if not paths:
+                raise RuntimeError("Không tìm thấy ảnh sản phẩm nào từ link nguồn.")
+            r = self.task.result or {}
+            r["product_images"] = paths
+            rb, th = _remove_bg_opts(self.store)
+            images = build_template_images(
+                self.site, self.task, r.get("brand_logo", ""), paths,
+                self.task.footer_mode, log=self.log.emit,
+                rules=self.store.image_rules,
+                remove_bg=rb, remove_bg_thresh=th,
+                only_index=self.index,
+            )
+            self.ok.emit(images)
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))

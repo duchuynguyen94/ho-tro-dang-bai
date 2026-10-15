@@ -28,6 +28,7 @@ class DraggableImage(QLabel):
     moved = Signal()
     resized = Signal(int)
     RESIZE_ZONE = 18
+    CORNERS = ("tl", "tr", "bl", "br")
 
     def __init__(self, parent: QWidget, dashed: bool = False):
         super().__init__(parent)
@@ -38,33 +39,55 @@ class DraggableImage(QLabel):
         self._press: QPoint | None = None
         self._start: QPoint | None = None
         self._mode = ""
+        self._corner = ""
         self._start_size = None
         self._src: QPixmap | None = None
 
-        self.grip = QLabel(self)
-        self.grip.setFixedSize(11, 11)
-        self.grip.setStyleSheet("background:#2563eb;border-radius:3px;")
-        self.grip.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        self.grip.hide()
+        self.grips = []
+        for _ in range(4):
+            g = QLabel(self)
+            g.setFixedSize(11, 11)
+            g.setStyleSheet("background:#2563eb;border-radius:3px;")
+            g.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+            g.hide()
+            self.grips.append(g)
 
     def set_source(self, pm: QPixmap) -> None:
         self._src = pm
 
     def resizeEvent(self, event) -> None:  # noqa: N802
-        self.grip.move(max(0, self.width() - 11), max(0, self.height() - 11))
+        w, h = self.width(), self.height()
+        pos = [(0, 0), (w - 11, 0), (0, h - 11), (w - 11, h - 11)]
+        for g, (x, y) in zip(self.grips, pos):
+            g.move(max(0, x), max(0, y))
         super().resizeEvent(event)
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.LeftButton:
             return
         pos = event.position().toPoint()
-        near = (pos.x() >= self.width() - self.RESIZE_ZONE
-                and pos.y() >= self.height() - self.RESIZE_ZONE)
-        self._mode = "resize" if near else "move"
+        w, h = self.width(), self.height()
+        z = self.RESIZE_ZONE
+        corner = ""
+        if pos.x() <= z and pos.y() <= z:
+            corner = "tl"
+        elif pos.x() >= w - z and pos.y() <= z:
+            corner = "tr"
+        elif pos.x() <= z and pos.y() >= h - z:
+            corner = "bl"
+        elif pos.x() >= w - z and pos.y() >= h - z:
+            corner = "br"
+        self._corner = corner
+        self._mode = "resize" if corner else "move"
         self._press = event.globalPosition().toPoint()
         self._start = self.pos()
         self._start_size = self.size()
-        self.setCursor(Qt.SizeFDiagCursor if near else Qt.ClosedHandCursor)
+        if corner in ("tl", "br"):
+            self.setCursor(Qt.SizeFDiagCursor)
+        elif corner in ("tr", "bl"):
+            self.setCursor(Qt.SizeBDiagCursor)
+        else:
+            self.setCursor(Qt.ClosedHandCursor)
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if not self._mode or self._press is None or self._start is None:
@@ -77,19 +100,30 @@ class DraggableImage(QLabel):
             self.move(x, y)
             self.moved.emit()
             return
-        # resize giữ tỉ lệ
-        new_w = max(24, self._start_size.width() + delta.x())
-        ratio = self._start_size.height() / max(1, self._start_size.width())
+        # resize giữ tỉ lệ, giữ cạnh/góc đối diện cố định
+        sw, sh = self._start_size.width(), self._start_size.height()
+        dx = delta.x() if self._corner in ("tr", "br") else -delta.x()
+        ratio = sh / max(1, sw)
+        new_w = max(24, sw + dx)
         new_h = max(12, int(new_w * ratio))
-        self.setFixedSize(new_w, new_h)
         if self._src is not None and not self._src.isNull():
             self.setPixmap(self._src.scaled(new_w, new_h, Qt.KeepAspectRatio,
                                             Qt.SmoothTransformation))
-        self.move(self._start)
+        self.setFixedSize(new_w, new_h)
+        nx, ny = self._start.x(), self._start.y()
+        if self._corner in ("tl", "bl"):
+            nx = self._start.x() + (sw - new_w)
+        if self._corner in ("tl", "tr"):
+            ny = self._start.y() + (sh - new_h)
+        par = self.parentWidget()
+        nx = max(0, min(par.width() - new_w, nx))
+        ny = max(0, min(par.height() - new_h, ny))
+        self.move(nx, ny)
         self.resized.emit(new_w)
 
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         self._mode = ""
+        self._corner = ""
         self._press = None
         self._start = None
         self.setCursor(Qt.OpenHandCursor)
@@ -253,7 +287,8 @@ class ImageEditorPanel(QFrame):
             item.set_source(pm)
             item.setFixedSize(max(1, w), max(1, h))
             item.setVisible(not pm.isNull())
-            item.grip.setVisible(not pm.isNull())
+            for g in item.grips:
+                g.setVisible(not pm.isNull())
 
         lp = self._opts.get("logo_pos") or [0.035, 0.035]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
