@@ -208,11 +208,10 @@ class ImageEditorPanel(QFrame):
 
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
-        self.s_product = self._slider(grid, 0, "Ảnh sản phẩm — kích thước", 50, 180, 100)
-        self.s_logo = self._slider(grid, 1, "Logo website — kích thước", 50, 180, 100)
-        self.s_brand = self._slider(grid, 2, "Logo thương hiệu — kích thước", 50, 180, 100)
-        self.s_wm = self._slider(grid, 3, "Watermark — độ mờ", 0, 100, 7)
-        self.s_wm_size = self._slider(grid, 4, "Watermark — kích thước", 50, 200, 150)
+        self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 180, 100)
+        self.s_brand = self._slider(grid, 1, "Logo thương hiệu — kích thước", 50, 180, 100)
+        self.s_wm = self._slider(grid, 2, "Watermark — độ mờ", 0, 100, 7)
+        self.s_wm_size = self._slider(grid, 3, "Watermark — kích thước", 50, 200, 100)
         right.addLayout(grid)
 
         self.remove_bg = QCheckBox("Xoá nền ảnh sản phẩm → trong suốt")
@@ -228,7 +227,6 @@ class ImageEditorPanel(QFrame):
         right.addStretch(1)
         body.addLayout(right, 1)
 
-        self.s_product.valueChanged.connect(self._on_product_slider)
         self.s_logo.valueChanged.connect(lambda _v: self._layout_items())
         self.s_brand.valueChanged.connect(lambda _v: self._layout_items())
 
@@ -237,7 +235,7 @@ class ImageEditorPanel(QFrame):
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(700)
         self._autosave.timeout.connect(self._emit_opts)
-        for w in (self.s_product, self.s_logo, self.s_brand, self.s_wm, self.s_wm_size):
+        for w in (self.s_logo, self.s_brand, self.s_wm, self.s_wm_size):
             w.valueChanged.connect(self._schedule_save)
         self.remove_bg.toggled.connect(self._schedule_save)
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
@@ -280,11 +278,10 @@ class ImageEditorPanel(QFrame):
             self.canvas.clear()
             self.canvas.setText("(chưa có ảnh)")
 
-        self.s_product.setValue(int(float(self._opts.get("product_scale", 1.0)) * 100))
         self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0)) * 100))
         self.s_brand.setValue(int(float(self._opts.get("brand_scale", 1.0)) * 100))
         self.s_wm.setValue(int(self._opts.get("watermark_opacity", 7) or 0))
-        self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.5) or 1.5) * 100))
+        self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
         self.remove_bg.setChecked(bool(self._opts.get("remove_bg", False)))
         mode = self._opts.get("footer_mode") or footer_mode or "bar1"
         self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
@@ -294,22 +291,44 @@ class ImageEditorPanel(QFrame):
         self._layout_watermark()
 
     # ---------------- logo ---------------- #
-    def _pixmap_for(self, path: str, base_w: float, scale: float) -> tuple[QPixmap, int, int]:
+    @staticmethod
+    def _fit_size(iw: int, ih: int, max_w: int, max_h: int) -> tuple[int, int]:
+        """Giống composer._fit: vừa trong max_w × max_h, KHÔNG phóng to."""
+        if iw <= 0 or ih <= 0:
+            return 0, 0
+        ratio = min(max_w / iw, max_h / ih, 1.0)
+        return max(1, int(iw * ratio)), max(1, int(ih * ratio))
+
+    def _composed_size(self, path: str, base_w: float, base_h: float,
+                       scale: float) -> tuple[int, int]:
+        p = Path(path or "")
+        if not p.exists():
+            return 0, 0
+        src = QPixmap(str(p))
+        if src.isNull():
+            return 0, 0
+        return self._fit_size(src.width(), src.height(),
+                              int(SRC * base_w * scale), int(SRC * base_h * scale))
+
+    def _pixmap_for(self, path: str, base_w: float, base_h: float,
+                    scale: float) -> tuple[QPixmap, int, int]:
         p = Path(path or "")
         if not p.exists():
             return QPixmap(), 0, 0
         src = QPixmap(str(p))
         if src.isNull():
             return QPixmap(), 0, 0
-        target_w = max(20, int(SRC * base_w * scale))
-        disp_w = max(16, int(target_w * CANVAS / SRC))
-        disp_h = max(10, int(disp_w * src.height() / max(1, src.width())))
+        cw, ch = self._composed_size(path, base_w, base_h, scale)
+        if cw <= 0:
+            return QPixmap(), 0, 0
+        disp_w = max(8, int(cw * CANVAS / SRC))
+        disp_h = max(8, int(ch * CANVAS / SRC))
         return src.scaled(disp_w, disp_h, Qt.KeepAspectRatio, Qt.SmoothTransformation), disp_w, disp_h
 
     def _layout_items(self) -> None:
-        logo_pm, lw, lh = self._pixmap_for(self._preview.get("logo", ""), 0.26,
+        logo_pm, lw, lh = self._pixmap_for(self._preview.get("logo", ""), 0.26, 0.12,
                                            self.s_logo.value() / 100.0)
-        brand_pm, bw, bh = self._pixmap_for(self._preview.get("brand", ""), 0.34,
+        brand_pm, bw, bh = self._pixmap_for(self._preview.get("brand", ""), 0.34, 0.13,
                                             self.s_brand.value() / 100.0)
         for item, pm, w, h in ((self.logo_item, logo_pm, lw, lh),
                                (self.brand_item, brand_pm, bw, bh)):
@@ -329,18 +348,6 @@ class ImageEditorPanel(QFrame):
         )
 
     # ---------------- sản phẩm ---------------- #
-    def _on_product_slider(self, _v: int) -> None:
-        """Thanh kích thước chung: áp cho mọi thành phần."""
-        val = self.s_product.value() / 100.0
-        self._opts["product_scales"] = [val] * len(self._preview.get("products") or [])
-        ups = list(self._opts.get("uploads") or [])
-        for u in ups:
-            if isinstance(u, dict):
-                u["scale"] = val
-        self._opts["uploads"] = ups
-        self._layout_products()
-        self._layout_uploads()
-
     def _layout_products(self) -> None:
         paths = list(self._preview.get("products") or [])[:3]
         for it in self._product_items:
@@ -350,7 +357,7 @@ class ImageEditorPanel(QFrame):
 
         if not paths:
             return
-        scale = self.s_product.value() / 100.0
+        scale = 1.0
         scales = list(self._opts.get("product_scales") or [])
         positions = list(self._opts.get("product_pos") or [])
         if len(positions) < len(paths):
@@ -358,14 +365,17 @@ class ImageEditorPanel(QFrame):
 
         for i, path in enumerate(paths):
             sc = float(scales[i]) if i < len(scales) else scale
-            disp = max(24, int(product_box(SRC, sc) * CANVAS / SRC))
+            box_i = product_box(SRC, sc)
             it = DraggableImage(self.canvas)
             it.index = i
             pm = QPixmap(path) if Path(path).exists() else QPixmap()
             if pm.isNull():
                 it.deleteLater()
                 continue
-            pm = pm.scaled(disp, disp, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            cw, ch = self._fit_size(pm.width(), pm.height(), box_i, box_i)
+            dw = max(8, int(cw * CANVAS / SRC))
+            dh = max(8, int(ch * CANVAS / SRC))
+            pm = pm.scaled(dw, dh, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             it.setPixmap(pm)
             it.set_source(pm)
             it.setFixedSize(pm.size())
@@ -387,10 +397,10 @@ class ImageEditorPanel(QFrame):
             it.deleteLater()
         self._upload_items = []
 
-        scale = self.s_product.value() / 100.0
+        scale = 1.0
         for i, up in enumerate(ups):
             sc = float(up.get("scale", scale)) if isinstance(up, dict) else scale
-            disp = max(24, int(product_box(SRC, sc) * CANVAS / SRC))
+            box_i = product_box(SRC, sc)
             path = up.get("path") if isinstance(up, dict) else str(up)
             pos = (up.get("pos") if isinstance(up, dict) else None) or [0.5, 0.5]
             it = DraggableImage(self.canvas)
@@ -399,7 +409,10 @@ class ImageEditorPanel(QFrame):
             if pm.isNull():
                 it.deleteLater()
                 continue
-            pm = pm.scaled(disp, disp, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            cw, ch = self._fit_size(pm.width(), pm.height(), box_i, box_i)
+            dw = max(8, int(cw * CANVAS / SRC))
+            dh = max(8, int(ch * CANVAS / SRC))
+            pm = pm.scaled(dw, dh, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             it.setPixmap(pm)
             it.set_source(pm)
             it.setFixedSize(pm.size())
@@ -425,8 +438,12 @@ class ImageEditorPanel(QFrame):
         self._schedule_save()
 
     def _on_upload_resized(self, index: int, width: int) -> None:
-        base = product_box(SRC, 1.0) * CANVAS / SRC
-        scale = max(0.3, min(2.5, width / max(1.0, base)))
+        ups0 = list(self._opts.get("uploads") or [])
+        path = ""
+        if index < len(ups0) and isinstance(ups0[index], dict):
+            path = ups0[index].get("path", "")
+        disp1 = self._disp_width_at_scale1(path)
+        scale = max(0.3, min(2.5, width / max(1.0, disp1)))
         ups = list(self._opts.get("uploads") or [])
         if index < len(ups) and isinstance(ups[index], dict):
             ups[index]["scale"] = round(scale, 3)
@@ -475,9 +492,21 @@ class ImageEditorPanel(QFrame):
         ]
         self._schedule_save()
 
+    def _disp_width_at_scale1(self, path: str) -> int:
+        p = Path(path or "")
+        if not p.exists():
+            return 0
+        src = QPixmap(str(p))
+        if src.isNull():
+            return 0
+        cw, _ch = self._fit_size(src.width(), src.height(), product_box(SRC, 1.0),
+                                 product_box(SRC, 1.0))
+        return max(1, int(cw * CANVAS / SRC))
+
     def _on_product_resized(self, index: int, width: int) -> None:
-        base = product_box(SRC, 1.0) * CANVAS / SRC
-        scale = max(0.3, min(2.5, width / max(1.0, base)))
+        paths = list(self._preview.get("products") or [])
+        disp1 = self._disp_width_at_scale1(paths[index] if index < len(paths) else "")
+        scale = max(0.3, min(2.5, width / max(1.0, disp1)))
         scales = list(self._opts.get("product_scales") or [])
         while len(scales) < index + 1:
             scales.append(1.0)
@@ -487,8 +516,11 @@ class ImageEditorPanel(QFrame):
 
     # ---------------- chung ---------------- #
     def _on_resized(self, which: str, width: int) -> None:
-        base = (0.26 if which == "logo" else 0.34) * CANVAS
-        scale = max(0.5, min(1.8, width / max(1.0, base)))
+        bw, bh = (0.26, 0.12) if which == "logo" else (0.34, 0.13)
+        path = self._preview.get("logo" if which == "logo" else "brand", "")
+        w1, _h1 = self._composed_size(path, bw, bh, 1.0)
+        disp1 = max(1, int(w1 * CANVAS / SRC))
+        scale = max(0.3, min(2.5, width / max(1.0, disp1)))
         slider = self.s_logo if which == "logo" else self.s_brand
         slider.blockSignals(True)
         slider.setValue(int(scale * 100))
@@ -508,11 +540,10 @@ class ImageEditorPanel(QFrame):
 
     def _reset(self) -> None:
         self._opts = {}
-        self.s_product.setValue(100)
         self.s_logo.setValue(100)
         self.s_brand.setValue(100)
         self.s_wm.setValue(7)
-        self.s_wm_size.setValue(150)
+        self.s_wm_size.setValue(100)
         self.remove_bg.setChecked(False)
         self._layout_items()
         self._layout_products()
@@ -526,7 +557,6 @@ class ImageEditorPanel(QFrame):
         self._on_upload_moved()
         opts = dict(self._opts)
         opts.update({
-            "product_scale": self.s_product.value() / 100.0,
             "logo_scale": self.s_logo.value() / 100.0,
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
@@ -543,7 +573,6 @@ class ImageEditorPanel(QFrame):
         self._on_product_moved()
         opts = dict(self._opts)
         opts.update({
-            "product_scale": self.s_product.value() / 100.0,
             "logo_scale": self.s_logo.value() / 100.0,
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),

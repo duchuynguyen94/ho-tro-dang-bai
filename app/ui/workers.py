@@ -18,16 +18,30 @@ class _Cancelled(Exception):
     """Người dùng bấm Dừng."""
 
 
-def _image_name(rule: str, ctx: dict, index: int) -> str:
+def render_rule(rule: str, ctx: dict) -> str:
+    """Thay biến trong Rule ảnh: hỗ trợ cả {title} và {{title}}."""
     import re as _re
 
-    from ..wp import render_value
+    def repl(m):
+        return str(ctx.get(m.group(1), m.group(0)))
+
+    return _re.sub(r"\{\{?\s*(\w+)\s*\}\}?", repl, rule or "")
+
+
+def _image_name(rule: str, ctx: dict, index: int) -> str:
+    """Tên file theo Rule ảnh (giữ đuôi .jpg/.png nếu có)."""
+    import re as _re
 
     name = ""
     if rule:
-        name = _re.sub(r"[^\w\-\. ]+", "", render_value(rule, {**ctx, "index": index + 1})).strip()
-        name = name.replace(" ", "-")[:80]
-    return (name or f"anh-{index + 1}") + ".png"
+        name = render_rule(rule, {**ctx, "index": index + 1}).strip()
+        name = _re.sub(r'[\\/:*?"<>|]+', "-", name)      # bỏ ký tự cấm trong tên file
+        name = _re.sub(r"\s+", " ", name).strip()[:100]
+    if not name:
+        name = f"anh-{index + 1}.png"
+    if not _re.search(r"\.(png|jpe?g|webp)$", name, _re.I):
+        name += ".png"
+    return name
 
 
 def export_post_images(store, task) -> list[str]:
@@ -57,7 +71,17 @@ def export_post_images(store, task) -> list[str]:
             continue
         dest = base / _image_name(rules[i] if i < len(rules) else "", ctx, i)
         try:
-            shutil.copy2(src, dest)
+            ext = dest.suffix.lower()
+            if ext in (".jpg", ".jpeg"):
+                from PIL import Image as _Img
+
+                _Img.open(src).convert("RGB").save(dest, "JPEG", quality=92)
+            elif ext == ".webp":
+                from PIL import Image as _Img
+
+                _Img.open(src).convert("RGB").save(dest, "WEBP", quality=92)
+            else:
+                shutil.copy2(src, dest)
             out.append(str(dest))
         except OSError:
             continue
@@ -117,8 +141,6 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
     """Ghép ảnh theo mẫu (dùng cho cả tạo mới và tạo lại ảnh)."""
     import re as _re
 
-    from ..wp import render_value
-
     images: list[dict] = []
     count = max(1, int(task.image_count or 3))
     mode = footer_mode or task.footer_mode or "random"
@@ -150,7 +172,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         if product_positions:
             product_positions = [tuple(p) for p in product_positions]
         wm_opacity = int(o.get("watermark_opacity", 7) or 0)
-        wm_size = float(o.get("watermark_size", 1.5) or 1.5)
+        wm_size = float(o.get("watermark_size", 1.0) or 1.0)
         product_scales = o.get("product_scales") or None
         rb = remove_bg if o.get("remove_bg") is None else bool(o["remove_bg"])
         mode_i = o.get("footer_mode") or footer_mode or mode
@@ -181,7 +203,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         rule = (rules[i] if i < len(rules) else "").strip()
         name = ""
         if rule:
-            name = _re.sub(r"[^\w\-\. ]+", "", render_value(rule, {**ctx, "index": i + 1})).strip()
+            name = _re.sub(r"[^\w\-\. ]+", "", render_rule(rule, {**ctx, "index": i + 1})).strip()
         fname = f"{name.replace(' ', '-')[:80]}_{i + 1}.png" if name else f"{task.id}_{i + 1}.png"
         out = output_dir() / fname
         save_composed(img, str(out))
