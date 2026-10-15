@@ -390,12 +390,20 @@ class SitePanel(QWidget):
             self.script_table.setItem(i, 3, QTableWidgetItem(src))
 
     def _pick_into(self, edit: QLineEdit, caption: str, filt: str = IMAGE_FILTER) -> None:
+        """Chọn ảnh (logo / thanh thông tin / khung) — copy vào thư mục media."""
         path, _ = QFileDialog.getOpenFileName(self, caption, "", filt)
         if not path:
             return
-        is_format = edit in (self.fmt_title, self.fmt_content, self.fmt_desc, self.fmt_tags)
-        dest_dir = formats_dir() if is_format else media_dir()
-        edit.setText(Store.import_file(path, dest_dir))
+        try:
+            new_path = Store.import_file(path, media_dir())
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Không chọn được ảnh: {exc}", 3200, ok=False)
+            return
+        if not new_path:
+            show_toast(self, "Không chọn được ảnh", 3200, ok=False)
+            return
+        edit.setText(new_path)
+        show_toast(self, "Đã chọn ảnh — bấm Lưu để áp dụng", 2600)
 
     # ------------------------------------------------------------------ #
     def _save_steps(self) -> None:
