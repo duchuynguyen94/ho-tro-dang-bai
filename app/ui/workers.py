@@ -197,7 +197,6 @@ class ContentWorker(QThread):
                     html_out, ext.url or "",
                     [pname, data.get("focus_keyword", ""), data.get("title", ""),
                      page.get("title", "")],
-                    "giới thiệu",
                 )
                 self.log.emit(f"Chèn liên kết ngoài tới {ext.name}.")
             else:

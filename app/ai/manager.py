@@ -288,9 +288,9 @@ def linkify_site(html_text: str, site_url: str, site_name: str = "") -> str:
     variants: list[str] = []
     for src in (site_name, site_url):
         for v in _dom_variants(src):
-            if v not in variants:
+            if v.startswith("www.") and v not in variants:
                 variants.append(v)
-    variants = [v for v in variants if len(v) >= 4]
+    variants = [v for v in variants if len(v) >= 5]
     if not base or not variants:
         return html_text
 
@@ -317,9 +317,15 @@ def linkify_site(html_text: str, site_url: str, site_name: str = "") -> str:
     return "".join(out)
 
 
+AFTER_PATTERN = re.compile(
+    r"(hotline|điện thoại|\btel\b|\b0\d{2,3}[\s.\-]?\d{3}[\s.\-]?\d{3,4}\b|href=\"[^\"]*www\.)",
+    re.I,
+)
+
+
 def insert_external_link(html_text: str, ext_url: str, candidates: list[str] | None,
-                         after_marker: str = "giới thiệu") -> str:
-    """Chèn 1 link ngoài vào từ khoá đầu tiên xuất hiện SAU mục 'Giới thiệu'."""
+                         after_pattern=AFTER_PATTERN) -> str:
+    """Chèn 1 link ngoài vào từ khoá sản phẩm đầu tiên SAU hotline hoặc SAU link có www."""
     if not html_text or not ext_url:
         return html_text
     base = _norm_url(ext_url)
@@ -330,22 +336,26 @@ def insert_external_link(html_text: str, ext_url: str, candidates: list[str] | N
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
     in_a = False
-    armed = not after_marker
+    armed = after_pattern is None
     done = False
     for part in parts:
         if part.startswith("<"):
             low = part.lower()
             if low.startswith("<a "):
                 in_a = True
+                if not armed and after_pattern and after_pattern.search(part):
+                    armed = True
             elif low.startswith("</a"):
                 in_a = False
+                if not armed and after_pattern and after_pattern.search(part):
+                    armed = True
             out.append(part)
             continue
         if in_a or not part.strip():
             out.append(part)
             continue
         text = part
-        if not armed and after_marker and after_marker in text.lower():
+        if not armed and after_pattern and after_pattern.search(text):
             armed = True
             out.append(text)
             continue

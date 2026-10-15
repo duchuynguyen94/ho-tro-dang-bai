@@ -531,7 +531,7 @@ class JobsPage(QWidget):
         self._thumbs = []
         for i, im in enumerate(images, 1):
             box = self._image_box(i, im)
-            self.images_row.addWidget(box)
+            self.images_row.addWidget(box, 1)     # chia đều 3 khung
             self._thumbs.append(box)
         self.images_row.addStretch(1)
 
