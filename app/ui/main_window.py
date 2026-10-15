@@ -69,12 +69,6 @@ class MainWindow(QMainWindow):
         name = QLabel("WP Multi Poster")
         tl.addWidget(name)
         tl.addStretch(1)
-        self.status_pill = QLabel("Sẵn sàng")
-        self.status_pill.setStyleSheet(
-            "color:#4ade80;background:rgba(22,163,74,.15);border:1px solid rgba(74,222,128,.35);"
-            "border-radius:10px;padding:3px 10px;font-size:11px;"
-        )
-        tl.addWidget(self.status_pill)
         v.addWidget(titlebar)
 
         # thanh điều hướng
@@ -129,9 +123,8 @@ class MainWindow(QMainWindow):
             self.status("Chưa có website — vào tab Cấu hình để thêm.")
 
     def status(self, text: str) -> None:
-        """Chỉ hiển thị việc ĐANG LÀM (không dùng cho báo lỗi)."""
+        """Chỉ hiển thị việc ĐANG LÀM ở thanh dưới (không dùng cho báo lỗi)."""
         self.statusBar().showMessage(text)
-        self.status_pill.setText(text[:44] if text else "Sẵn sàng")
 
     def _go(self, index: int) -> None:
         self.stack.setCurrentIndex(index)

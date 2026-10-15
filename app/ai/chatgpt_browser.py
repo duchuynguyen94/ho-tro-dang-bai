@@ -96,19 +96,11 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300)
         if log:
             log("Đang mở ChatGPT…")
         page = br.open()
-        page.goto(CHATGPT_URL, wait_until="domcontentloaded", timeout=60000)
-        _wait_composer(page, 8)
+        # Mở THẲNG Project nếu đã cấu hình URL, không cần qua trang chủ
+        target = project_url if project_url.startswith("http") else CHATGPT_URL
+        page.goto(target, wait_until="domcontentloaded", timeout=60000)
+        page.wait_for_timeout(1200)
         _dismiss_modals(page)
-
-        if project_url and project_url.startswith("http"):
-            if log:
-                log("Đang mở Project đã cấu hình…")
-            try:
-                page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
-            except Exception as exc:
-                raise AIError(f"Không mở được URL Project: {exc}") from exc
-            page.wait_for_timeout(1200)
-            _dismiss_modals(page)
 
         box = _wait_composer(page, 25)
         if box is None:
