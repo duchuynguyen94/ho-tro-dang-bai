@@ -473,6 +473,7 @@ class PostWorker(TrackedThread):
 
     def run(self) -> None:
         from ..wp import WPBrowser, play_script
+        from ..wp.player import wait_editor_ready
 
         site = self.site
         try:
@@ -487,6 +488,11 @@ class PostWorker(TrackedThread):
                 self.log.emit("Đã đăng nhập." if ok else "Không đăng nhập được (tiếp tục với session hiện có).")
 
             if site.script and site.script.steps:
+                # LUÔN mở trang tạo bài trước khi phát lại kịch bản
+                if site.new_post_url:
+                    self.log.emit("Mở trang tạo bài viết…")
+                    page.goto(site.new_post_url, wait_until="domcontentloaded")
+                    wait_editor_ready(page, log=self.log.emit)
                 self.log.emit("Phát lại kịch bản…")
                 ctx = {
                     "title": self.result.get("title", ""),

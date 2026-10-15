@@ -410,7 +410,8 @@ class JobsPage(QWidget):
         ev.addWidget(self.error_label)
         retry = QPushButton("↻ Thử tạo lại")
         retry.setProperty("class", "primary")
-        retry.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, ""))
+        retry.clicked.connect(self._on_retry)
+        self.retry_btn = retry
         ev.addWidget(retry, alignment=Qt.AlignHCenter)
         ev.addStretch(1)
         self.stack.addWidget(self.page_error)
@@ -631,13 +632,27 @@ class JobsPage(QWidget):
         if task.status == STATUS_ERROR:
             self.footer.hide()
             msg = task.message or "Lỗi không xác định."
-            if "giới hạn" in msg.lower():
-                hint = ("Chờ tới khi lượt được làm mới, hoặc đổi provider khác "
-                        "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung.")
-                title = "AI đang bị giới hạn."
+            r = task.result or {}
+            has_content = bool(r.get("content_html") or r.get("title"))
+            if has_content:
+                # Nội dung đã có -> lỗi ở bước ĐĂNG BÀI, không cần tạo lại nội dung
+                self.retry_btn.setText("↻ Thử ĐĂNG LẠI")
+                self.retry_btn.setToolTip("Nội dung đã có sẵn — chỉ đăng lại, không tạo lại nội dung")
+                title = "Không đăng được bài."
+                hint = ("Nội dung vẫn được giữ nguyên. Kiểm tra kịch bản đăng bài / đăng nhập "
+                        "WordPress trong Cấu hình → website → Kịch bản đăng bài.")
+                if "giới hạn" in msg.lower():
+                    title = "AI đang bị giới hạn."
             else:
-                hint = "Kiểm tra API key / model trong Cấu hình → AI nội dung."
-                title = "Không tạo được nội dung."
+                self.retry_btn.setText("↻ Thử tạo lại")
+                self.retry_btn.setToolTip("Tạo lại nội dung bằng AI")
+                if "giới hạn" in msg.lower():
+                    hint = ("Chờ tới khi lượt được làm mới, hoặc đổi provider khác "
+                            "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung.")
+                    title = "AI đang bị giới hạn."
+                else:
+                    hint = "Kiểm tra API key / model trong Cấu hình → AI nội dung."
+                    title = "Không tạo được nội dung."
             self.error_label.setText(
                 f"<b>{title}</b><br><br>{msg}"
                 f"<br><br><span style='color:#64748b'>{hint}</span>"
@@ -646,6 +661,16 @@ class JobsPage(QWidget):
             return
 
         self._load(task)
+
+    def _on_retry(self) -> None:
+        """Nút thử lại: có nội dung rồi -> ĐĂNG LẠI; chưa có -> tạo lại nội dung."""
+        if not self.current:
+            return
+        r = self.current.result or {}
+        if r.get("content_html") or r.get("title"):
+            self.post.emit(self.current)
+        else:
+            self.regenerate.emit(self.current, "")
 
     def _load(self, task) -> None:
         """Hiển thị kết quả — có chốt an toàn: lỗi thì báo rõ, KHÔNG kẹt ở màn hình chờ."""
