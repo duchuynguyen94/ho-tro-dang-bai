@@ -52,6 +52,28 @@ class DraggableImage(QLabel):
             g.setAttribute(Qt.WA_TransparentForMouseEvents, True)
             g.hide()
             self.grips.append(g)
+        self._grips_on = False       # có cho phép hiện tay nắm không
+        self._hover = False
+        self.setMouseTracking(True)
+
+    def enable_grips(self, on: bool) -> None:
+        self._grips_on = bool(on)
+        self._update_grips()
+
+    def _update_grips(self) -> None:
+        show = self._grips_on and (self._hover or bool(self._mode))
+        for g in self.grips:
+            g.setVisible(show)
+
+    def enterEvent(self, event) -> None:  # noqa: N802
+        self._hover = True
+        self._update_grips()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event) -> None:  # noqa: N802
+        self._hover = False
+        self._update_grips()
+        super().leaveEvent(event)
 
     def set_source(self, pm: QPixmap) -> None:
         self._src = pm
@@ -87,6 +109,7 @@ class DraggableImage(QLabel):
             self.setCursor(Qt.SizeBDiagCursor)
         else:
             self.setCursor(Qt.ClosedHandCursor)
+        self._update_grips()
 
     def mouseMoveEvent(self, event) -> None:  # noqa: N802
         if not self._mode or self._press is None or self._start is None:
@@ -124,6 +147,7 @@ class DraggableImage(QLabel):
         self._press = None
         self._start = None
         self.setCursor(Qt.OpenHandCursor)
+        self._update_grips()
         self.moved.emit()
 
 
@@ -336,8 +360,7 @@ class ImageEditorPanel(QFrame):
             item.set_source(pm)
             item.setFixedSize(max(1, w), max(1, h))
             item.setVisible(not pm.isNull())
-            for g in item.grips:
-                g.setVisible(not pm.isNull())
+            item.enable_grips(not pm.isNull())
 
         lp = self._opts.get("logo_pos") or [0.035, 0.035]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
@@ -380,8 +403,7 @@ class ImageEditorPanel(QFrame):
             it.set_source(pm)
             it.setFixedSize(pm.size())
             it.show()
-            for g in it.grips:
-                g.setVisible(True)
+            it.enable_grips(True)
             it.moved.connect(self._on_product_moved)
             it.resized.connect(lambda w, idx=i: self._on_product_resized(idx, w))
             fx, fy = positions[i]
@@ -417,8 +439,7 @@ class ImageEditorPanel(QFrame):
             it.set_source(pm)
             it.setFixedSize(pm.size())
             it.show()
-            for g in it.grips:
-                g.setVisible(True)
+            it.enable_grips(True)
             it.moved.connect(self._on_upload_moved)
             it.resized.connect(lambda w, idx=i: self._on_upload_resized(idx, w))
             it.move(max(0, min(CANVAS - it.width(), int(pos[0] * CANVAS - it.width() / 2))),
