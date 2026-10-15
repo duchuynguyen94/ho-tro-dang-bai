@@ -400,7 +400,7 @@ class PostRecordWorker(QThread):
                     page.goto(target, wait_until="domcontentloaded", timeout=25000)
                 except Exception as exc:
                     self.log.emit(f"Không mở được địa chỉ đã cấu hình ({str(exc)[:80]}).")
-            self.log.emit("● Đang ghi: đăng bài bằng tay rồi bấm “Dừng & Lưu kịch bản”.")
+            self.log.emit("● Đang ghi: thao tác trên trình duyệt rồi bấm “Dừng & Lưu kịch bản”.")
 
             while self._running:
                 try:

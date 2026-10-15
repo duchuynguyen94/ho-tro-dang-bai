@@ -112,7 +112,7 @@ class JobsPage(QWidget):
     regenerate = Signal(object, str)         # (task, field)
     regenerate_images = Signal(object, str)  # (task, footer_mode)
     post = Signal(object)                    # (task)
-    post_and_record = Signal(object)         # (task) - đăng bài & tạo kịch bản
+    create_script = Signal(object)           # (task) - tạo kịch bản (có xác nhận mật khẩu)
     stop_record = Signal()                   # dừng ghi & lưu
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
@@ -282,9 +282,10 @@ class JobsPage(QWidget):
         self.save_btn = QPushButton("Lưu nháp")
         self.save_btn.setProperty("class", "ghost")
         self.save_btn.clicked.connect(self._save)
-        self.record_btn = QPushButton("Đăng bài & tạo kịch bản")
-        self.record_btn.setProperty("class", "ghost")
-        self.record_btn.clicked.connect(lambda: self.current and self.post_and_record.emit(self.current))
+        self.record_btn = QPushButton("● Tạo kịch bản")
+        self.record_btn.setObjectName("recordBtn")
+        self.record_btn.setToolTip("Mở trình duyệt và ghi lại thao tác đăng bài thành kịch bản (cần mật khẩu)")
+        self.record_btn.clicked.connect(self._start_create_script)
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
         self.post_btn.clicked.connect(lambda: self.current and self.post.emit(self.current))
@@ -489,6 +490,22 @@ class JobsPage(QWidget):
         self.store.upsert_task(self.current)
         self.store.save()
         self._load(self.current)
+
+    def _start_create_script(self) -> None:
+        """Xác nhận mật khẩu trước khi bắt đầu ghi kịch bản (tránh bấm nhầm)."""
+        if not self.current:
+            return
+        pw, ok = QInputDialog.getText(
+            self, "Tạo kịch bản",
+            "Nhập mật khẩu để bắt đầu tạo kịch bản:",
+            QLineEdit.Password,
+        )
+        if not ok:
+            return
+        if (pw or "").strip() != "admin":
+            QMessageBox.warning(self, "Sai mật khẩu", "Mật khẩu không đúng. Không tạo kịch bản.")
+            return
+        self.create_script.emit(self.current)
 
     def _confirm_delete(self, task_id: str) -> None:
         ans = QMessageBox.question(

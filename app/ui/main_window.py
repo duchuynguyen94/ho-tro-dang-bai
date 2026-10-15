@@ -115,7 +115,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.regenerate_images.connect(self._on_regenerate_images)
         self.jobs_page.delete_task.connect(self._on_delete_task)
         self.jobs_page.post.connect(self._on_post_task)
-        self.jobs_page.post_and_record.connect(self._on_post_and_record)
+        self.jobs_page.create_script.connect(self._on_create_script)
         self.jobs_page.stop_record.connect(self._on_stop_record)
         self.jobs_page.ai_edit.connect(self._on_ai_edit)
         self.config_page.changed.connect(self._on_config_changed)
@@ -298,7 +298,7 @@ class MainWindow(QMainWindow):
                 QMessageBox.Yes,
             )
             if ans == QMessageBox.Yes:
-                self._on_post_and_record(task)
+                self._on_create_script(task)
                 return
 
         task.status = STATUS_POSTING
@@ -352,7 +352,7 @@ class MainWindow(QMainWindow):
         self.store.log_error(source, message)
         self.error_log_page.refresh()
 
-    def _on_post_and_record(self, task) -> None:
+    def _on_create_script(self, task) -> None:
         site = self.store.get_site(task.site_id)
         if not site:
             return

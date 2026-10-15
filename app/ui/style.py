@@ -119,6 +119,8 @@ QPushButton.green {{ background: {GREEN}; color: #ffffff; border: none; border-r
 QPushButton.green:hover {{ background: #15803d; }}
 QPushButton.danger {{ background: #ffffff; color: {RED}; border: 1px solid #fecaca; border-radius: 7px; padding: 8px 12px; }}
 QPushButton.danger:hover {{ background: #fef2f2; }}
+QPushButton#recordBtn {{ background: {RED}; color: #ffffff; border: none; border-radius: 7px; padding: 8px 14px; font-weight: 600; }}
+QPushButton#recordBtn:hover {{ background: #b91c1c; }}
 
 QListWidget {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 10px; padding: 6px; }}
 QListWidget::item {{ padding: 9px 10px; border-radius: 7px; }}
