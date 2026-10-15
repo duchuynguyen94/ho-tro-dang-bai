@@ -177,7 +177,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         rb = remove_bg if o.get("remove_bg") is None else bool(o["remove_bg"])
         mode_i = o.get("footer_mode") or footer_mode or mode
         footer = pick_footer_by_index(site, i, mode_i)
-        prods = product_paths[i:] + product_paths[:i] if product_paths else []
+        prods = list(product_paths or [])   # giữ ĐÚNG thứ tự như canvas
         img = compose(
             size=1080,
             site_logo=site.logo_path,
