@@ -295,31 +295,69 @@ def text_to_html(text: str) -> str:
 # Luồng chính: 2 bước
 # --------------------------------------------------------------------------- #
 def generate_content(store, source: dict, log=None) -> dict:
+    """2 bước: Rule Content → Rule SEO. ChatGPT chạy cả 2 trong 1 lần chat."""
     rules = store.formats
-    if log:
-        log("Bước 1/2 — viết nội dung theo Rule Content…")
-    raw_content = _call_ai(
-        store,
-        build_content_prompt(rules, source),
-        build_content_short_prompt(source),
-        log,
-    )
-    if not raw_content.strip():
-        raise providers.AIError("AI không trả về nội dung bài viết.")
+    cfg = store.ai_content
+    content_full = build_content_prompt(rules, source)
+    content_short = build_content_short_prompt(source)
+    seo_full = None
+    errors: list[str] = []
 
-    if log:
-        log("Bước 2/2 — tạo thông tin SEO theo Rule SEO…")
-    seo = _call_ai_json(
-        store,
-        build_seo_prompt(rules, raw_content),
-        build_seo_short_prompt(raw_content),
-        log,
+    for provider in _active_chain(cfg):
+        pcfg = (cfg.get("providers") or {}).get(provider, {})
+        api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
+        if provider in API_PROVIDERS and not api_key:
+            errors.append(f"{provider}: thiếu API key")
+            continue
+        try:
+            if provider == "chatgpt":
+                from .chatgpt_browser import generate_two_step
+
+                seo_short = build_seo_short_prompt_placeholder()
+                raw_content, seo_text = generate_two_step(
+                    pcfg, content_short, seo_short, log
+                )
+                seo = providers.parse_json_response(seo_text)
+            else:
+                if log:
+                    log("Bước 1/2 — viết nội dung theo Rule Content…")
+                raw_content = providers.generate_text(provider, pcfg, content_full, api_key)
+                if log:
+                    log("Bước 2/2 — tạo thông tin SEO theo Rule SEO…")
+                seo_full = build_seo_prompt(rules, raw_content)
+                seo_text = providers.generate_text(provider, pcfg, seo_full, api_key)
+                seo = providers.parse_json_response(seo_text)
+
+            missing = [k for k in REQUIRED_KEYS if not str(seo.get(k, "")).strip()]
+            if missing:
+                raise providers.AIError(f"thiếu trường {missing}")
+            if _is_placeholder(seo.get("title")):
+                raise providers.AIError("AI trả về mẫu rỗng cho tiêu đề.")
+
+            seo["content_html"] = text_to_html(raw_content)
+            seo["raw_content"] = raw_content
+            if log:
+                log("Đã có kết quả cuối (SEO).")
+            return seo
+        except Exception as exc:
+            errors.append(f"{provider}: {exc}")
+            if log:
+                log(f"{provider} lỗi → thử provider khác…")
+
+    limit = next((e for e in errors if "GIỚI HẠN" in e.upper()), "")
+    if limit:
+        raise providers.AIError(limit.split(":", 1)[-1].strip())
+    raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))
+
+
+def build_seo_short_prompt_placeholder() -> str:
+    """Prompt SEO ngắn cho ChatGPT — nội dung bài viết nằm ngay trong đoạn chat."""
+    return (
+        "Dựa vào BÀI VIẾT bạn vừa viết ở trên, hãy tạo thông tin SEO theo đúng tài liệu "
+        "đã đính kèm (sources) trong Project này — cụ thể là file **rule_seo.pdf**.\n\n"
+        "CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích:\n"
+        + SEO_JSON_SPEC
     )
-    seo["content_html"] = text_to_html(raw_content)
-    seo["raw_content"] = raw_content
-    if log:
-        log("Đã có kết quả cuối (SEO).")
-    return seo
 
 
 # --------------------------------------------------------------------------- #

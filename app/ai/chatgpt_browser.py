@@ -25,7 +25,49 @@ LOGIN_HINT = (
 )
 NEED_LOGIN_MARKERS = ("log in", "sign up", "đăng nhập", "đăng ký")
 
+LIMIT_MARKERS = (
+    "reached the limit",
+    "usage limit",
+    "chat paused",
+    "limit will reset",
+    "you've reached",
+    "limit for chats",
+    "resets at",
+    "hết lượt",
+    "giới hạn",
+    "tạm dừng",
+)
 
+LIMIT_MSG = (
+    "ChatGPT BỊ GIỚI HẠN (đã hết lượt dùng miễn phí). "
+    "Hãy chờ tới khi lượt được làm mới, hoặc đổi sang provider khác "
+    "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung."
+)
+
+_REPLY_JS = r"""() => {
+  const sels = ['[data-message-author-role="assistant"]','[class*="MarkdownRoot"]',
+                '[class*="DilResponseRoot"]','[class*="assistant-message"]',
+                '.prose','[class*="prose"]'];
+  const set = new Set();
+  for (const s of sels) {
+    for (const el of document.querySelectorAll(s)) set.add(el);
+  }
+  const arr = [...set].filter(el => {
+    const t = (el.innerText || '').trim();
+    if (!t) return false;
+    if (el.closest('[class*="user-message"]')) return false;
+    if (el.matches('[class*="user-message"]')) return false;
+    return true;
+  });
+  if (!arr.length) return '';
+  arr.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  return arr[arr.length - 1].innerText || '';
+}"""
+
+
+# --------------------------------------------------------------------------- #
+# Tiện ích
+# --------------------------------------------------------------------------- #
 def _composer(page):
     for sel in COMPOSER_SELECTORS:
         try:
@@ -51,7 +93,6 @@ def _wait_composer(page, timeout: float = 25.0):
 
 
 def _dismiss_modals(page) -> None:
-    """Đóng popup (ví dụ 'Requires upgrade') nếu có."""
     for _ in range(2):
         try:
             page.keyboard.press("Escape")
@@ -76,49 +117,19 @@ def _looks_logged_out(page) -> bool:
     return any(m in body for m in NEED_LOGIN_MARKERS)
 
 
-_REPLY_JS = r"""() => {
-  const sels = ['[data-message-author-role="assistant"]','[class*="MarkdownRoot"]',
-                '[class*="DilResponseRoot"]','[class*="assistant-message"]',
-                '.prose','[class*="prose"]'];
-  const set = new Set();
-  for (const s of sels) {
-    for (const el of document.querySelectorAll(s)) set.add(el);
-  }
-  const arr = [...set].filter(el => {
-    const t = (el.innerText || '').trim();
-    if (!t) return false;
-    // loại bỏ tin nhắn của NGƯỜI DÙNG (không được lấy prompt làm kết quả)
-    if (el.closest('[class*="user-message"]')) return false;
-    if (el.matches('[class*="user-message"]')) return false;
-    return true;
-  });
-  if (!arr.length) return '';
-  arr.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
-  return arr[arr.length - 1].innerText || '';
-}"""
+def _is_placeholder(value) -> bool:
+    s = str(value or "").strip()
+    if not s:
+        return True
+    return all(ch in ".-_…~ " for ch in s)
 
-LIMIT_MARKERS = (
-    "reached the limit",
-    "usage limit",
-    "chat paused",
-    "limit will reset",
-    "you've reached",
-    "limit for chats",
-    "resets at",
-    "hết lượt",
-    "giới hạn",
-    "tạm dừng",
-)
 
-LIMIT_MSG = (
-    "ChatGPT BỊ GIỚI HẠN (đã hết lượt dùng miễn phí). "
-    "Hãy chờ tới khi lượt được làm mới, hoặc đổi sang provider khác "
-    "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung."
-)
+def _looks_template(html: str) -> bool:
+    text = re.sub(r"<[^>]*>", " ", str(html or ""))
+    return _is_placeholder(text)
 
 
 def _same_as_prompt(text: str, prompt: str) -> bool:
-    """True nếu 'câu trả lời' thực ra chính là prompt đã gửi."""
     if not prompt:
         return False
     a = " ".join((text or "").split()).lower()
@@ -132,14 +143,12 @@ def _same_as_prompt(text: str, prompt: str) -> bool:
 
 
 def _reply_text(page, prompt: str = "") -> str:
-    """Lấy nội dung tin nhắn trả lời mới nhất của ChatGPT."""
     txt = ""
     try:
         txt = (page.evaluate(_REPLY_JS) or "").strip()
     except Exception:
         txt = ""
     if not txt:
-        # dự phòng: lấy phần sau "ChatGPT said:"
         try:
             body = page.inner_text("body")
             idx = body.rfind("ChatGPT said:")
@@ -148,12 +157,11 @@ def _reply_text(page, prompt: str = "") -> str:
         except Exception:
             txt = ""
     if txt and _same_as_prompt(txt, prompt):
-        return ""      # chưa có trả lời thật, mới chỉ là tin nhắn của mình
+        return ""
     return txt
 
 
 def _limit_reached(page, extra_text: str = "") -> str:
-    """Kiểm tra ChatGPT có báo hết lượt miễn phí không."""
     body = ""
     try:
         body = page.inner_text("body").lower()
@@ -167,22 +175,8 @@ def _limit_reached(page, extra_text: str = "") -> str:
     return ""
 
 
-def _is_placeholder(value) -> bool:
-    """True nếu giá trị chỉ là dấu chấm/ellipsis (mẫu rỗng)."""
-    s = str(value or "").strip()
-    if not s:
-        return True
-    return all(ch in ".-_…~ " for ch in s)
-
-
-def _looks_template(html: str) -> bool:
-    """True nếu nội dung HTML chỉ là mẫu (sau khi bỏ thẻ thì toàn dấu …)."""
-    text = re.sub(r"<[^>]*>", " ", str(html or ""))
-    return _is_placeholder(text)
-
-
 def _try_extract_json(text: str) -> dict | None:
-    """Tìm JSON kết quả THẬT trong câu trả lời (bỏ qua JSON mẫu)."""
+    """Tìm JSON kết quả THẬT (bỏ qua JSON mẫu)."""
     if not text:
         return None
     t = text.strip()
@@ -201,109 +195,131 @@ def _try_extract_json(text: str) -> dict | None:
         return None
     if not isinstance(data, dict):
         return None
-
     content = data.get("content_html", "")
     if _is_placeholder(data.get("title")):
         return None
-    if _is_placeholder(content) or _looks_template(content):
+    if content and (_is_placeholder(content) or _looks_template(content)):
         return None
     return data
 
 
-def _is_placeholder(value) -> bool:
-    """True nếu giá trị chỉ là dấu chấm/ellipsis (mẫu rỗng do AI trả lại)."""
-    s = str(value or "").strip()
-    if not s:
-        return True
-    return all(ch in ".-_…~ " for ch in s)
+# --------------------------------------------------------------------------- #
+# Mở trang + gửi / chờ trả lời
+# --------------------------------------------------------------------------- #
+def _open_page(br, project_url: str, log=None):
+    if log:
+        log("Đang mở ChatGPT…")
+    page = br.open()
+    target = project_url if project_url.startswith("http") else CHATGPT_URL
+    page.goto(target, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(1200)
+    _dismiss_modals(page)
+    if _wait_composer(page, 25) is None:
+        if _looks_logged_out(page):
+            raise AIError(LOGIN_HINT)
+        try:
+            title = page.title()
+            body = re.sub(r"\s+", " ", page.inner_text("body"))[:200]
+        except Exception:
+            title, body = "", ""
+        raise AIError(
+            f"Không tìm thấy ô nhập tin nhắn của ChatGPT (tiêu đề: {title}; nội dung: {body}). "
+            "Hãy mở lại ChatGPT trên trình duyệt của phần mềm rồi thử lại."
+        )
+    return page
 
 
+def _send(page, text: str) -> None:
+    box = _composer(page) or _wait_composer(page, 15)
+    if box is None:
+        raise AIError("Không tìm thấy ô nhập tin nhắn để gửi.")
+    try:
+        box.click(timeout=5000)
+    except Exception:
+        pass
+    try:
+        box.fill(text)
+    except Exception:
+        page.keyboard.type(text[:4000])
+    page.wait_for_timeout(400)
+    page.keyboard.press("Enter")
+
+
+def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = False) -> str:
+    deadline = time.time() + timeout
+    last = ""
+    stable = 0
+    result = ""
+    while time.time() < deadline:
+        page.wait_for_timeout(1500)
+        text = _reply_text(page, prompt)
+        if require_json:
+            data = _try_extract_json(text)
+            if data is not None:
+                return json.dumps(data, ensure_ascii=False)
+        elif text and text == last and len(text) > 20:
+            stable += 1
+            if stable >= 2:
+                return text
+        if text != last:
+            stable = 0
+            last = text
+        if _limit_reached(page, last):
+            raise AIError(LIMIT_MSG)
+    if require_json:
+        raise AIError(
+            "ChatGPT không trả về nội dung thật (chỉ trả lại mẫu). "
+            "Nếu tài khoản đang bị giới hạn lượt, hãy chờ lượt làm mới "
+            "hoặc đổi provider khác trong Cấu hình → AI nội dung."
+        )
+    raise AIError("ChatGPT không trả về nội dung (quá thời gian chờ).")
+
+
+# --------------------------------------------------------------------------- #
+# API chính
+# --------------------------------------------------------------------------- #
 def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
                           require_json: bool = False) -> str:
-    """Mở ChatGPT bằng trình duyệt riêng, gửi prompt, trả về câu trả lời."""
+    """1 lượt: gửi prompt, chờ trả lời."""
     from ..wp import WPBrowser
 
     project_url = (pcfg or {}).get("project_url", "") or ""
     br = WPBrowser(headless=False, site_id="chatgpt")
     try:
-        if log:
-            log("Đang mở ChatGPT…")
-        page = br.open()
-        # Mở THẲNG Project nếu đã cấu hình URL, không cần qua trang chủ
-        target = project_url if project_url.startswith("http") else CHATGPT_URL
-        page.goto(target, wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(1200)
-        _dismiss_modals(page)
-
-        box = _wait_composer(page, 25)
-        if box is None:
-            if _looks_logged_out(page):
-                raise AIError(LOGIN_HINT)
-            try:
-                title = page.title()
-                body = re.sub(r"\s+", " ", page.inner_text("body"))[:200]
-            except Exception:
-                title, body = "", ""
-            raise AIError(
-                f"Không tìm thấy ô nhập tin nhắn của ChatGPT (tiêu đề: {title}; nội dung: {body}). "
-                "Hãy mở lại ChatGPT trên trình duyệt của phần mềm rồi thử lại."
-            )
-
+        page = _open_page(br, project_url, log)
         if log:
             log("Đang gửi yêu cầu cho ChatGPT…")
+        _send(page, prompt)
+        return _wait_reply(page, prompt, timeout, require_json)
+    finally:
         try:
-            box.click(timeout=5000)
+            br.close()
         except Exception:
             pass
-        try:
-            box.fill(prompt)
-        except Exception:
-            page.keyboard.type(prompt[:4000])
-        page.wait_for_timeout(400)
-        page.keyboard.press("Enter")
 
-        # Chờ câu trả lời: nhận diện ngay khi thấy JSON kết quả
-        deadline = time.time() + timeout
-        last = ""
-        stable = 0
-        result_text = ""
-        while time.time() < deadline:
-            page.wait_for_timeout(1500)
-            text = _reply_text(page, prompt)
-            data = _try_extract_json(text)
-            if data is not None:
-                result_text = json.dumps(data, ensure_ascii=False)
-                if log:
-                    log("Đã nhận kết quả từ ChatGPT.")
-                break
-            if _limit_reached(page):
-                raise AIError(LIMIT_MSG)
-            if text and text == last and len(text) > 20:
-                stable += 1
-                if stable >= 2:
-                    if require_json:
-                        # trả lời không phải JSON -> tiếp tục chờ, không nhận mẫu rỗng
-                        stable = 0
-                    else:
-                        result_text = text
-                        break
-            else:
-                stable = 0
-                last = text
-            if log and text:
-                log(f"ChatGPT đang viết… ({len(text)} ký tự)")
 
-        if not result_text:
-            if _limit_reached(page, last):
-                raise AIError(LIMIT_MSG)
-            if require_json:
-                raise AIError(
-                    "ChatGPT không trả về nội dung thật (chỉ trả lại mẫu). "
-                    "Nếu tài khoản đang bị giới hạn lượt, hãy chờ lượt làm mới "
-                    "hoặc đổi provider khác trong Cấu hình → AI nội dung."
-                )
-            raise AIError("ChatGPT không trả về nội dung (quá thời gian chờ).")
-        return result_text
+def generate_two_step(pcfg: dict, content_prompt: str, seo_prompt: str,
+                      log=None, timeout: int = 420) -> tuple[str, str]:
+    """2 bước trong CÙNG 1 cửa sổ / đoạn chat: viết nội dung → tạo SEO.
+
+    Trả về (nội dung bài viết, JSON SEO).
+    """
+    from ..wp import WPBrowser
+
+    project_url = (pcfg or {}).get("project_url", "") or ""
+    br = WPBrowser(headless=False, site_id="chatgpt")
+    try:
+        page = _open_page(br, project_url, log)
+        if log:
+            log("Bước 1/2 — gửi yêu cầu viết nội dung (rule_content)…")
+        _send(page, content_prompt)
+        raw = _wait_reply(page, content_prompt, timeout, require_json=False)
+
+        if log:
+            log("Bước 2/2 — gửi yêu cầu SEO (rule_seo) trong cùng đoạn chat…")
+        _send(page, seo_prompt)
+        seo = _wait_reply(page, seo_prompt, timeout, require_json=True)
+        return raw, seo
     finally:
         try:
             br.close()
