@@ -144,8 +144,22 @@ def _limit_reached(page, extra_text: str = "") -> str:
     return ""
 
 
+def _is_placeholder(value) -> bool:
+    """True nếu giá trị chỉ là dấu chấm/ellipsis (mẫu rỗng)."""
+    s = str(value or "").strip()
+    if not s:
+        return True
+    return all(ch in ".-_…~ " for ch in s)
+
+
+def _looks_template(html: str) -> bool:
+    """True nếu nội dung HTML chỉ là mẫu (sau khi bỏ thẻ thì toàn dấu …)."""
+    text = re.sub(r"<[^>]*>", " ", str(html or ""))
+    return _is_placeholder(text)
+
+
 def _try_extract_json(text: str) -> dict | None:
-    """Tìm JSON kết quả trong câu trả lời."""
+    """Tìm JSON kết quả THẬT trong câu trả lời (bỏ qua JSON mẫu)."""
     if not text:
         return None
     t = text.strip()
@@ -164,10 +178,11 @@ def _try_extract_json(text: str) -> dict | None:
         return None
     if not isinstance(data, dict):
         return None
-    content = str(data.get("content_html", "")).strip()
-    if not data.get("title") and not content:
+
+    content = data.get("content_html", "")
+    if _is_placeholder(data.get("title")):
         return None
-    if content.strip(". ") == "" or content == "...":
+    if _is_placeholder(content) or _looks_template(content):
         return None
     return data
 
@@ -260,7 +275,9 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
                 raise AIError(LIMIT_MSG)
             if require_json:
                 raise AIError(
-                    "ChatGPT không trả về JSON hợp lệ (có thể chỉ trả lại mẫu). Thử lại hoặc dùng provider khác."
+                    "ChatGPT không trả về nội dung thật (chỉ trả lại mẫu). "
+                    "Nếu tài khoản đang bị giới hạn lượt, hãy chờ lượt làm mới "
+                    "hoặc đổi provider khác trong Cấu hình → AI nội dung."
                 )
             raise AIError("ChatGPT không trả về nội dung (quá thời gian chờ).")
         return result_text
