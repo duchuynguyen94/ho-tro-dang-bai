@@ -37,6 +37,7 @@ from ...storage.models import (
     STATUS_REVIEW,
 )
 from ..style import Card
+from ..widgets.rich_editor import RichEditor
 from ..toast import show_toast
 
 STATUS_OBJECTS = {
@@ -240,10 +241,9 @@ class JobsPage(QWidget):
         ev2.addLayout(self._field("Description (mô tả SEO)", self.desc_edit, "description"))
         self.tags_edit = QLineEdit()
         ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit, "tags"))
-        self.content_edit = QPlainTextEdit()
-        self.content_edit.setMinimumHeight(180)
-        self.content_edit.setObjectName("mono")
-        ev2.addLayout(self._field("Nội dung (HTML)", self.content_edit, "content_html"))
+        self.content_edit = RichEditor()
+        ev2.addLayout(self._field("Nội dung (soạn thảo trực tiếp — chèn được link/ảnh & sửa HTML)",
+                                  self.content_edit, "content_html"))
 
         img_head = QHBoxLayout()
         img_lab = QLabel("Ảnh (thumbnail + slider)")
@@ -429,7 +429,7 @@ class JobsPage(QWidget):
         self.kw_edit.setText(r.get("focus_keyword", ""))
         self.desc_edit.setPlainText(r.get("description", ""))
         self.tags_edit.setText(r.get("tags", ""))
-        self.content_edit.setPlainText(r.get("content_html", ""))
+        self.content_edit.set_html(r.get("content_html", ""))
         self.footer_combo.setCurrentIndex({"random": 0, "bar1": 1, "bar2": 2}.get(task.footer_mode, 0))
 
         while self.images_row.count():
@@ -465,6 +465,13 @@ class JobsPage(QWidget):
         else:
             pic.setText("(chưa có ảnh)")
         bl.addWidget(pic)
+
+        footer = im.get("footer") or ""
+        tag = "#1" if "bar_1" in footer else ("#2" if "bar_2" in footer else "")
+        cap = QLabel(f"Ảnh {index}" + (f" · thanh TT {tag}" if tag else ""))
+        cap.setObjectName("taskMeta")
+        cap.setAlignment(Qt.AlignCenter)
+        bl.addWidget(cap)
 
         bts = QHBoxLayout()
         up = QPushButton("Tải lên")
@@ -549,6 +556,6 @@ class JobsPage(QWidget):
         r["focus_keyword"] = self.kw_edit.text()
         r["description"] = self.desc_edit.toPlainText()
         r["tags"] = self.tags_edit.text()
-        r["content_html"] = self.content_edit.toPlainText()
+        r["content_html"] = self.content_edit.get_html()
         self.store.upsert_task(self.current)
         self.store.save()

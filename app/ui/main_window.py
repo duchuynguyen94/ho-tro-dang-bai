@@ -253,10 +253,13 @@ class MainWindow(QMainWindow):
             "tags": self.jobs_page.tags_edit,
             "content_html": self.jobs_page.content_edit,
         }
-        widget = value_map.get(field)
-        current = (
-            widget.toPlainText() if hasattr(widget, "toPlainText") else widget.text()
-        ) if widget else ""
+        if field == "content_html":
+            current = self.jobs_page.content_edit.get_text()
+        else:
+            widget = value_map.get(field)
+            current = (
+                widget.toPlainText() if hasattr(widget, "toPlainText") else widget.text()
+            ) if widget else ""
 
         worker = FieldWorker(self.store, site, task, field, current)
         worker.log.connect(self._on_worker_log)
