@@ -98,6 +98,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         logo_scale = float(o.get("logo_scale", 1.0) or 1.0)
         brand_scale = float(o.get("brand_scale", 1.0) or 1.0)
         product_scale = float(o.get("product_scale", 1.0) or 1.0)
+        uploads = o.get("uploads") or None
         product_positions = o.get("product_pos") or None
         if product_positions:
             product_positions = [tuple(p) for p in product_positions]
@@ -123,6 +124,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             brand_scale=brand_scale,
             product_scale=product_scale,
             product_positions=product_positions,
+            uploads=uploads,
         )
         # Rule đặt tên ảnh (nếu có)
         rule = (rules[i] if i < len(rules) else "").strip()

@@ -141,6 +141,8 @@ class ImageEditorPanel(QFrame):
         self._opts: dict = {}
         self._preview: dict = {}
         self._product_items: list[DraggableImage] = []
+        self._upload_items: list[DraggableImage] = []
+        self.wm_label = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(12, 12, 12, 12)
@@ -275,6 +277,8 @@ class ImageEditorPanel(QFrame):
         self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
         self._layout_items()
         self._layout_products()
+        self._layout_uploads()
+        self._layout_watermark()
 
     # ---------------- logo ---------------- #
     def _pixmap_for(self, path: str, base_w: float, scale: float) -> tuple[QPixmap, int, int]:
@@ -349,6 +353,79 @@ class ImageEditorPanel(QFrame):
                     max(0, min(CANVAS - it.height(), int(fy * CANVAS))))
             self._product_items.append(it)
 
+    # ---------------- thành phần tải lên (per-image) ---------------- #
+    def _layout_uploads(self) -> None:
+        ups = list(self._opts.get("uploads") or [])
+        for it in self._upload_items:
+            it.setParent(None)
+            it.deleteLater()
+        self._upload_items = []
+
+        scale = self.s_product.value() / 100.0
+        box_src = product_box(SRC, scale)
+        disp = max(24, int(box_src * CANVAS / SRC))
+        for i, up in enumerate(ups):
+            path = up.get("path") if isinstance(up, dict) else str(up)
+            pos = (up.get("pos") if isinstance(up, dict) else None) or [0.5, 0.5]
+            it = DraggableImage(self.canvas)
+            it.index = i
+            pm = QPixmap(path) if Path(path).exists() else QPixmap()
+            if pm.isNull():
+                it.deleteLater()
+                continue
+            pm = pm.scaled(disp, disp, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            it.setPixmap(pm)
+            it.set_source(pm)
+            it.setFixedSize(pm.size())
+            it.show()
+            for g in it.grips:
+                g.setVisible(True)
+            it.moved.connect(self._on_upload_moved)
+            it.resized.connect(lambda w, idx=i: self._on_upload_resized(idx, w))
+            it.move(max(0, min(CANVAS - it.width(), int(pos[0] * CANVAS - it.width() / 2))),
+                    max(0, min(CANVAS - it.height(), int(pos[1] * CANVAS - it.height() / 2))))
+            it.raise_()
+            self._upload_items.append(it)
+        if self.wm_label is not None:
+            self.wm_label.raise_()      # watermark luôn nằm TRÊN thành phần
+
+    def _on_upload_moved(self) -> None:
+        ups = list(self._opts.get("uploads") or [])
+        for i, it in enumerate(self._upload_items):
+            if i < len(ups) and isinstance(ups[i], dict):
+                ups[i]["pos"] = [round((it.x() + it.width() / 2) / CANVAS, 4),
+                                 round((it.y() + it.height() / 2) / CANVAS, 4)]
+        self._opts["uploads"] = ups
+
+    def _on_upload_resized(self, index: int, width: int) -> None:
+        base = product_box(SRC, 1.0) * CANVAS / SRC
+        scale = max(0.5, min(1.8, width / max(1.0, base)))
+        self.s_product.blockSignals(True)
+        self.s_product.setValue(int(scale * 100))
+        self.s_product.blockSignals(False)
+        self._on_upload_moved()
+
+    # ---------------- watermark nằm TRÊN các thành phần ---------------- #
+    def _layout_watermark(self) -> None:
+        text = (self._preview.get("watermark") or "").strip()
+        if self.wm_label is not None:
+            self.wm_label.setParent(None)
+            self.wm_label.deleteLater()
+            self.wm_label = None
+        if not text:
+            return
+        lab = QLabel(text, self.canvas)
+        lab.setStyleSheet(
+            "color: rgba(15,23,42,0.22); font-weight:700; font-size:13px;"
+            "background: transparent;"
+        )
+        lab.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        lab.adjustSize()
+        lab.move(max(4, (CANVAS - lab.width()) // 2), max(4, (CANVAS - lab.height()) // 2))
+        lab.show()
+        lab.raise_()
+        self.wm_label = lab
+
     def _on_product_moved(self) -> None:
         self._opts["product_pos"] = [
             [round(it.x() / CANVAS, 4), round(it.y() / CANVAS, 4)] for it in self._product_items
@@ -390,6 +467,8 @@ class ImageEditorPanel(QFrame):
         self.remove_bg.setChecked(False)
         self._layout_items()
         self._layout_products()
+        self._layout_uploads()
+        self._layout_watermark()
 
     def _apply(self) -> None:
         self._on_moved()

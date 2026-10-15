@@ -146,6 +146,7 @@ def compose(
     brand_scale: float = 1.0,
     product_scale: float = 1.0,
     product_positions: list | None = None,
+    uploads: list | None = None,
 ) -> Image.Image:
     products = [p for p in (products or []) if p]
     bg = (255, 255, 255, 0) if transparent_bg else (255, 255, 255, 255)
@@ -183,6 +184,21 @@ def compose(
             px = max(0, min(size - im.size[0], px))
             py = max(0, min(size - im.size[1], py))
             base.alpha_composite(im, (px, py))
+
+    # --- thành phần TẢI LÊN (per-image), canh theo tâm ---
+    for up in (uploads or []):
+        path = up.get("path") if isinstance(up, dict) else str(up)
+        pos = (up.get("pos") if isinstance(up, dict) else None) or [0.5, 0.5]
+        im = prepare_product(path, remove_bg, remove_bg_thresh)
+        if im is None:
+            continue
+        box = product_box(size, product_scale)
+        im = _fit(im, box, box)
+        px = int(pos[0] * size - im.size[0] / 2)
+        py = int(pos[1] * size - im.size[1] / 2)
+        px = max(0, min(size - im.size[0], px))
+        py = max(0, min(size - im.size[1], py))
+        base.alpha_composite(im, (px, py))
 
     # --- logo website (trên-trái) ---
     logo = _load_rgba(site_logo)

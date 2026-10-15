@@ -610,8 +610,8 @@ class JobsPage(QWidget):
             products=[],
             footer_bar=footer,
             frame=site.frame_path if site else "",
-            watermark=site.watermark_text if site else "",
-            watermark_opacity=int(opts.get("watermark_opacity", 18) or 18),
+            watermark="",     # watermark vẽ riêng để luôn nằm trên thành phần
+            watermark_opacity=0,
             remove_bg=remove_bg,
             remove_bg_thresh=th,
             product_scale=float(opts.get("product_scale", 1.0) or 1.0),
@@ -623,6 +623,7 @@ class JobsPage(QWidget):
             "logo": site.logo_path if site else "",
             "brand": r.get("brand_logo", ""),
             "products": [p for p in (r.get("product_images") or []) if p],
+            "watermark": (site.watermark_text if site else ""),
         }
 
     def _refresh_preview(self, task) -> None:
@@ -655,16 +656,15 @@ class JobsPage(QWidget):
             return
         self._save()
         r = self.current.result
-        prods = list(r.get("product_images") or [])
-        if len(prods) >= 3:
-            prods[-1] = path          # đã đủ 3 -> thay cái cuối
-        else:
-            prods.append(path)
-        r["product_images"] = prods
-        # bỏ vị trí cũ để thành phần tự sắp xếp lại ở giữa
         lst = r.get("image_opts_list") or []
-        if index < len(lst):
-            lst[index].pop("product_pos", None)
+        while len(lst) <= index:
+            lst.append({})
+        ups = list(lst[index].get("uploads") or [])
+        if len(ups) >= 3:
+            ups[-1] = {"path": path, "pos": [0.5, 0.5]}   # đủ 3 -> thay cái cuối
+        else:
+            ups.append({"path": path, "pos": [0.5, 0.5]})  # canh giữa
+        lst[index]["uploads"] = ups
         r["image_opts_list"] = lst
         self.store.upsert_task(self.current)
         self.store.save()
