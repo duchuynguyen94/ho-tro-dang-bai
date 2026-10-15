@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QPixmap
+from PySide6.QtCore import QMimeData, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QDrag, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -39,7 +39,7 @@ from ...storage.models import (
 )
 from ...config import output_dir
 from ...images import compose, save_composed
-from ..style import Card
+from ..style import Card, polish_combos
 from ..workers import _remove_bg_opts
 from ..widgets.image_editor import ImageEditorPanel
 from ..widgets.rich_editor import RichEditor
@@ -54,6 +54,8 @@ STATUS_OBJECTS = {
     STATUS_ERROR: "chipRed",
 }
 
+MAX_IMAGES = 8      # số ảnh tối đa cho 1 bài (nút "+ Thêm hình")
+
 
 class ThumbImage(QLabel):
     """Ảnh thumbnail: tự phóng đầy khung (cắt cạnh thừa)."""
@@ -62,6 +64,7 @@ class ThumbImage(QLabel):
         super().__init__(parent)
         self.setObjectName("imgThumb")
         self.setMinimumWidth(80)
+        self.setMinimumHeight(118)
         self.setAlignment(Qt.AlignCenter)
         self._src = None
         sp = self.sizePolicy()
@@ -93,7 +96,7 @@ class ThumbImage(QLabel):
 
 
 class ThumbBox(QFrame):
-    """Thumbnail ảnh, bấm vào để chọn sửa."""
+    """Thumbnail ảnh: bấm để chọn sửa, KÉO để đổi thứ tự."""
 
     clicked = Signal(int)
 
@@ -101,9 +104,10 @@ class ThumbBox(QFrame):
         super().__init__(parent)
         self.index = index
         self.setObjectName("imgBox")
+        self.setMinimumWidth(108)
         self.pic = None
-
-
+        self._press = None
+        self.setToolTip("Bấm để chỉnh sửa · kéo sang trái/phải để đổi thứ tự")
 
     def set_selected(self, on: bool) -> None:
         self.setProperty("selected", "true" if on else "false")
@@ -113,8 +117,79 @@ class ThumbBox(QFrame):
         self.update()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        self.clicked.emit(self.index)
+        if event.button() == Qt.LeftButton:
+            self._press = event.position().toPoint()
         super().mousePressEvent(event)
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._press is None:
+            return
+        if (event.position().toPoint() - self._press).manhattanLength() < QApplication.startDragDistance():
+            return
+        self._press = None
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setText(str(self.index))
+        drag.setMimeData(mime)
+        pm = self.grab()
+        drag.setPixmap(pm.scaled(max(40, pm.width() // 2), max(40, pm.height() // 2),
+                                 Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        drag.exec(Qt.MoveAction)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        if self._press is not None:
+            self._press = None
+            self.clicked.emit(self.index)
+        super().mouseReleaseEvent(event)
+
+
+class ImagesBox(QWidget):
+    """Hàng thumbnail ảnh — nhận kéo-thả để sắp xếp lại."""
+
+    reordered = Signal(int, int)      # (từ vị trí, đến vị trí)
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+
+    def _boxes(self) -> list[ThumbBox]:
+        lay = self.layout()
+        out: list[ThumbBox] = []
+        if lay is None:
+            return out
+        for i in range(lay.count()):
+            w = lay.itemAt(i).widget()
+            if isinstance(w, ThumbBox):
+                out.append(w)
+        return out
+
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        try:
+            frm = int(event.mimeData().text())
+        except (TypeError, ValueError):
+            return
+        boxes = self._boxes()
+        if not boxes:
+            return
+        x = event.position().toPoint().x()
+        to = len(boxes)
+        for i, b in enumerate(boxes):
+            if x < b.x() + b.width() / 2:
+                to = i
+                break
+        if to > frm:
+            to -= 1
+        if 0 <= to < len(boxes) and to != frm:
+            self.reordered.emit(frm, to)
+        event.acceptProposedAction()
 
 
 class TaskRow(QFrame):
@@ -204,6 +279,7 @@ class JobsPage(QWidget):
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
     refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
     recompose_image = Signal(object, int)    # (task, image index) ghép lại 1 ảnh
+    recompose_all = Signal(object)           # (task) ghép lại TOÀN BỘ ảnh (sau thêm/xoá/sắp xếp)
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
@@ -330,14 +406,26 @@ class JobsPage(QWidget):
                                   self.content_edit))
 
         img_head = QHBoxLayout()
-        img_lab = QLabel("Ảnh (thumbnail + slider)")
+        img_lab = QLabel("Ảnh")
         img_lab.setStyleSheet("font-weight:600;")
         img_head.addWidget(img_lab)
         img_head.addStretch(1)
         ev2.addLayout(img_head)
 
-        self.images_row = QHBoxLayout()
-        ev2.addLayout(self.images_row)
+        self.images_box = ImagesBox()
+        self.images_row = QHBoxLayout(self.images_box)
+        self.images_row.setContentsMargins(0, 0, 0, 0)
+        self.images_row.setSpacing(8)
+        ev2.addWidget(self.images_box)
+        self.images_box.reordered.connect(self._reorder_images)
+
+        self.add_img_btn = QPushButton("+ Thêm hình")
+        self.add_img_btn.setProperty("class", "ghost")
+        self.add_img_btn.setToolTip(
+            "Thêm 1 ảnh TRỐNG (chỉ có logo site, logo brand, watermark, thanh thông tin).\n"
+            "Bạn tự tải ảnh sản phẩm lên cho ảnh đó."
+        )
+        self.add_img_btn.clicked.connect(self._add_image)
 
         self.img_editor = ImageEditorPanel()
         self.img_editor.apply_opts.connect(self._apply_image_opts)
@@ -401,6 +489,7 @@ class JobsPage(QWidget):
         split.setStretchFactor(1, 1)
         split.setSizes([330, 900])
         outer.addWidget(split)
+        polish_combos(self)
 
     def _field(self, label: str, widget: QWidget, field: str | None = None) -> QVBoxLayout:
         box = QVBoxLayout()
@@ -541,10 +630,11 @@ class JobsPage(QWidget):
         images = r.get("images", [])
         self._thumbs = []
         for i, im in enumerate(images, 1):
-            box = self._image_box(i, im)
-            self.images_row.addWidget(box, 1)     # chia đều 3 khung
+            box = self._image_box(i, im, len(images) > 1)
+            self.images_row.addWidget(box, 1)
             self._thumbs.append(box)
-        self.images_row.addStretch(1)
+        self.images_row.addWidget(self.add_img_btn, 0, Qt.AlignTop)
+        self.add_img_btn.setEnabled(len(images) < MAX_IMAGES)
 
         if getattr(self, "_sel_index", 0) >= len(images):
             self._sel_index = 0
@@ -553,7 +643,7 @@ class JobsPage(QWidget):
         self.stack.setCurrentWidget(self.editor_scroll)
         self.footer.show()
 
-    def _image_box(self, index: int, im: dict) -> ThumbBox:
+    def _image_box(self, index: int, im: dict, can_delete: bool = True) -> ThumbBox:
         box = ThumbBox(index - 1)
         box.clicked.connect(self._select_image)
         bl = QVBoxLayout(box)
@@ -576,12 +666,117 @@ class JobsPage(QWidget):
 
         footer = im.get("footer") or ""
         tag = "#1" if "bar_1" in footer else ("#2" if "bar_2" in footer else "")
+        cap_row = QHBoxLayout()
+        cap_row.setContentsMargins(0, 0, 0, 0)
+        cap_row.setSpacing(4)
         cap = QLabel(f"Ảnh {index}" + (f" · thanh TT {tag}" if tag else ""))
         cap.setObjectName("taskMeta")
-        cap.setAlignment(Qt.AlignCenter)
-        pad.addWidget(cap)
+        cap_row.addWidget(cap, 1)
+        del_btn = QPushButton("✕")
+        del_btn.setObjectName("imgDel")
+        del_btn.setFixedSize(20, 20)
+        del_btn.setToolTip("Xoá ảnh này")
+        del_btn.setEnabled(bool(can_delete))
+        del_btn.clicked.connect(lambda _=False, i=index - 1: self._delete_image(i))
+        cap_row.addWidget(del_btn)
+        pad.addLayout(cap_row)
 
         return box
+
+    # ---------------- thêm / xoá / sắp xếp ảnh ---------------- #
+    def _norm_footers(self, task) -> None:
+        """Gán lại thanh thông tin luân phiên 1→2→1→2 theo index mới."""
+        site = self.store.get_site(task.site_id)
+        bars = [b for b in ((site.footer_bars if site else []) or []) if b]
+        r = task.result or {}
+        images = r.get("images") or []
+        lst = list(r.get("image_opts_list") or [])
+        while len(lst) < len(images):
+            lst.append({})
+        for i in range(len(images)):
+            lst[i]["footer_mode"] = "bar2" if (len(bars) > 1 and i % 2 == 1) else "bar1"
+        r["image_opts_list"] = lst
+        task.image_count = max(1, len(images))
+
+    def _add_image(self) -> None:
+        if not self.current:
+            return
+        self._save()
+        r = self.current.result
+        images = list(r.get("images") or [])
+        if len(images) >= MAX_IMAGES:
+            show_toast(self, f"Tối đa {MAX_IMAGES} ảnh", 2200, ok=False)
+            return
+        images.append({"path": "", "footer": ""})
+        r["images"] = images
+        lst = list(r.get("image_opts_list") or [])
+        while len(lst) < len(images):
+            lst.append({})
+        # ảnh mới: ĐỂ TRỐNG (chỉ khung mẫu) — chờ người dùng tải ảnh lên
+        lst[len(images) - 1] = {**lst[len(images) - 1], "no_products": True}
+        r["image_opts_list"] = lst
+        self._norm_footers(self.current)
+        self.store.upsert_task(self.current)
+        self.store.save()
+        self._sel_index = len(images) - 1
+        self._load(self.current)
+        self.recompose_all.emit(self.current)
+
+    def _delete_image(self, index: int) -> None:
+        if not self.current:
+            return
+        images = list((self.current.result or {}).get("images") or [])
+        if len(images) <= 1:
+            show_toast(self, "Phải giữ lại ít nhất 1 ảnh", 2200, ok=False)
+            return
+        if not (0 <= index < len(images)):
+            return
+        ans = QMessageBox.question(
+            self, "Xoá ảnh", f"Xoá Ảnh {index + 1}?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.Yes,        # Enter = Yes
+        )
+        if ans != QMessageBox.Yes:
+            return
+        self._save()
+        r = self.current.result
+        images = list(r.get("images") or [])
+        if not (0 <= index < len(images)):
+            return
+        images.pop(index)
+        r["images"] = images
+        lst = list(r.get("image_opts_list") or [])
+        if index < len(lst):
+            lst.pop(index)
+        r["image_opts_list"] = lst
+        self._norm_footers(self.current)
+        self.store.upsert_task(self.current)
+        self.store.save()
+        self._sel_index = max(0, min(self._sel_index, len(images) - 1))
+        self._load(self.current)
+        self.recompose_all.emit(self.current)
+
+    def _reorder_images(self, frm: int, to: int) -> None:
+        if not self.current or frm == to:
+            return
+        self._save()
+        r = self.current.result
+        images = list(r.get("images") or [])
+        lst = list(r.get("image_opts_list") or [])
+        while len(lst) < len(images):
+            lst.append({})
+        if not (0 <= frm < len(images)) or not (0 <= to < len(images)):
+            return
+        images.insert(to, images.pop(frm))
+        lst.insert(to, lst.pop(frm))
+        r["images"] = images
+        r["image_opts_list"] = lst
+        self._norm_footers(self.current)
+        self.store.upsert_task(self.current)
+        self.store.save()
+        self._sel_index = to
+        self._load(self.current)
+        self.recompose_all.emit(self.current)
 
     def _ai_edit(self, index: int) -> None:
         if not self.current:
@@ -626,7 +821,8 @@ class JobsPage(QWidget):
             "background": str(out),
             "logo": site.logo_path if site else "",
             "brand": r.get("brand_logo", ""),
-            "products": [p for p in (r.get("product_images") or []) if p],
+            "products": [] if opts.get("no_products") else
+                        [p for p in (r.get("product_images") or []) if p],
             "watermark": (site.watermark_text if site else ""),
         }
 
@@ -640,6 +836,7 @@ class JobsPage(QWidget):
         lst = r.get("image_opts_list") or []
         opts_i = dict(lst[idx]) if idx < len(lst) else (r.get("image_opts") or {})
         preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
+        self.img_editor.set_ai_enabled((self.store.ai_image or {}).get("active") != "off")
         self.img_editor.load(preview, opts_i, task.footer_mode, title)
 
     def _apply_image_opts(self, opts: dict) -> None:

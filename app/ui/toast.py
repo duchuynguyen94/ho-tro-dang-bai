@@ -7,16 +7,23 @@ from PySide6.QtWidgets import QGraphicsOpacityEffect, QLabel, QWidget
 _alive: list = []
 
 
-def show_toast(source: QWidget, text: str = "Đã lưu thành công", ms: int = 1600) -> QLabel | None:
-    """Hiện thông báo ở góc dưới-phải cửa sổ rồi tự mờ dần và biến mất."""
+def show_toast(source: QWidget, text: str = "Đã lưu thành công", ms: int = 1800,
+               ok: bool = True) -> QLabel | None:
+    """Hiện thông báo ở góc dưới-phải cửa sổ rồi tự mờ dần và biến mất.
+
+    ok=True  -> nền xanh (thành công)
+    ok=False -> nền đỏ  (thất bại)
+    """
     win = source.window()
     if win is None:
         return None
 
-    lab = QLabel(f"✓  {text}", win)
+    bg = "#16a34a" if ok else "#dc2626"
+    icon = "✓" if ok else "✗"
+    lab = QLabel(f"{icon}  {text}", win)
     lab.setStyleSheet(
-        "background:#16a34a;color:#ffffff;border-radius:9px;"
-        "padding:10px 16px;font-weight:600;font-size:13px;"
+        f"background:{bg};color:#ffffff;border-radius:9px;"
+        "padding:11px 18px;font-weight:600;font-size:13px;"
     )
     lab.adjustSize()
 

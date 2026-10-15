@@ -259,7 +259,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "ai_image": {
         "pillow": {"enabled": True, "output_format": "PNG", "jpg_quality": 90, "size": 1080},
-        "remove_bg": {"mode": "local", "threshold": 0.5},
         "active": "gemini",
         "providers": {
             "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash-image"},

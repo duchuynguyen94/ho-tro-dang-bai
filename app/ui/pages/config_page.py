@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 from ...config import formats_dir, media_dir
 from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
-from ..style import Card
+from ..style import Card, polish_combos
 from ..toast import show_toast
 from ..workers import LoginWorker, OpenLoginWorker
 
@@ -154,6 +154,7 @@ class ConfigPage(QWidget):
         first_key = next(iter(self._panels), None)
         if first_key:
             self._show(first_key)
+        polish_combos(self)
 
     def _show(self, key: str) -> None:
         if key not in self._panels:
@@ -408,10 +409,14 @@ class SitePanel(QWidget):
             old.setdefault("selectors", [])
             old.setdefault("source", "recorded")
             steps.append(old)
-        self._steps = steps
-        self.site.script = Script(steps=[ScriptStep.from_dict(x) for x in steps]) if steps else None
-        self.store.upsert_site(self.site)
-        self.store.save()
+        try:
+            self._steps = steps
+            self.site.script = Script(steps=[ScriptStep.from_dict(x) for x in steps]) if steps else None
+            self.store.upsert_site(self.site)
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Lưu kịch bản THẤT BẠI: {exc}", 3400, ok=False)
+            return
         show_toast(self, "Đã lưu kịch bản")
 
     def _cell(self, row: int, col: int) -> str:
@@ -495,21 +500,26 @@ class SitePanel(QWidget):
 
     # ------------------------------------------------------------------ #
     def _save(self, silent: bool = False) -> None:
-        s = self.site
-        s.name = self.name_edit.text().strip()
-        s.url = self.url_edit.text().strip()
-        s.new_post_url = self.newpost_edit.text().strip()
-        s.watermark = s.url
-        s.username = self.user_edit.text().strip()
-        if self.pass_edit.text():
-            s.set_password(self.pass_edit.text())
-        s.logo_path = self.logo_edit.text()
-        s.frame_path = self.frame_edit.text()
-        s.footer_bars = [self.bar1_edit.text(), self.bar2_edit.text()]
-        if self._steps:
-            s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
-        self.store.upsert_site(s)
-        self.store.save()
+        try:
+            s = self.site
+            s.name = self.name_edit.text().strip()
+            s.url = self.url_edit.text().strip()
+            s.new_post_url = self.newpost_edit.text().strip()
+            s.watermark = s.url
+            s.username = self.user_edit.text().strip()
+            if self.pass_edit.text():
+                s.set_password(self.pass_edit.text())
+            s.logo_path = self.logo_edit.text()
+            s.frame_path = self.frame_edit.text()
+            s.footer_bars = [self.bar1_edit.text(), self.bar2_edit.text()]
+            if self._steps:
+                s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
+            self.store.upsert_site(s)
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            if not silent:
+                show_toast(self, f"Lưu website THẤT BẠI: {exc}", 3400, ok=False)
+            return
         if not silent:
             show_toast(self, "Đã lưu website")
         self.saved.emit()
@@ -640,23 +650,44 @@ class ProviderList(QWidget):
         event.acceptProposedAction()
 
 
-class AIContentPanel(QScrollArea):
+class AIContentPanel(QWidget):
+    """Cấu hình AI nội dung — nút Lưu GHIM cố định trên đầu panel."""
+
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWidgetResizable(True)
         self._rows: dict[str, dict] = {}
         self._group = QButtonGroup(self)      # đảm bảo "Mặc định" là duy nhất
         self._group.setExclusive(True)
         self._build()
 
     def _build(self) -> None:
-        root = QWidget()
-        v = QVBoxLayout(root)
-        v.setContentsMargins(20, 18, 20, 20)
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 12)
+        outer.setSpacing(10)
+
+        # ---- header cố định: tiêu đề + nút Lưu (luôn hiển thị khi cuộn) ----
+        head = QHBoxLayout()
         title = QLabel("AI nội dung")
         title.setProperty("class", "h2")
-        v.addWidget(title)
+        head.addWidget(title)
+        head.addStretch(1)
+        save = QPushButton("Lưu cấu hình AI nội dung")
+        save.setProperty("class", "primary")
+        save.clicked.connect(self._save)
+        head.addWidget(save)
+        outer.addLayout(head)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        root = QWidget()
+        v = QVBoxLayout(root)
+        v.setContentsMargins(0, 0, 0, 8)
+        v.setSpacing(10)
+
         sub = QLabel(
             "Ưu tiên miễn phí. <b>Kéo ⠿ để đổi thứ tự</b> — thứ tự này là thứ tự gọi khi bật "
             "<b>Fallback tự động</b>. Chọn 1 provider làm mặc định (gọi trước tiên)."
@@ -684,12 +715,9 @@ class AIContentPanel(QScrollArea):
         self.fallback.setChecked(bool(cfg.get("fallback", True)))
         v.addWidget(self.fallback)
 
-        save = QPushButton("Lưu cấu hình AI nội dung")
-        save.setProperty("class", "primary")
-        save.clicked.connect(self._save)
-        v.addWidget(save, alignment=Qt.AlignRight)
         v.addStretch(1)
-        self.setWidget(root)
+        scroll.setWidget(root)
+        outer.addWidget(scroll, 1)
 
     def _make_card(self, key: str, pcfg: dict):
         card = Card(PROVIDER_LABELS.get(key, key))
@@ -752,22 +780,26 @@ class AIContentPanel(QScrollArea):
         return card, num
 
     def _save(self) -> None:
-        cfg = self.store.ai_content
-        for key, row in self._rows.items():
-            p = cfg["providers"].setdefault(key, {})
-            if row.get("key") is not None:
-                p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
-            if row.get("model") is not None and row["model"].text().strip():
-                p["model"] = row["model"].text().strip()
-            if row.get("project") is not None:
-                p["project_url"] = row["project"].text().strip()
-            if key == "chatgpt" and getattr(self, "show_browser", None) is not None:
-                p["show_browser"] = self.show_browser.isChecked()
-            if row["radio"].isChecked():
-                cfg["active"] = key
-        cfg["order"] = self.list.keys()
-        cfg["fallback"] = self.fallback.isChecked()
-        self.store.save()
+        try:
+            cfg = self.store.ai_content
+            for key, row in self._rows.items():
+                p = cfg["providers"].setdefault(key, {})
+                if row.get("key") is not None:
+                    p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
+                if row.get("model") is not None and row["model"].text().strip():
+                    p["model"] = row["model"].text().strip()
+                if row.get("project") is not None:
+                    p["project_url"] = row["project"].text().strip()
+                if key == "chatgpt" and getattr(self, "show_browser", None) is not None:
+                    p["show_browser"] = self.show_browser.isChecked()
+                if row["radio"].isChecked():
+                    cfg["active"] = key
+            cfg["order"] = self.list.keys()
+            cfg["fallback"] = self.fallback.isChecked()
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Lưu AI nội dung THẤT BẠI: {exc}", 3400, ok=False)
+            return
         show_toast(self, "Đã lưu AI nội dung")
 
     def _login_chatgpt(self, btn) -> None:
@@ -785,27 +817,50 @@ class AIContentPanel(QScrollArea):
         btn.setText("■ Đóng trình duyệt")
 
 
-class AIImagePanel(QScrollArea):
+class AIImagePanel(QWidget):
+    """Cấu hình AI ảnh — nút Lưu GHIM cố định trên đầu panel."""
+
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
         self.store = store
-        self.setWidgetResizable(True)
-        root = QWidget()
-        v = QVBoxLayout(root)
-        v.setContentsMargins(20, 18, 20, 20)
+        self._providers: list[QWidget] = []
+        self._build()
+
+    def _build(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 12)
+        outer.setSpacing(10)
+
+        # ---- header cố định: tiêu đề + nút Lưu (luôn hiển thị khi cuộn) ----
+        head = QHBoxLayout()
         t = QLabel("AI ảnh")
         t.setProperty("class", "h2")
-        v.addWidget(t)
+        head.addWidget(t)
+        head.addStretch(1)
+        save = QPushButton("Lưu cấu hình AI ảnh")
+        save.setProperty("class", "primary")
+        save.clicked.connect(self._save)
+        head.addWidget(save)
+        outer.addLayout(head)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+
+        root = QWidget()
+        v = QVBoxLayout(root)
+        v.setContentsMargins(0, 0, 0, 8)
+        v.setSpacing(10)
+
         sub = QLabel("Gắn logo / khung / watermark / thanh thông tin và chỉnh sửa ảnh sản phẩm.")
         sub.setProperty("class", "sub")
         v.addWidget(sub)
 
         cfg = self.store.ai_image
+
+        # ---- Xử lý ảnh cục bộ (Pillow): luôn bật, bỏ ô tick + bỏ ghi chú ----
         c1 = Card("Xử lý ảnh cục bộ (Pillow)")
-        c1.body.addWidget(QLabel("Gắn logo, khung, watermark, thanh thông tin và resize — miễn phí, chạy tại máy."))
-        self.pillow_on = QCheckBox("Bật")
-        self.pillow_on.setChecked(bool(cfg["pillow"].get("enabled", True)))
-        c1.body.addWidget(self.pillow_on)
         form = _form()
         self.out_fmt = QComboBox()
         self.out_fmt.addItems(["PNG (giữ trong suốt)", "JPG"])
@@ -813,37 +868,40 @@ class AIImagePanel(QScrollArea):
         form.addRow("Định dạng xuất", self.out_fmt)
         self.size_combo = QComboBox()
         self.size_combo.addItems(["1080 × 1080 (mặc định)", "1200 × 1200", "Giữ nguyên"])
+        try:
+            _size = int(cfg["pillow"].get("size", 1080) or 0)
+        except (TypeError, ValueError):
+            _size = 1080
+        self.size_combo.setCurrentIndex(0 if _size == 1080 else (1 if _size == 1200 else 2))
         form.addRow("Kích thước ảnh xuất", self.size_combo)
         c1.body.addLayout(form)
         v.addWidget(c1)
 
-        c2 = Card("Xoá nền ảnh sản phẩm")
-        self.remove_bg = QCheckBox("Bật xoá nền (xuất PNG trong suốt)")
-        self.remove_bg.setChecked(cfg["remove_bg"].get("mode") != "off")
-        c2.body.addWidget(self.remove_bg)
+        # ---- Tắt AI chỉnh ảnh: công tắc CHUNG, đặt TRÊN danh sách provider ----
+        c2 = Card("")
+        self.ai_off = QCheckBox("Tắt AI chỉnh ảnh — chỉ dùng Pillow để cắt ghép (không gọi AI)")
+        self.ai_off.setChecked(cfg.get("active") == "off")
+        self.ai_off.toggled.connect(self._toggle_providers)
+        c2.body.addWidget(self.ai_off)
         v.addWidget(c2)
 
+        # ---- AI chỉnh sửa ảnh (các provider) ----
         c3 = Card("AI chỉnh sửa ảnh")
         grid = QGridLayout()
         self._img_rows: dict[str, dict] = {}
         self._img_group = QButtonGroup(self)
         self._img_group.setExclusive(True)
-        for i, (key, pcfg) in enumerate(cfg["providers"].items()):
-            label = {"gemini": "Google Gemini 2.5 Flash Image", "fal": "fal.ai — Flux Kontext",
-                     "openai": "OpenAI Images", "off": "Tắt AI chỉnh ảnh"}.get(key, key)
+        idx = 0
+        for key, pcfg in cfg["providers"].items():
+            if key == "off":
+                continue                      # đã tách thành công tắc ở trên
+            label = {"gemini": "Google Gemini", "fal": "fal.ai — Flux Kontext",
+                     "openai": "OpenAI Images"}.get(key, key)
             card = Card(label)
             radio = QCheckBox("Mặc định")
             radio.setChecked(cfg.get("active") == key)
             self._img_group.addButton(radio)
             card.add_header_widget(radio)
-            if key == "off":
-                hint = QLabel("Chỉ dùng Pillow (cắt ghép, không gọi AI).")
-                hint.setProperty("class", "hint")
-                hint.setWordWrap(True)
-                card.body.addWidget(hint)
-                self._img_rows[key] = {"key": None, "model": None, "radio": radio}
-                grid.addWidget(card, i // 2, i % 2)
-                continue
             key_edit = QLineEdit()
             key_edit.setEchoMode(QLineEdit.Password)
             key_edit.setPlaceholderText("API Key")
@@ -852,30 +910,45 @@ class AIImagePanel(QScrollArea):
             card.body.addWidget(key_edit)
             card.body.addWidget(model_edit)
             self._img_rows[key] = {"key": key_edit, "model": model_edit, "radio": radio}
-            grid.addWidget(card, i // 2, i % 2)
+            self._providers.append(card)
+            grid.addWidget(card, idx // 2, idx % 2)
+            idx += 1
         c3.body.addLayout(grid)
         v.addWidget(c3)
+        self._toggle_providers(self.ai_off.isChecked())
 
-        save = QPushButton("Lưu cấu hình AI ảnh")
-        save.setProperty("class", "primary")
-        save.clicked.connect(self._save)
-        v.addWidget(save, alignment=Qt.AlignRight)
         v.addStretch(1)
-        self.setWidget(root)
+        scroll.setWidget(root)
+        outer.addWidget(scroll, 1)
+
+    def _toggle_providers(self, off: bool) -> None:
+        """Tắt AI chỉnh ảnh -> khoá danh sách provider."""
+        for card in self._providers:
+            card.setEnabled(not off)
 
     def _save(self) -> None:
-        cfg = self.store.ai_image
-        cfg["pillow"]["enabled"] = self.pillow_on.isChecked()
-        cfg["pillow"]["output_format"] = "PNG" if self.out_fmt.currentIndex() == 0 else "JPG"
-        cfg["remove_bg"]["mode"] = "local" if self.remove_bg.isChecked() else "off"
-        for key, row in self._img_rows.items():
-            p = cfg["providers"][key]
-            p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
-            if row["model"].text().strip():
-                p["model"] = row["model"].text().strip()
-            if row["radio"].isChecked():
-                cfg["active"] = key
-        self.store.save()
+        try:
+            cfg = self.store.ai_image
+            cfg["pillow"]["enabled"] = True       # luôn bật (đã bỏ ô tick)
+            cfg["pillow"]["output_format"] = "PNG" if self.out_fmt.currentIndex() == 0 else "JPG"
+            cfg["pillow"]["size"] = [1080, 1200, 0][self.size_combo.currentIndex()]
+            for key, row in self._img_rows.items():
+                p = cfg["providers"][key]
+                p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
+                if row["model"].text().strip():
+                    p["model"] = row["model"].text().strip()
+            if self.ai_off.isChecked():
+                cfg["active"] = "off"
+            else:
+                chosen = next((k for k, r in self._img_rows.items() if r["radio"].isChecked()), "")
+                if chosen:
+                    cfg["active"] = chosen
+                elif cfg.get("active") == "off":
+                    cfg["active"] = next(iter(self._img_rows), "gemini")
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Lưu AI ảnh THẤT BẠI: {exc}", 3400, ok=False)
+            return
         show_toast(self, "Đã lưu AI ảnh")
 
 
@@ -936,15 +1009,19 @@ class SheetsPanel(QScrollArea):
             self.sa_edit.setText(path)
 
     def _save(self) -> None:
-        cfg = self.store.sheets
-        cfg["enabled"] = self.enabled.isChecked()
-        cfg["service_account_file"] = self.sa_edit.text()
-        cfg["spreadsheet_id"] = self.sheet_id.text().strip()
-        cfg["sheet_name"] = self.sheet_name.text().strip()
-        cfg["col_source"] = self.col_src.text().strip() or "A"
-        cfg["col_result"] = self.col_res.text().strip() or "B"
-        cfg["mode"] = "append" if self.mode.currentIndex() == 0 else "update"
-        self.store.save()
+        try:
+            cfg = self.store.sheets
+            cfg["enabled"] = self.enabled.isChecked()
+            cfg["service_account_file"] = self.sa_edit.text()
+            cfg["spreadsheet_id"] = self.sheet_id.text().strip()
+            cfg["sheet_name"] = self.sheet_name.text().strip()
+            cfg["col_source"] = self.col_src.text().strip() or "A"
+            cfg["col_result"] = self.col_res.text().strip() or "B"
+            cfg["mode"] = "append" if self.mode.currentIndex() == 0 else "update"
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Lưu Google Sheets THẤT BẠI: {exc}", 3400, ok=False)
+            return
         show_toast(self, "Đã lưu Google Sheets")
 
 
@@ -1056,12 +1133,16 @@ class FormatPanel(QScrollArea):
         edit.setText(Store.import_file(path, formats_dir()))
 
     def _save(self) -> None:
-        fmt = self.store.formats
-        for key, edit in self._edits.items():
-            setattr(fmt, key, edit.text())
-        self.store.set_formats(fmt)
-        self.store.set_image_rules([e.text().strip() for e in self.rule_edits])
-        self.store.save()
+        try:
+            fmt = self.store.formats
+            for key, edit in self._edits.items():
+                setattr(fmt, key, edit.text())
+            self.store.set_formats(fmt)
+            self.store.set_image_rules([e.text().strip() for e in self.rule_edits])
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Lưu Format Rule THẤT BẠI: {exc}", 3400, ok=False)
+            return
         show_toast(self, "Đã lưu Format Rule")
         if self.on_saved:
             self.on_saved()

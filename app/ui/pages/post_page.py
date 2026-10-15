@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...storage.models import Task
-from ..style import Card
+from ..style import Card, polish_combos
 
 
 class SiteRow(QFrame):
@@ -132,6 +132,7 @@ class PostPage(QWidget):
         self.image_count = QComboBox()
         self.image_count.addItems(["3 ảnh (mặc định)", "1 ảnh", "2 ảnh", "4 ảnh", "5 ảnh"])
         b.addWidget(self.image_count)
+        polish_combos(self)
 
         b.addSpacing(6)
         self.create_btn = QPushButton("Tạo nội dung bằng AI")

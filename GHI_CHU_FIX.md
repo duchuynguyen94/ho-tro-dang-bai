@@ -1,9 +1,32 @@
-# Ghi chú — 11 mục cần fix (CHỜ LỆNH)
+# Ghi chú — 11 mục cần fix
 
-> Trạng thái: **CHƯA LÀM** — chỉ thực hiện khi người dùng nói **"fix"**.
-> Ngày ghi: 2026-10-16
+> Trạng thái: **✅ ĐÃ LÀM XONG** (2026-10-16) — 11/11 mục.
+> Ngày ghi yêu cầu: 2026-10-16
+
+## Tóm tắt đã làm
+
+| # | Việc | Kết quả |
+|---|---|---|
+| 1 | Xoá ô tick "Bật" (Pillow) | Đã xoá; `pillow.enabled` luôn `True` |
+| 2 | Xoá dòng ghi chú trong card Pillow | Đã xoá |
+| 3 | Định dạng PNG/JPG có tác dụng thật | `export_post_images()` dùng `pillow.output_format`; Rule ảnh chỉ là tên, đuôi do cấu hình quyết định |
+| 4 | Kích thước ảnh xuất có tác dụng thật | `pillow.size` (1080 / 1200 / 0=giữ nguyên) resize khi bấm "OK — Đăng bài" |
+| 5 | Đổi tiêu đề "Google Gemini 2.5 Flash Image" → "Google Gemini" | Đã đổi |
+| 6 | Lưu → luôn thông báo thành công/thất bại | `show_toast(..., ok=False)` đỏ cho lỗi; áp cho mọi panel (site, kịch bản, AI nội dung, AI ảnh, Format Rule, Sheets) |
+| 7 | Xoá card "Xoá nền ảnh sản phẩm" toàn cục | Đã xoá card + `remove_bg` khỏi config mặc định; `_remove_bg_opts()` luôn trả `(False, 42)`; giữ chuột phải từng thành phần |
+| 8 | "Tắt AI chỉnh ảnh" lên trên + ẩn nút "AI sửa" | Công tắc riêng trên danh sách provider (khoá provider khi tắt); `ImageEditorPanel.set_ai_enabled()` ẩn nút AI sửa |
+| 9 | "+ Thêm hình" / Xoá ảnh / Sắp xếp ảnh | Nút "+ Thêm hình" (ảnh mới TRỐNG: logo site/brand/watermark/thanh thông tin); nút ✕ xoá có popup Yes/No (Enter = Yes), giữ tối thiểu 1 ảnh; kéo–thả đổi thứ tự → đánh lại index, Rule ảnh + thanh thông tin theo index mới; `export_post_images()` xuất TẤT CẢ ảnh |
+| 10 | Làm đẹp dropdown (select) | QSS mới cho item/hover/selected + scrollbar; `polish_combo()/polish_combos()` bo tròn khung popup, rộng theo nội dung |
+| 11 | Nút Lưu ghim cố định phía trên | `AIContentPanel`/`AIImagePanel` chuyển thành `QWidget` (header ghim + vùng cuộn riêng) |
+
+Ghi chú kỹ thuật thêm:
+- Ảnh mới (mục 9) đánh dấu `no_products=True` trong `image_opts_list[i]` → composer chỉ vẽ khung mẫu.
+- Thêm/xoá/sắp xếp ảnh → `task.image_count` cập nhật và phát signal `recompose_all` để ghép lại toàn bộ.
+- `QComboBox` cần gọi `polish_combos(root)` sau khi tạo (đã gọi ở ConfigPage.reload, JobsPage._build, PostPage._build, RichEditor).
 
 ---
+
+## Chi tiết yêu cầu (lưu lại để tham chiếu)
 
 ## Mục 1 — Xoá ô tick "Bật" trong card "Xử lý ảnh cục bộ (Pillow)"
 - Vị trí: **Cấu hình → AI ảnh → card "Xử lý ảnh cục bộ (Pillow)"**

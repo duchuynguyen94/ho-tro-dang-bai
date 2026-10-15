@@ -73,13 +73,39 @@ QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{
 }}
 QLineEdit:focus, QPlainTextEdit:focus, QTextEdit:focus, QComboBox:focus {{ border: 1px solid {ACCENT}; }}
 
-QComboBox {{ padding-right: 28px; }}
+QComboBox {{ padding: 7px 30px 7px 10px; }}
+QComboBox:hover {{ border: 1px solid #94a3b8; }}
 QComboBox::drop-down {{ subcontrol-origin: padding; subcontrol-position: center right;
-    width: 26px; border: none; background: transparent; }}
-QComboBox::down-arrow {{ image: url("{ARROW}"); width: 12px; height: 12px; }}
-QComboBox QAbstractItemView {{ background: #ffffff; border: 1px solid #cbd5e1; border-radius: 8px;
-    padding: 4px; outline: none; selection-background-color: #eff6ff; selection-color: {ACCENT_DARK}; }}
-QComboBox QAbstractItemView::item {{ padding: 6px 8px; border-radius: 6px; }}
+    width: 28px; border: none; background: transparent; }}
+QComboBox::down-arrow {{ image: url("{ARROW}"); width: 11px; height: 11px; }}
+
+/* Danh sách xổ xuống: nền trắng bo góc, item có hover + đang chọn rõ ràng */
+QComboBox QAbstractItemView {{ background: #ffffff; border: 1px solid #cbd5e1;
+    border-radius: 10px; padding: 6px; outline: none;
+    selection-color: {ACCENT_DARK}; }}
+QComboBox QAbstractItemView::item {{ padding: 7px 10px; border-radius: 7px;
+    min-height: 20px; color: #1f2937; }}
+QComboBox QAbstractItemView::item:hover {{ background: #f1f5f9; }}
+QComboBox QAbstractItemView::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; font-weight: 600; }}
+
+/* Khung popup (window riêng) — trong suốt để thấy viền bo của phần view */
+#comboPopup {{ background: transparent; border: none; }}
+#comboView {{ background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px;
+    padding: 6px; outline: none; }}
+#comboView::item {{ padding: 7px 10px; border-radius: 7px; min-height: 20px; color: #1f2937; }}
+#comboView::item:hover {{ background: #f1f5f9; }}
+#comboView::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; font-weight: 600; }}
+
+/* Thanh cuộn trong danh sách xổ xuống (mảnh, bo tròn, không dùng thanh mặc định) */
+QComboBox QAbstractItemView QScrollBar:vertical {{ background: transparent; width: 8px;
+    margin: 4px 2px 4px 0; border: none; }}
+QComboBox QAbstractItemView QScrollBar::handle:vertical {{ background: #cbd5e1;
+    border-radius: 4px; min-height: 24px; }}
+QComboBox QAbstractItemView QScrollBar::handle:vertical:hover {{ background: #94a3b8; }}
+QComboBox QAbstractItemView QScrollBar::add-line:vertical,
+QComboBox QAbstractItemView QScrollBar::sub-line:vertical {{ height: 0; border: none; }}
+QComboBox QAbstractItemView QScrollBar::add-page:vertical,
+QComboBox QAbstractItemView QScrollBar::sub-page:vertical {{ background: transparent; }}
 
 QFrame#siteRow {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9px; }}
 QFrame#siteRow[selected="true"] {{ background: #eff6ff; border: 1px solid {ACCENT}; }}
@@ -114,6 +140,10 @@ QTextEdit#rteEdit, QPlainTextEdit#rteSource {{ border: 1px solid #cbd5e1; border
     border-bottom: none; border-radius: 0; }}
 QPlainTextEdit#rteSource {{ font-family: Menlo, Consolas, monospace; font-size: 12px; }}
 QLabel#imgThumb {{ background: #f1f5f9; border-radius: 6px; color: #94a3b8; }}
+QPushButton#imgDel {{ background: transparent; border: none; color: #94a3b8; font-weight: 700;
+    font-size: 12px; }}
+QPushButton#imgDel:hover {{ color: {RED}; background: #fef2f2; border-radius: 5px; }}
+QPushButton#imgDel:disabled {{ color: #cbd5e1; }}
 
 /* Danh sách công việc */
 QFrame#taskRow {{ background: transparent; border: none; border-bottom: 1px solid {LINE}; }}
@@ -160,6 +190,47 @@ QLabel.badge {{ border-radius: 9px; padding: 2px 8px; font-size: 11px; font-weig
 QLabel.warn {{ color: {RED}; background: #fef2f2; border: 1px solid #fecaca; border-radius: 7px; padding: 8px 10px; }}
 QLabel.notice {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; padding: 8px 10px; }}
 """
+
+
+def polish_combo(combo) -> None:
+    """Bo tròn + làm đẹp danh sách xổ xuống của QComboBox.
+
+    Trên macOS khung popup là 1 cửa sổ riêng nên QSS không bo góc được —
+    phải set cờ cửa sổ trong suốt cho popup.
+    """
+    from PySide6.QtCore import Qt
+    from PySide6.QtWidgets import QComboBox
+
+    if not isinstance(combo, QComboBox):
+        return
+    try:
+        view = combo.view()
+        if view is None:
+            return
+        view.setObjectName("comboView")
+        fm = combo.fontMetrics()
+        longest = max([fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count())] or [0])
+        view.setMinimumWidth(max(combo.width(), longest + 48, 150))
+        frame = view.parentWidget()
+        win = view.window()
+        if frame is not None and frame is not win:
+            frame.setObjectName("comboPopup")
+        if win is not None:
+            win.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
+            win.setAttribute(Qt.WA_TranslucentBackground, True)
+        combo.setMaxVisibleItems(12)
+    except Exception:
+        pass
+
+
+def polish_combos(root) -> None:
+    """Áp polish_combo cho mọi QComboBox trong `root`."""
+    from PySide6.QtWidgets import QComboBox
+
+    if root is None:
+        return
+    for c in root.findChildren(QComboBox):
+        polish_combo(c)
 
 
 class Card(QFrame):

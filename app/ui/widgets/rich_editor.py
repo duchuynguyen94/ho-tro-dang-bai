@@ -47,6 +47,9 @@ class RichEditor(QWidget):
         self.heading.setFixedWidth(104)
         self.heading.currentIndexChanged.connect(self._heading_changed)
         tb.addWidget(self.heading)
+        from ..style import polish_combo
+
+        polish_combo(self.heading)
         tb.addWidget(self._sep())
 
         # định dạng chữ

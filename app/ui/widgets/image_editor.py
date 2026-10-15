@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...images.composer import default_product_positions, product_box
+from ..style import polish_combos
 
 CANVAS = 380
 SRC = 1080
@@ -239,6 +240,7 @@ class ImageEditorPanel(QFrame):
         ai = QPushButton("AI sửa")
         ai.setProperty("class", "ghost")
         ai.clicked.connect(self.request_ai_edit.emit)
+        self.ai_btn = ai
         fetch = QPushButton("Lấy hình")
         fetch.setProperty("class", "ghost")
         fetch.setToolTip("Lấy lại ảnh sản phẩm từ link nguồn (hoặc tìm trên mạng)")
@@ -280,6 +282,12 @@ class ImageEditorPanel(QFrame):
         for w in (self.s_logo, self.s_wm, self.s_wm_size):
             w.valueChanged.connect(self._schedule_save)
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
+        polish_combos(self)
+
+    # ------------------------------------------------------------------ #
+    def set_ai_enabled(self, on: bool) -> None:
+        """Ẩn nút "AI sửa" khi cấu hình đang TẮT AI chỉnh ảnh."""
+        self.ai_btn.setVisible(bool(on))
 
     # ------------------------------------------------------------------ #
     def _schedule_save(self, *_a) -> None:

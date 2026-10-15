@@ -28,8 +28,11 @@ def render_rule(rule: str, ctx: dict) -> str:
     return _re.sub(r"\{\{?\s*(\w+)\s*\}\}?", repl, rule or "")
 
 
-def _image_name(rule: str, ctx: dict, index: int) -> str:
-    """Tên file theo Rule ảnh (giữ đuôi .jpg/.png nếu có)."""
+def _image_stem(rule: str, ctx: dict, index: int) -> str:
+    """Tên ảnh theo Rule ảnh (CHỈ tên, KHÔNG kèm đuôi file).
+
+    Đuôi file (.png/.jpg) do cấu hình AI ảnh → "Định dạng xuất" quyết định.
+    """
     import re as _re
 
     name = ""
@@ -37,16 +40,21 @@ def _image_name(rule: str, ctx: dict, index: int) -> str:
         name = render_rule(rule, {**ctx, "index": index + 1}).strip()
         name = _re.sub(r'[\\/:*?"<>|]+', "-", name)      # bỏ ký tự cấm trong tên file
         name = _re.sub(r"\s+", " ", name).strip()[:100]
+    # bỏ đuôi cũ nếu người dùng có gõ kèm trong Rule ảnh
+    name = _re.sub(r"\.(png|jpe?g|webp)$", "", name, flags=_re.I).strip()
     if not name:
-        name = f"anh-{index + 1}.png"
-    if not _re.search(r"\.(png|jpe?g|webp)$", name, _re.I):
-        name += ".png"
+        name = f"anh-{index + 1}"
     return name
 
 
 def export_post_images(store, task) -> list[str]:
-    """Lưu 3 ảnh vào thư mục tên = ID công việc (để upload lên website)."""
-    import shutil
+    """Lưu ảnh vào thư mục tên = ID công việc (để upload lên website).
+
+    - Tên file: theo Rule ảnh (chỉ tên) + đuôi theo cấu hình AI ảnh.
+    - Định dạng (PNG/JPG) và kích thước lấy từ Cấu hình → AI ảnh → Xử lý ảnh cục bộ.
+    - Xuất TẤT CẢ ảnh đang có (kể cả ảnh thêm bằng nút "+ Thêm hình").
+    """
+    from PIL import Image as _Img
 
     from ..config import posts_dir
 
@@ -57,6 +65,17 @@ def export_post_images(store, task) -> list[str]:
     base = posts_dir() / task.id
     base.mkdir(parents=True, exist_ok=True)
     rules = list(store.image_rules or [])
+    pillow = ((store.ai_image or {}).get("pillow") or {})
+    fmt = str(pillow.get("output_format", "PNG") or "PNG").upper()
+    ext = ".jpg" if fmt == "JPG" else ".png"
+    try:
+        quality = max(50, min(100, int(pillow.get("jpg_quality", 90) or 90)))
+    except (TypeError, ValueError):
+        quality = 90
+    try:
+        out_size = int(pillow.get("size", 1080) or 0)      # 0 = giữ nguyên
+    except (TypeError, ValueError):
+        out_size = 1080
     ctx = {
         "title": r.get("title", ""),
         "focus_keyword": r.get("focus_keyword", ""),
@@ -65,23 +84,19 @@ def export_post_images(store, task) -> list[str]:
         "description": r.get("description", ""),
     }
     out: list[str] = []
-    for i, im in enumerate(images[:3]):
+    for i, im in enumerate(images):
         src = Path(im.get("path", ""))
         if not src.exists():
             continue
-        dest = base / _image_name(rules[i] if i < len(rules) else "", ctx, i)
+        dest = base / f"{_image_stem(rules[i] if i < len(rules) else '', ctx, i)}{ext}"
         try:
-            ext = dest.suffix.lower()
-            if ext in (".jpg", ".jpeg"):
-                from PIL import Image as _Img
-
-                _Img.open(src).convert("RGB").save(dest, "JPEG", quality=92)
-            elif ext == ".webp":
-                from PIL import Image as _Img
-
-                _Img.open(src).convert("RGB").save(dest, "WEBP", quality=92)
+            img = _Img.open(src)
+            if out_size > 0 and (img.width != out_size or img.height != out_size):
+                img = img.resize((out_size, out_size), _Img.LANCZOS)
+            if ext == ".jpg":
+                img.convert("RGB").save(dest, "JPEG", quality=quality)
             else:
-                shutil.copy2(src, dest)
+                img.convert("RGBA").save(dest, "PNG")
             out.append(str(dest))
         except OSError:
             continue
@@ -89,13 +104,8 @@ def export_post_images(store, task) -> list[str]:
 
 
 def _remove_bg_opts(store) -> tuple[bool, int]:
-    cfg = (store.ai_image or {}).get("remove_bg") or {}
-    enabled = cfg.get("mode", "off") != "off"
-    try:
-        thresh = max(10, int(float(cfg.get("threshold", 0.5)) * 100))
-    except (TypeError, ValueError):
-        thresh = 42
-    return enabled, thresh
+    """Xoá nền TOÀN CỤC đã bỏ — giờ chỉ xoá nền theo từng thành phần (chuột phải)."""
+    return False, 42
 
 
 def pick_footer(site, mode: str = "") -> str:
@@ -183,6 +193,9 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         footer = pick_footer_by_index(site, i, mode_i)
         keep = [k for k in range(len(product_paths or [])) if k not in hidden]
         prods = [product_paths[k] for k in keep]
+        if o.get("no_products"):
+            # ảnh mới thêm bằng "+ Thêm hình": để TRỐNG, chỉ có khung mẫu
+            prods = []
         if product_scales:
             product_scales = [product_scales[k] for k in keep if k < len(product_scales)]
         if product_positions:
