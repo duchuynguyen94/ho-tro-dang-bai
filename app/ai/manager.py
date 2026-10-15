@@ -247,10 +247,6 @@ def text_to_html(text: str) -> str:
     return "\n".join(out)
 
 
-# Mã sản phẩm: chữ HOA + số, có dấu - hoặc /
-MODEL_RE = re.compile(r"\b(?=[A-Z0-9]*(?:\d))(?=[A-Z0-9\-/]{5,}\b)[A-Z0-9]+(?:[-/][A-Z0-9]+)+\b")
-
-
 def _site_tokens(site_url: str, site_name: str) -> list[str]:
     """Chỉ lấy các biến thể tên miền CÓ 'www.' để tự chèn link."""
     tokens: list[str] = []
