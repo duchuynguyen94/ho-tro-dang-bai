@@ -313,28 +313,25 @@ def _send(page, text: str) -> None:
 
 
 def _find_json_block(text: str):
-    """Tìm khối JSON đầu tiên có 'title'. Trả về (data, start, end)."""
+    """Tìm khối JSON đầu tiên có 'title' (dùng JSON decoder chuẩn để không lệch)."""
     if not text:
         return None, -1, -1
+    decoder = json.JSONDecoder()
+    idx = 0
     n = len(text)
-    for i, ch in enumerate(text):
-        if ch != "{":
+    while idx < n:
+        i = text.find("{", idx)
+        if i < 0:
+            return None, -1, -1
+        try:
+            data, end = decoder.raw_decode(text, i)
+        except (json.JSONDecodeError, ValueError):
+            idx = i + 1
             continue
-        depth = 0
-        for j in range(i, n):
-            if text[j] == "{":
-                depth += 1
-            elif text[j] == "}":
-                depth -= 1
-                if depth == 0:
-                    try:
-                        data = json.loads(text[i:j + 1])
-                    except (json.JSONDecodeError, ValueError):
-                        data = None
-                    if isinstance(data, dict) and str(data.get("title", "")).strip() \
-                            and not _is_placeholder(data.get("title")):
-                        return data, i, j
-                    break
+        if isinstance(data, dict) and str(data.get("title", "")).strip() \
+                and not _is_placeholder(data.get("title")):
+            return data, i, end
+        idx = i + 1
     return None, -1, -1
 
 

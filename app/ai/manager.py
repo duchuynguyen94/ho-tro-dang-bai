@@ -371,6 +371,9 @@ def generate_content(store, source: dict, log=None) -> dict:
             if not content or len(content) < 50:
                 raise providers.AIError("AI không trả về nội dung bài viết.")
 
+            inner = str(seo.get("content_html", "") or "").strip()
+            if inner and not _is_placeholder(inner) and _looks_like_html(inner):
+                content = inner        # AI để nội dung trong JSON -> dùng luôn
             seo["content_html"] = (
                 content if _looks_like_html(content) else text_to_html(content)
             )

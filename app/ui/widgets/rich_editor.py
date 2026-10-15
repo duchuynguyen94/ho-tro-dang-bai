@@ -4,8 +4,9 @@ from __future__ import annotations
 import re
 
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont, QTextListFormat
+from PySide6.QtGui import QFont, QTextCharFormat, QTextListFormat
 from PySide6.QtWidgets import (
+    QComboBox,
     QFileDialog,
     QHBoxLayout,
     QInputDialog,
@@ -28,40 +29,70 @@ class RichEditor(QWidget):
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(0)
 
-        # ---------------- thanh công cụ ----------------
         bar = QWidget()
         bar.setObjectName("rteBar")
         tb = QHBoxLayout(bar)
         tb.setContentsMargins(6, 6, 6, 6)
         tb.setSpacing(2)
 
-        tb.addWidget(self._btn("H2", self._heading, "Tiêu đề mục"))
+        # hoàn tác / làm lại
+        tb.addWidget(self._btn("↶", self._undo, "Hoàn tác"))
+        tb.addWidget(self._btn("↷", self._redo, "Làm lại"))
         tb.addWidget(self._sep())
+
+        # kiểu đoạn
+        self.heading = QComboBox()
+        self.heading.setObjectName("rteCombo")
+        self.heading.addItems(["Đoạn", "Tiêu đề 1", "Tiêu đề 2", "Tiêu đề 3"])
+        self.heading.setFixedWidth(104)
+        self.heading.currentIndexChanged.connect(self._heading_changed)
+        tb.addWidget(self.heading)
+        tb.addWidget(self._sep())
+
+        # định dạng chữ
         tb.addWidget(self._btn("B", self._bold, "Đậm", bold=True))
         tb.addWidget(self._btn("I", self._italic, "Nghiêng", italic=True))
         tb.addWidget(self._btn("U", self._underline, "Gạch chân", underline=True))
+        tb.addWidget(self._btn("S", self._strike, "Gạch ngang", strike=True))
+        tb.addWidget(self._btn("⌫", self._clear_format, "Bỏ định dạng"))
         tb.addWidget(self._sep())
-        tb.addWidget(self._btn("• Danh sách", lambda: self._list(QTextListFormat.ListDisc), "Danh sách chấm"))
-        tb.addWidget(self._btn("1. Danh sách", lambda: self._list(QTextListFormat.ListDecimal), "Danh sách số"))
+
+        # danh sách
+        tb.addWidget(self._btn("•", lambda: self._list(QTextListFormat.ListDisc), "Danh sách chấm"))
+        tb.addWidget(self._btn("1.", lambda: self._list(QTextListFormat.ListDecimal), "Danh sách số"))
+        tb.addWidget(self._btn("⇤", lambda: self._indent(-1), "Giảm thụt lề"))
+        tb.addWidget(self._btn("⇥", lambda: self._indent(1), "Tăng thụt lề"))
         tb.addWidget(self._sep())
-        tb.addWidget(self._btn("Chèn link", self._insert_link, "Chèn liên kết"))
-        tb.addWidget(self._btn("Chèn ảnh", self._insert_image, "Chèn ảnh (src)"))
+
+        # căn lề
+        tb.addWidget(self._btn("⬅", lambda: self._align(Qt.AlignLeft), "Căn trái"))
+        tb.addWidget(self._btn("↔", lambda: self._align(Qt.AlignHCenter), "Căn giữa"))
+        tb.addWidget(self._btn("➡", lambda: self._align(Qt.AlignRight), "Căn phải"))
+        tb.addWidget(self._btn("☰", lambda: self._align(Qt.AlignJustify), "Căn đều"))
+        tb.addWidget(self._sep())
+
+        # chèn
+        tb.addWidget(self._btn("Link", self._insert_link, "Chèn liên kết"))
+        tb.addWidget(self._btn("Ảnh", self._insert_image, "Chèn ảnh (src)"))
+        tb.addWidget(self._btn("Bảng", self._insert_table, "Chèn bảng"))
+        tb.addWidget(self._btn("―", lambda: self.edit.insertHtml("<hr>"), "Đường kẻ ngang"))
         tb.addStretch(1)
+
         self.html_btn = self._btn("</> HTML", self._toggle_html, "Xem / sửa HTML")
         self.html_btn.setObjectName("tbBtnHtml")
         tb.addWidget(self.html_btn)
         v.addWidget(bar)
 
-        # ---------------- vùng soạn thảo ----------------
+        # vùng soạn thảo
         self.edit = QTextEdit()
         self.edit.setObjectName("rteEdit")
         self.edit.setAcceptRichText(True)
-        self.edit.setMinimumHeight(200)
+        self.edit.setMinimumHeight(220)
         self.edit.textChanged.connect(self._update_status)
 
         self.source = QPlainTextEdit()
         self.source.setObjectName("rteSource")
-        self.source.setMinimumHeight(200)
+        self.source.setMinimumHeight(220)
         self.source.textChanged.connect(self._update_status)
 
         self.stack = QStackedWidget()
@@ -69,24 +100,29 @@ class RichEditor(QWidget):
         self.stack.addWidget(self.source)
         v.addWidget(self.stack)
 
-        # ---------------- thanh trạng thái ----------------
         self.status = QLabel("")
         self.status.setObjectName("rteStatus")
         v.addWidget(self.status)
         self._update_status()
 
     # ------------------------------------------------------------------ #
-    def _btn(self, text: str, slot, tip: str = "", bold=False, italic=False, underline=False) -> QPushButton:
+    def _btn(self, text: str, slot, tip: str = "", bold=False, italic=False,
+             underline=False, strike=False) -> QPushButton:
         b = QPushButton(text)
         b.setObjectName("tbBtn")
         b.setToolTip(tip or text)
         b.setCursor(Qt.PointingHandCursor)
+        style = ""
         if bold:
-            b.setStyleSheet("font-weight:800;")
+            style = "font-weight:800;"
         elif italic:
-            b.setStyleSheet("font-style:italic;")
+            style = "font-style:italic;"
         elif underline:
-            b.setStyleSheet("text-decoration:underline;")
+            style = "text-decoration:underline;"
+        elif strike:
+            style = "text-decoration:line-through;"
+        if style:
+            b.setStyleSheet(style)
         b.clicked.connect(slot)
         return b
 
@@ -97,10 +133,28 @@ class RichEditor(QWidget):
         s.setFixedHeight(20)
         return s
 
-    # ------------------------------------------------------------------ #
     def _focus_rich(self) -> None:
         if self.stack.currentWidget() is not self.edit:
             self._toggle_html()
+
+    # ---------------- hành động ---------------- #
+    def _undo(self) -> None:
+        self._focus_rich()
+        self.edit.undo()
+
+    def _redo(self) -> None:
+        self._focus_rich()
+        self.edit.redo()
+
+    def _heading_changed(self, idx: int) -> None:
+        if self.stack.currentWidget() is not self.edit:
+            return
+        cursor = self.edit.textCursor()
+        cursor.beginEditBlock()
+        fmt = cursor.blockFormat()
+        fmt.setHeadingLevel(max(0, idx))
+        cursor.setBlockFormat(fmt)
+        cursor.endEditBlock()
 
     def _bold(self) -> None:
         self._focus_rich()
@@ -115,10 +169,15 @@ class RichEditor(QWidget):
         self._focus_rich()
         self.edit.setFontUnderline(not self.edit.currentCharFormat().fontUnderline())
 
-    def _heading(self) -> None:
+    def _strike(self) -> None:
         self._focus_rich()
-        cursor = self.edit.textCursor()
-        cursor.insertHtml("<h2>Tiêu đề mục</h2><p><br/></p>")
+        cf = QTextCharFormat()
+        cf.setFontStrikeOut(not self.edit.currentCharFormat().fontStrikeOut())
+        self.edit.mergeCurrentCharFormat(cf)
+
+    def _clear_format(self) -> None:
+        self._focus_rich()
+        self.edit.setCurrentCharFormat(QTextCharFormat())
 
     def _list(self, style) -> None:
         self._focus_rich()
@@ -128,6 +187,19 @@ class RichEditor(QWidget):
         fmt.setStyle(style)
         cursor.createList(fmt)
         cursor.endEditBlock()
+
+    def _indent(self, delta: int) -> None:
+        self._focus_rich()
+        cursor = self.edit.textCursor()
+        cursor.beginEditBlock()
+        fmt = cursor.blockFormat()
+        fmt.setIndent(max(0, fmt.indent() + delta))
+        cursor.setBlockFormat(fmt)
+        cursor.endEditBlock()
+
+    def _align(self, align) -> None:
+        self._focus_rich()
+        self.edit.setAlignment(align)
 
     def _insert_link(self) -> None:
         self._focus_rich()
@@ -146,6 +218,13 @@ class RichEditor(QWidget):
         )
         if path:
             self.edit.insertHtml(f'<img src="{path}" width="520" />')
+
+    def _insert_table(self) -> None:
+        self._focus_rich()
+        cursor = self.edit.textCursor()
+        cursor.beginEditBlock()
+        cursor.insertTable(3, 3)
+        cursor.endEditBlock()
 
     def _toggle_html(self) -> None:
         if self.stack.currentWidget() is self.edit:

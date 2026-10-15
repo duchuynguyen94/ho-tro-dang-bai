@@ -97,9 +97,12 @@ QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9
 #rteBar {{ background: #f8fafc; border: 1px solid #cbd5e1; border-bottom: none;
     border-top-left-radius: 8px; border-top-right-radius: 8px; }}
 QPushButton#tbBtn {{ background: transparent; border: 1px solid transparent; border-radius: 6px;
-    padding: 4px 9px; font-size: 12.5px; color: #334155; }}
+    padding: 3px 7px; font-size: 12.5px; color: #334155; }}
 QPushButton#tbBtn:hover {{ background: #e2e8f0; }}
 QPushButton#tbBtnHtml {{ color: {ACCENT_DARK}; border-color: #bfdbfe; background: #eff6ff; font-weight: 700; }}
+QComboBox#rteCombo {{ padding: 3px 22px 3px 8px; font-size: 12.5px; border-radius: 6px; }}
+QComboBox#rteCombo::drop-down {{ width: 20px; }}
+QComboBox#rteCombo::down-arrow {{ width: 10px; height: 10px; }}
 QLabel#tbSep {{ background: {LINE}; }}
 QLabel#rteStatus {{ background: #f8fafc; border: 1px solid #cbd5e1; border-top: none;
     border-bottom-left-radius: 8px; border-bottom-right-radius: 8px; padding: 4px 8px;
