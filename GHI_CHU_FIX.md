@@ -65,6 +65,11 @@
     - `app/images/composer.py` → `prods = prods[:3]`
     - `app/ui/widgets/image_editor.py` → `keep = [...][:3]`
   - Nút **"+ Thêm hình"** đặt cùng hàng/cạnh dãy thumbnail trong mục **"Ảnh"** của panel kết quả (`jobs_page.py`, `images_row`).
+  - **Xoá ảnh (bổ sung):** thêm **nút Xoá** nằm **bên phải chữ "Ảnh 1", "Ảnh 2", "Ảnh 3"…** (ngay trên caption của mỗi thumbnail).
+    - Bấm → xoá **ảnh đó**: bỏ entry tương ứng trong `task.result["images"]` **và** `task.result["image_opts_list"]`, xoá cả file ảnh đã ghép (nếu có) trong `posts/` / thư mục tạm.
+    - Sau khi xoá → **đánh số lại** caption (Ảnh 1, 2, 3…) và chuyển **ảnh đang chọn** (`_sel_index`) về ảnh hợp lệ.
+    - (Đề xuất) **không cho xoá ảnh cuối cùng** — luôn giữ **tối thiểu 1 ảnh**. *Chờ người dùng chốt.*
+    - (Đề xuất) xoá có **xác nhận** (hỏi trước khi xoá) để tránh mất công chỉnh. *Chờ người dùng chốt.*
 
 ---
 
