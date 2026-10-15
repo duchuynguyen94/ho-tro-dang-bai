@@ -174,10 +174,20 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         wm_opacity = int(o.get("watermark_opacity", 7) or 0)
         wm_size = float(o.get("watermark_size", 1.0) or 1.0)
         product_scales = o.get("product_scales") or None
+        product_nobg = o.get("product_nobg") or None
+        hidden = set(o.get("product_hidden") or [])
         rb = remove_bg if o.get("remove_bg") is None else bool(o["remove_bg"])
         mode_i = o.get("footer_mode") or footer_mode or mode
         footer = pick_footer_by_index(site, i, mode_i)
-        prods = list(product_paths or [])   # giữ ĐÚNG thứ tự như canvas
+        keep = [k for k in range(len(product_paths or [])) if k not in hidden]
+        prods = [product_paths[k] for k in keep]
+        if product_scales:
+            product_scales = [product_scales[k] for k in keep if k < len(product_scales)]
+        if product_positions:
+            product_positions = [product_positions[k] for k in keep
+                                 if k < len(product_positions)]
+        if product_nobg:
+            product_nobg = [product_nobg[k] for k in keep if k < len(product_nobg)]
         img = compose(
             size=1080,
             site_logo=site.logo_path,
@@ -197,6 +207,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             product_scale=product_scale,
             product_positions=product_positions,
             product_scales=product_scales,
+            product_nobg=product_nobg,
             uploads=uploads,
         )
         # Rule đặt tên ảnh (nếu có)

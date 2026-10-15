@@ -8,6 +8,7 @@ from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
+    QMenu,
     QFrame,
     QGridLayout,
     QHBoxLayout,
@@ -31,8 +32,12 @@ class DraggableImage(QLabel):
     resized = Signal(int)
     RESIZE_ZONE = 18
 
-    def __init__(self, parent: QWidget, dashed: bool = False):
+    def __init__(self, parent: QWidget, dashed: bool = False, kind: str = ""):
         super().__init__(parent)
+        self.kind = kind          # product | upload | logo | brand
+        self.index = 0
+        self.on_remove_bg = None   # callback
+        self.on_remove = None      # callback
         self.setCursor(Qt.OpenHandCursor)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         if dashed:
@@ -141,6 +146,20 @@ class DraggableImage(QLabel):
         self.move(nx, ny)
         self.resized.emit(new_w)
 
+    def contextMenuEvent(self, event) -> None:  # noqa: N802
+        # chỉ áp dụng cho THÀNH PHẦN SẢN PHẨM (không áp cho logo/watermark/thanh thông tin)
+        if self.kind not in ("product", "upload"):
+            return
+        menu = QMenu(self)
+        act_bg = menu.addAction("Xoá nền → trong suốt")
+        menu.addSeparator()
+        act_del = menu.addAction("Xoá thành phần này")
+        chosen = menu.exec(event.globalPos())
+        if chosen == act_bg and self.on_remove_bg:
+            self.on_remove_bg(self)
+        elif chosen == act_del and self.on_remove:
+            self.on_remove(self)
+
     def mouseReleaseEvent(self, event) -> None:  # noqa: N802
         self._mode = ""
         self._corner = ""
@@ -194,8 +213,8 @@ class ImageEditorPanel(QFrame):
         self.canvas.setAlignment(Qt.AlignCenter)
         left.addWidget(self.canvas)
 
-        self.logo_item = DraggableImage(self.canvas, dashed=True)
-        self.brand_item = DraggableImage(self.canvas)
+        self.logo_item = DraggableImage(self.canvas, dashed=True, kind="logo")
+        self.brand_item = DraggableImage(self.canvas, kind="brand")
         self.logo_item.moved.connect(self._on_moved)
         self.brand_item.moved.connect(self._on_moved)
         self.logo_item.resized.connect(lambda w: self._on_resized("logo", w))
@@ -238,9 +257,6 @@ class ImageEditorPanel(QFrame):
         self.s_wm_size = self._slider(grid, 3, "Watermark — kích thước", 50, 200, 100)
         right.addLayout(grid)
 
-        self.remove_bg = QCheckBox("Xoá nền ảnh sản phẩm → trong suốt")
-        right.addWidget(self.remove_bg)
-
         foot_row = QHBoxLayout()
         foot_row.addWidget(QLabel("Thanh thông tin:"))
         self.footer_combo = QComboBox()
@@ -261,7 +277,6 @@ class ImageEditorPanel(QFrame):
         self._autosave.timeout.connect(self._emit_opts)
         for w in (self.s_logo, self.s_brand, self.s_wm, self.s_wm_size):
             w.valueChanged.connect(self._schedule_save)
-        self.remove_bg.toggled.connect(self._schedule_save)
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
 
     # ------------------------------------------------------------------ #
@@ -306,7 +321,6 @@ class ImageEditorPanel(QFrame):
         self.s_brand.setValue(int(float(self._opts.get("brand_scale", 1.0)) * 100))
         self.s_wm.setValue(int(self._opts.get("watermark_opacity", 7) or 0))
         self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
-        self.remove_bg.setChecked(bool(self._opts.get("remove_bg", False)))
         mode = self._opts.get("footer_mode") or footer_mode or "bar1"
         self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
         self._layout_items()
@@ -371,8 +385,39 @@ class ImageEditorPanel(QFrame):
         )
 
     # ---------------- sản phẩm ---------------- #
+    def _display_pixmap(self, path: str, nobg: bool):
+        """QPixmap để hiển thị (xoá nền nếu cần) — có cache."""
+        cache = getattr(self, "_nobg_cache", None)
+        if cache is None:
+            cache = self._nobg_cache = {}
+        key = (path, bool(nobg))
+        if key in cache:
+            return cache[key]
+        pm = QPixmap(path) if Path(path).exists() else QPixmap()
+        if not pm.isNull() and nobg:
+            try:
+                from PIL import Image as _Img
+
+                from ...images.composer import remove_background_auto
+
+                img = _Img.open(path).convert("RGBA")
+                img = remove_background_auto(img, 42)
+                buf = str(Path(path).with_suffix("")) + "_nobg.png"
+                img.save(buf)
+                pm2 = QPixmap(buf)
+                if not pm2.isNull():
+                    pm = pm2
+            except Exception:
+                pass
+        cache[key] = pm
+        return pm
+
     def _layout_products(self) -> None:
-        paths = list(self._preview.get("products") or [])[:3]
+        all_paths = list(self._preview.get("products") or [])
+        hidden = set(self._opts.get("product_hidden") or [])
+        keep = [k for k in range(len(all_paths)) if k not in hidden][:3]
+        paths = [all_paths[k] for k in keep]
+        nobg = list(self._opts.get("product_nobg") or [])
         for it in self._product_items:
             it.setParent(None)
             it.deleteLater()
@@ -391,7 +436,8 @@ class ImageEditorPanel(QFrame):
             box_i = product_box(SRC, sc)
             it = DraggableImage(self.canvas)
             it.index = i
-            pm = QPixmap(path) if Path(path).exists() else QPixmap()
+            orig = keep[i] if i < len(keep) else i
+            pm = self._display_pixmap(path, bool(nobg[orig]) if orig < len(nobg) else False)
             if pm.isNull():
                 it.deleteLater()
                 continue
@@ -402,6 +448,10 @@ class ImageEditorPanel(QFrame):
             it.setPixmap(pm)
             it.set_source(pm)
             it.setFixedSize(pm.size())
+            it.kind = "product"
+            it.index = orig
+            it.on_remove_bg = self._ctx_remove_bg
+            it.on_remove = self._ctx_remove_component
             it.show()
             it.enable_grips(True)
             it.moved.connect(self._on_product_moved)
@@ -427,7 +477,7 @@ class ImageEditorPanel(QFrame):
             pos = (up.get("pos") if isinstance(up, dict) else None) or [0.5, 0.5]
             it = DraggableImage(self.canvas)
             it.index = i
-            pm = QPixmap(path) if Path(path).exists() else QPixmap()
+            pm = self._display_pixmap(path, bool(up.get("nobg")) if isinstance(up, dict) else False)
             if pm.isNull():
                 it.deleteLater()
                 continue
@@ -438,6 +488,9 @@ class ImageEditorPanel(QFrame):
             it.setPixmap(pm)
             it.set_source(pm)
             it.setFixedSize(pm.size())
+            it.kind = "upload"
+            it.on_remove_bg = self._ctx_remove_bg
+            it.on_remove = self._ctx_remove_component
             it.show()
             it.enable_grips(True)
             it.moved.connect(self._on_upload_moved)
@@ -507,6 +560,39 @@ class ImageEditorPanel(QFrame):
         lab.raise_()
         self.wm_label = lab
 
+    def _ctx_remove_bg(self, item) -> None:
+        """Xoá nền cho ĐÚNG thành phần đó."""
+        if item.kind == "product":
+            nobg = list(self._opts.get("product_nobg") or [])
+            while len(nobg) <= item.index:
+                nobg.append(False)
+            nobg[item.index] = True
+            self._opts["product_nobg"] = nobg
+            self._layout_products()
+        elif item.kind == "upload":
+            ups = list(self._opts.get("uploads") or [])
+            if item.index < len(ups) and isinstance(ups[item.index], dict):
+                ups[item.index]["nobg"] = True
+                self._opts["uploads"] = ups
+                self._layout_uploads()
+        self._schedule_save()
+
+    def _ctx_remove_component(self, item) -> None:
+        """Xoá thành phần khỏi ảnh đang sửa."""
+        if item.kind == "product":
+            hidden = list(self._opts.get("product_hidden") or [])
+            if item.index not in hidden:
+                hidden.append(item.index)
+            self._opts["product_hidden"] = hidden
+            self._layout_products()
+        elif item.kind == "upload":
+            ups = list(self._opts.get("uploads") or [])
+            if item.index < len(ups):
+                ups.pop(item.index)
+            self._opts["uploads"] = ups
+            self._layout_uploads()
+        self._schedule_save()
+
     def _on_product_moved(self) -> None:  # noqa: D401
         self._opts["product_pos"] = [
             [round(it.x() / CANVAS, 4), round(it.y() / CANVAS, 4)] for it in self._product_items
@@ -565,7 +651,6 @@ class ImageEditorPanel(QFrame):
         self.s_brand.setValue(100)
         self.s_wm.setValue(7)
         self.s_wm_size.setValue(100)
-        self.remove_bg.setChecked(False)
         self._layout_items()
         self._layout_products()
         self._layout_uploads()
@@ -582,7 +667,6 @@ class ImageEditorPanel(QFrame):
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "watermark_size": self.s_wm_size.value() / 100.0,
-            "remove_bg": self.remove_bg.isChecked(),
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
         self._opts = opts
@@ -598,7 +682,6 @@ class ImageEditorPanel(QFrame):
             "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "watermark_size": self.s_wm_size.value() / 100.0,
-            "remove_bg": self.remove_bg.isChecked(),
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
         self._opts = opts

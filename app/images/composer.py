@@ -154,6 +154,7 @@ def compose(
     product_scale: float = 1.0,
     product_positions: list | None = None,
     product_scales: list | None = None,
+    product_nobg: list | None = None,
     uploads: list | None = None,
 ) -> Image.Image:
     products = [p for p in (products or []) if p]
@@ -185,9 +186,12 @@ def compose(
         if len(pos) < n:
             pos += default_product_positions(n, size, product_scale)[len(pos):]
         scales = list(product_scales or [])
+        nobg = list(product_nobg or [])
         for i, im in enumerate(prods):
             sc = float(scales[i]) if i < len(scales) else 1.0
             box_i = product_box(size, sc)
+            if i < len(nobg) and nobg[i]:
+                im = remove_background_auto(im, remove_bg_thresh)
             im = _fit(im, box_i, box_i)
             fx, fy = pos[i]
             px = int(fx * size)
@@ -205,6 +209,8 @@ def compose(
             continue
         sc = float(up.get("scale", 1.0)) if isinstance(up, dict) else 1.0
         box = product_box(size, sc)
+        if isinstance(up, dict) and up.get("nobg"):
+            im = remove_background_auto(im, remove_bg_thresh)
         im = _fit(im, box, box)
         px = int(pos[0] * size - im.size[0] / 2)
         py = int(pos[1] * size - im.size[1] / 2)
