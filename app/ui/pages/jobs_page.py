@@ -4,8 +4,8 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QDrag, QKeySequence, QPixmap, QShortcut
+from PySide6.QtCore import QEvent, QMimeData, Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QDrag, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -468,9 +468,8 @@ class JobsPage(QWidget):
         ev2.addWidget(self.img_editor)
 
         # Ctrl/Cmd + V: dán ảnh (copy từ web hoặc máy tính) vào canvas
-        self.paste_shortcut = QShortcut(QKeySequence.Paste, self)
-        self.paste_shortcut.setContext(Qt.WidgetWithChildrenShortcut)
-        self.paste_shortcut.activated.connect(self._paste_clipboard_image)
+        # (dùng event filter toàn app để chắc chắn bắt được phím, không phụ thuộc focus)
+        QApplication.instance().installEventFilter(self)
 
         ev2.addStretch(1)
 
@@ -926,20 +925,33 @@ class JobsPage(QWidget):
 
     def _paste_clipboard_image(self) -> None:
         """Ctrl/Cmd + V: dán ảnh copy từ web/máy tính vào canvas như thành phần tải lên."""
-        if not self.current:
-            return
-        fw = QApplication.focusWidget()
-        if isinstance(fw, (QLineEdit, QPlainTextEdit)) or (fw is not None and fw.inherits("QTextEdit")):
-            # đang gõ text -> dán text bình thường
-            try:
-                fw.paste()
-            except Exception:
-                pass
+        if not self.isVisible() or not self.current:
             return
         path = clipboard_image_path()
         if not path:
+            show_toast(self, "Clipboard không có ảnh", 2400, ok=False)
             return
         self._add_upload_component(path, getattr(self, "_sel_index", 0))
+        show_toast(self, "Đã dán ảnh vào canvas", 1800)
+
+    @staticmethod
+    def _is_text_widget(w) -> bool:
+        if isinstance(w, (QLineEdit, QPlainTextEdit)):
+            return True
+        return w is not None and w.inherits("QTextEdit")
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        """Bắt Ctrl/Cmd+V toàn app: nếu clipboard có ẢNH -> dán vào canvas."""
+        try:
+            if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Paste):
+                fw = QApplication.focusWidget()
+                if not self._is_text_widget(fw) and self.isVisible() and self.current:
+                    if clipboard_image_path():
+                        self._paste_clipboard_image()
+                        return True
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+        return super().eventFilter(obj, event)
 
     def _add_upload_component(self, path: str, index: int) -> None:
         """Thêm 1 ảnh (tải lên hoặc dán) thành thành phần ở giữa canvas."""
