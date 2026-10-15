@@ -76,24 +76,58 @@ def _looks_logged_out(page) -> bool:
     return any(m in body for m in NEED_LOGIN_MARKERS)
 
 
+_REPLY_JS = r"""() => {
+  const sels = ['[data-message-author-role="assistant"]','[class*="MarkdownRoot"]',
+                '[class*="DilResponseRoot"]','[class*="assistant-message"]',
+                '.prose','[class*="prose"]'];
+  const set = new Set();
+  for (const s of sels) {
+    for (const el of document.querySelectorAll(s)) set.add(el);
+  }
+  const arr = [...set].filter(el => (el.innerText || '').trim().length > 0);
+  if (!arr.length) return '';
+  arr.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
+  return arr[arr.length - 1].innerText || '';
+}"""
+
+LIMIT_MARKERS = (
+    "reached the limit",
+    "usage limit",
+    "chat paused",
+    "hết lượt",
+    "limit will reset",
+)
+
+
 def _reply_text(page) -> str:
-    """Lấy nội dung tin nhắn trả lời mới nhất (thử nhiều kiểu giao diện)."""
-    selectors = [
-        '[data-message-author-role="assistant"]',
-        "div[data-message-author-role='assistant'] .markdown",
-        "article .markdown",
-        "div.markdown",
-    ]
-    for sel in selectors:
-        try:
-            loc = page.locator(sel)
-            n = loc.count()
-            if n:
-                txt = (loc.nth(n - 1).inner_text() or "").strip()
-                if txt:
-                    return txt
-        except Exception:
-            continue
+    """Lấy nội dung tin nhắn trả lời mới nhất của ChatGPT."""
+    try:
+        txt = page.evaluate(_REPLY_JS)
+        if txt and txt.strip():
+            return txt.strip()
+    except Exception:
+        pass
+    # dự phòng: lấy phần sau "ChatGPT said:"
+    try:
+        body = page.inner_text("body")
+        idx = body.rfind("ChatGPT said:")
+        if idx >= 0:
+            return body[idx + len("ChatGPT said:"):].strip()
+    except Exception:
+        pass
+    return ""
+
+
+def _limit_reached(page) -> str:
+    """Kiểm tra ChatGPT có báo hết lượt miễn phí không."""
+    try:
+        body = page.inner_text("body").lower()
+    except Exception:
+        return ""
+    for marker in LIMIT_MARKERS:
+        if marker in body:
+            i = body.find(marker)
+            return body[max(0, i - 80): i + 120].replace("\n", " ").strip()
     return ""
 
 
@@ -182,6 +216,11 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300)
                 if log:
                     log("Đã nhận kết quả từ ChatGPT.")
                 break
+            if _limit_reached(page):
+                raise AIError(
+                    "ChatGPT đã hết lượt dùng miễn phí. Chờ đến khi lượt được làm mới, "
+                    "hoặc chuyển sang provider khác (Gemini/DeepSeek…) trong Cấu hình → AI nội dung."
+                )
             if text and text == last and len(text) > 20:
                 stable += 1
                 if stable >= 2:
