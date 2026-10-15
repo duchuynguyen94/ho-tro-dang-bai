@@ -252,27 +252,28 @@ MODEL_RE = re.compile(r"\b(?=[A-Z0-9]*(?:\d))(?=[A-Z0-9\-/]{5,}\b)[A-Z0-9]+(?:[-
 
 
 def _site_tokens(site_url: str, site_name: str) -> list[str]:
-    """Các biến thể tên miền cần tự động chèn link."""
+    """Chỉ lấy các biến thể tên miền CÓ 'www.' để tự chèn link."""
     tokens: list[str] = []
     for raw in (site_name or "", site_url or ""):
         t = (raw or "").strip().rstrip("/")
         if not t:
             continue
         t = re.sub(r"^https?://", "", t)
-        for cand in (t, t[4:] if t.startswith("www.") else f"www.{t}"):
-            if cand and cand not in tokens:
-                tokens.append(cand)
+        if t.startswith("www.") and t not in tokens:
+            tokens.append(t)
     return sorted(tokens, key=len, reverse=True)
 
 
 def autolink_html(html_text: str, site_url: str = "", site_name: str = "") -> str:
-    """Tự chèn link: tên website -> URL website; mã sản phẩm -> trang tìm kiếm website."""
+    """Tự chèn link cho tên website dạng 'www....' -> URL website."""
     if not html_text:
         return html_text
     base = (site_url or "").strip().rstrip("/")
     if base and not base.startswith("http"):
         base = "https://" + base
     tokens = _site_tokens(site_url, site_name)
+    if not base or not tokens:
+        return html_text
 
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
@@ -291,14 +292,9 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "") -> st
             continue
 
         text = part
-        if base and tokens:
-            for tok in tokens:
-                pattern = re.compile(rf"(?<![\w./-])({re.escape(tok)})(?![\w/-])", re.I)
-                text = pattern.sub(lambda m: f'<a href="{base}">{m.group(1)}</a>', text)
-        if base:
-            text = MODEL_RE.sub(
-                lambda m: f'<a href="{base}/?s={m.group(0)}">{m.group(0)}</a>', text
-            )
+        for tok in tokens:
+            pattern = re.compile(rf"(?<![\w./-])({re.escape(tok)})(?![\w/-])", re.I)
+            text = pattern.sub(lambda m: f'<a href="{base}">{m.group(1)}</a>', text)
         out.append(text)
     return "".join(out)
 
