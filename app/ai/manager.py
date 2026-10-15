@@ -194,7 +194,10 @@ def generate_content(store, source: dict, log=None) -> dict:
             missing = [k for k in REQUIRED_KEYS if not str(data.get(k, "")).strip()]
             if missing:
                 raise providers.AIError(f"thiếu trường {missing}")
-            if _is_placeholder(data.get("title")) or _is_placeholder(data.get("content_html")):
+            # Kiểm tra mẫu rỗng chỉ áp dụng cho luồng ChatGPT
+            if provider == "chatgpt" and (
+                _is_placeholder(data.get("title")) or _is_placeholder(data.get("content_html"))
+            ):
                 raise providers.AIError(
                     "AI trả về mẫu rỗng (title/content chỉ có dấu …). "
                     "Thử lại hoặc đổi provider."
