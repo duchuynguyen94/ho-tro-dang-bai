@@ -3,9 +3,10 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QUrl, Signal
+from PySide6.QtGui import QDesktopServices, QPixmap
 from PySide6.QtWidgets import (
+    QApplication,
     QComboBox,
     QFileDialog,
     QFrame,
@@ -13,6 +14,7 @@ from PySide6.QtWidgets import (
     QInputDialog,
     QLabel,
     QLineEdit,
+    QMenu,
     QMessageBox,
     QPlainTextEdit,
     QProgressBar,
@@ -35,6 +37,7 @@ from ...storage.models import (
     STATUS_REVIEW,
 )
 from ..style import Card
+from ..toast import show_toast
 
 STATUS_OBJECTS = {
     STATUS_QUEUED: "chipGray",
@@ -51,11 +54,13 @@ class TaskRow(QFrame):
 
     clicked = Signal(str)
     delete = Signal(str)
+    copied = Signal(str)
 
     def __init__(self, task, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("taskRow")
         self.task_id = task.id
+        self.source_url = task.source_url or ""
 
         h = QHBoxLayout(self)
         h.setContentsMargins(12, 10, 8, 10)
@@ -106,6 +111,24 @@ class TaskRow(QFrame):
     def mousePressEvent(self, event) -> None:  # noqa: N802
         self.clicked.emit(self.task_id)
         super().mousePressEvent(event)
+
+    def contextMenuEvent(self, event) -> None:  # noqa: N802
+        menu = QMenu(self)
+        act_copy = menu.addAction("Sao chép link nguồn")
+        act_copy.setEnabled(bool(self.source_url))
+        act_open = menu.addAction("Mở link nguồn")
+        act_open.setEnabled(bool(self.source_url))
+        menu.addSeparator()
+        act_del = menu.addAction("Xoá công việc")
+
+        chosen = menu.exec(event.globalPos())
+        if chosen == act_copy and self.source_url:
+            QApplication.clipboard().setText(self.source_url)
+            self.copied.emit(self.source_url)
+        elif chosen == act_open and self.source_url:
+            QDesktopServices.openUrl(QUrl(self.source_url))
+        elif chosen == act_del:
+            self.delete.emit(self.task_id)
 
 
 class JobsPage(QWidget):
@@ -334,6 +357,7 @@ class JobsPage(QWidget):
             row = TaskRow(t)
             row.clicked.connect(self.select_task)
             row.delete.connect(self._confirm_delete)
+            row.copied.connect(lambda _u: show_toast(self, "Đã sao chép link nguồn"))
             self._rows[t.id] = row
             self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
 
