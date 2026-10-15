@@ -14,6 +14,34 @@ from ..config import output_dir
 from ..images import compose, save_composed
 
 
+ACTIVE_THREADS: set = set()
+
+
+class TrackedThread(QThread):
+    """QThread tự đăng ký vào ACTIVE_THREADS để lúc thoát app chờ hết (tránh crash)."""
+
+    def __init__(self, *args, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        ACTIVE_THREADS.add(self)
+        self.finished.connect(lambda: ACTIVE_THREADS.discard(self))
+
+
+def shutdown_all_threads(timeout: int = 6000) -> None:
+    """Dừng + CHỜ mọi luồng nền đang chạy kết thúc."""
+    for w in list(ACTIVE_THREADS):
+        try:
+            if hasattr(w, "stop"):
+                w.stop()
+        except Exception:      # noqa: BLE001
+            pass
+    for w in list(ACTIVE_THREADS):
+        try:
+            if w.isRunning():
+                w.wait(timeout)
+        except Exception:      # noqa: BLE001
+            pass
+
+
 class _Cancelled(Exception):
     """Người dùng bấm Dừng."""
 
@@ -147,7 +175,8 @@ def _opts_list_of(result: dict) -> list[dict]:
 def build_template_images(site, task, brand_logo: str, product_paths: list[str],
                           footer_mode: str = "", log=None, rules: list[str] | None = None,
                           remove_bg: bool = False, remove_bg_thresh: int = 42,
-                          opts: dict | None = None, only_index: int | None = None) -> list[dict]:
+                          opts: dict | None = None, only_index: int | None = None,
+                          should_stop=None) -> list[dict]:
     """Ghép ảnh theo mẫu (dùng cho cả tạo mới và tạo lại ảnh)."""
     import re as _re
 
@@ -167,6 +196,8 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
     indices = [only_index] if only_index is not None else list(range(count))
 
     for i in indices:
+        if should_stop is not None and should_stop():
+            break
         o = dict(opts or {})
         if only_index is None and i < len(opts_list):
             o = dict(opts_list[i])
@@ -241,7 +272,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
     return images
 
 
-class ContentWorker(QThread):
+class ContentWorker(TrackedThread):
     """Đọc link nguồn -> AI viết -> ghép ảnh."""
 
     log = Signal(str)
@@ -358,7 +389,7 @@ class ContentWorker(QThread):
             self.failed.emit(str(exc))
 
 
-class FieldWorker(QThread):
+class FieldWorker(TrackedThread):
     """Tạo lại 1 trường duy nhất (nút Random riêng từng phần)."""
 
     log = Signal(str)
@@ -386,7 +417,7 @@ class FieldWorker(QThread):
             self.failed.emit(str(exc))
 
 
-class ImagesWorker(QThread):
+class ImagesWorker(TrackedThread):
     """Tạo lại ảnh theo mẫu (đổi thanh thông tin) mà không cần gọi lại AI."""
 
     log = Signal(str)
@@ -402,6 +433,10 @@ class ImagesWorker(QThread):
         self.footer_mode = footer_mode
         self.opts = dict(opts or {})
         self.only_index = only_index
+        self._cancel = False
+
+    def stop(self) -> None:
+        self._cancel = True
 
     def run(self) -> None:
         try:
@@ -415,14 +450,16 @@ class ImagesWorker(QThread):
                 remove_bg=rb, remove_bg_thresh=th,
                 opts=self.opts,
                 only_index=self.only_index,
+                should_stop=lambda: self._cancel,
             )
-            self.ok.emit(images)
+            if not self._cancel:
+                self.ok.emit(images)
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))
 
 
-class PostWorker(QThread):
+class PostWorker(TrackedThread):
     """Mở trình duyệt -> tự đăng nhập -> phát lại kịch bản (điền form)."""
 
     log = Signal(str)
@@ -474,7 +511,7 @@ class PostWorker(QThread):
             self.failed.emit(str(exc))
 
 
-class OpenLoginWorker(QThread):
+class OpenLoginWorker(TrackedThread):
     """Mở trình duyệt riêng để người dùng đăng nhập 1 dịch vụ (ví dụ ChatGPT)."""
 
     log = Signal(str)
@@ -517,7 +554,7 @@ class OpenLoginWorker(QThread):
                 pass
 
 
-class LoginWorker(QThread):
+class LoginWorker(TrackedThread):
     """Mở trình duyệt (có hiển thị) để đăng nhập và cho người dùng xem."""
 
     log = Signal(str)
@@ -575,7 +612,7 @@ class LoginWorker(QThread):
             self.failed.emit(str(exc))
 
 
-class ImageRefetchWorker(QThread):
+class ImageRefetchWorker(TrackedThread):
     """Crawl lại ảnh sản phẩm từ link nguồn và ghép lại 1 ảnh."""
 
     log = Signal(str)
@@ -621,7 +658,7 @@ class ImageRefetchWorker(QThread):
             self.failed.emit(str(exc))
 
 
-class ImageEditWorker(QThread):
+class ImageEditWorker(TrackedThread):
     """Sửa 1 ảnh bằng AI theo yêu cầu người dùng."""
 
     log = Signal(str)
@@ -650,7 +687,7 @@ class ImageEditWorker(QThread):
             self.failed.emit(str(exc))
 
 
-class PostRecordWorker(QThread):
+class PostRecordWorker(TrackedThread):
     """Mở trình duyệt để đăng bài bằng tay, đồng thời GHI lại kịch bản."""
 
     log = Signal(str)
@@ -719,7 +756,7 @@ class PostRecordWorker(QThread):
                 pass
 
 
-class RecordWorker(QThread):
+class RecordWorker(TrackedThread):
     """Ghi lại thao tác người dùng thành các bước kịch bản."""
 
     step = Signal(dict)

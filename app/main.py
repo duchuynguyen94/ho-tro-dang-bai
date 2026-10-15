@@ -53,7 +53,13 @@ def main() -> int:
 
     win = MainWindow()
     win.show()
-    return app.exec()
+    code = app.exec()
+    # Chờ mọi luồng nền kết thúc trước khi thoát (tránh crash 'QThread destroyed while running')
+    try:
+        win.shutdown_workers()
+    except Exception:      # noqa: BLE001
+        pass
+    return code
 
 
 if __name__ == "__main__":

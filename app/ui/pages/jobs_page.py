@@ -701,19 +701,31 @@ class JobsPage(QWidget):
         return box
 
     # ---------------- thêm / xoá / sắp xếp ảnh ---------------- #
-    def _norm_footers(self, task) -> None:
-        """Gán lại thanh thông tin luân phiên 1→2→1→2 theo index mới."""
-        site = self.store.get_site(task.site_id)
-        bars = [b for b in ((site.footer_bars if site else []) or []) if b]
+    def _sync_image_meta(self, task) -> None:
+        """Cập nhật số ảnh cho lần ghép lại — KHÔNG tự đổi thanh thông tin."""
         r = task.result or {}
         images = r.get("images") or []
         lst = list(r.get("image_opts_list") or [])
         while len(lst) < len(images):
             lst.append({})
-        for i in range(len(images)):
-            lst[i]["footer_mode"] = "bar2" if (len(bars) > 1 and i % 2 == 1) else "bar1"
         r["image_opts_list"] = lst
         task.image_count = max(1, len(images))
+
+    def _footer_mode_of(self, task, index: int) -> str:
+        """Thanh thông tin (bar1/bar2) ảnh ở vị trí `index` đang dùng."""
+        r = task.result or {}
+        lst = r.get("image_opts_list") or []
+        if 0 <= index < len(lst) and isinstance(lst[index], dict):
+            m = lst[index].get("footer_mode")
+            if m in ("bar1", "bar2"):
+                return m
+        site = self.store.get_site(task.site_id)
+        bars = [b for b in ((site.footer_bars if site else []) or []) if b]
+        images = r.get("images") or []
+        cur = images[index].get("footer", "") if 0 <= index < len(images) else ""
+        if len(bars) > 1 and cur and cur == bars[1]:
+            return "bar2"
+        return "bar1"
 
     def _add_image(self) -> None:
         if not self.current:
@@ -724,15 +736,19 @@ class JobsPage(QWidget):
         if len(images) >= MAX_IMAGES:
             show_toast(self, f"Tối đa {MAX_IMAGES} ảnh", 2200, ok=False)
             return
+        # ảnh mới lấy thanh thông tin KHÁC ảnh bên cạnh (ảnh cuối)
+        prev_mode = self._footer_mode_of(self.current, len(images) - 1) if images else "bar1"
+        new_mode = "bar2" if prev_mode == "bar1" else "bar1"
         images.append({"path": "", "footer": ""})
         r["images"] = images
         lst = list(r.get("image_opts_list") or [])
         while len(lst) < len(images):
             lst.append({})
         # ảnh mới: ĐỂ TRỐNG (chỉ khung mẫu) — chờ người dùng tải ảnh lên
-        lst[len(images) - 1] = {**lst[len(images) - 1], "no_products": True}
+        lst[len(images) - 1] = {**lst[len(images) - 1],
+                                "no_products": True, "footer_mode": new_mode}
         r["image_opts_list"] = lst
-        self._norm_footers(self.current)
+        self._sync_image_meta(self.current)
         self.store.upsert_task(self.current)
         self.store.save()
         self._sel_index = len(images) - 1
@@ -766,7 +782,7 @@ class JobsPage(QWidget):
         if index < len(lst):
             lst.pop(index)
         r["image_opts_list"] = lst
-        self._norm_footers(self.current)
+        self._sync_image_meta(self.current)
         self.store.upsert_task(self.current)
         self.store.save()
         self._sel_index = max(0, min(self._sel_index, len(images) - 1))
@@ -788,7 +804,7 @@ class JobsPage(QWidget):
         lst.insert(to, lst.pop(frm))
         r["images"] = images
         r["image_opts_list"] = lst
-        self._norm_footers(self.current)
+        self._sync_image_meta(self.current)
         self.store.upsert_task(self.current)
         self.store.save()
         self._sel_index = to

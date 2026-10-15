@@ -44,6 +44,7 @@ from .workers import (
     ImagesWorker,
     PostRecordWorker,
     PostWorker,
+    shutdown_all_threads,
 )
 
 NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Lịch sử", "Log lỗi"]
@@ -59,6 +60,7 @@ class MainWindow(QMainWindow):
         self.setFont(app_font())
         self._workers: list = []
         self._content_workers: dict = {}
+        self._img_workers: dict = {}
         self.record_worker = None
         self._build()
 
@@ -474,6 +476,35 @@ class MainWindow(QMainWindow):
         self._log_err("Ghi kịch bản", err)
         self.status("Sẵn sàng")
 
+    def _start_images_worker(self, task, opts: dict | None, only_index: int | None,
+                             status_msg: str) -> None:
+        """Chỉ chạy 1 luồng ghép ảnh cho mỗi công việc (tránh dồn luồng → crash khi thoát)."""
+        site = self.store.get_site(task.site_id)
+        if not site:
+            return
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        old = self._img_workers.get(fresh.id)
+        if old is not None and old.isRunning():
+            old.stop()
+            old.wait(5000)
+        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts,
+                              only_index=only_index)
+        self._img_workers[fresh.id] = worker
+        worker.log.connect(lambda m: self.status(m))
+        worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
+        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err),
+                                           self.status("Sẵn sàng")))
+
+        def _done() -> None:
+            if self._img_workers.get(fresh.id) is worker:
+                self._img_workers.pop(fresh.id, None)
+            self._cleanup(worker)
+
+        worker.finished.connect(_done)
+        self._workers.append(worker)
+        worker.start()
+        self.status(status_msg)
+
     def _on_apply_image_opts(self, task, index: int, opts: dict) -> None:
         site = self.store.get_site(task.site_id)
         if not site:
@@ -487,51 +518,18 @@ class MainWindow(QMainWindow):
         fresh.result["image_opts_list"] = lst
         self.store.upsert_task(fresh)
         self.store.save()
-
-        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts,
-                              only_index=index)
-        worker.log.connect(lambda m: self.status(m))
-        worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
-        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err), self.status("Sẵn sàng")))
-        worker.finished.connect(lambda: self._cleanup(worker))
-        self._workers.append(worker)
-        worker.start()
-        self.status("Đang ghép lại ảnh theo thiết lập…")
+        self._start_images_worker(fresh, opts, index, "Đang ghép lại ảnh theo thiết lập…")
 
     def _on_recompose_image(self, task, index: int) -> None:
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         lst = _opts_list_of(fresh.result)
         opts = dict(lst[index]) if index < len(lst) else {}
-        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts,
-                              only_index=index)
-        worker.log.connect(lambda m: self.status(m))
-        worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
-        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err),
-                                           self.status("Sẵn sàng")))
-        worker.finished.connect(lambda: self._cleanup(worker))
-        self._workers.append(worker)
-        worker.start()
-        self.status(f"Đang ghép lại Ảnh {index + 1}…")
+        self._start_images_worker(fresh, opts, index, f"Đang ghép lại Ảnh {index + 1}…")
 
     def _on_recompose_all(self, task) -> None:
         """Ghép lại TOÀN BỘ ảnh (sau khi thêm / xoá / sắp xếp ảnh)."""
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, None,
-                              only_index=None)
-        worker.log.connect(lambda m: self.status(m))
-        worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
-        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err),
-                                           self.status("Sẵn sàng")))
-        worker.finished.connect(lambda: self._cleanup(worker))
-        self._workers.append(worker)
-        worker.start()
-        self.status("Đang ghép lại toàn bộ ảnh…")
+        self._start_images_worker(fresh, None, None, "Đang ghép lại toàn bộ ảnh…")
 
     def _on_refetch_image(self, task, index: int) -> None:
         site = self.store.get_site(task.site_id)
@@ -581,12 +579,29 @@ class MainWindow(QMainWindow):
         if worker in self._workers:
             self._workers.remove(worker)
 
-    def closeEvent(self, event) -> None:  # noqa: N802
+    def shutdown_workers(self, timeout: int = 6000) -> None:
+        """Dừng & CHỜ mọi luồng nền kết thúc (tránh crash 'QThread destroyed while running')."""
         for w in list(self._workers):
             try:
                 if hasattr(w, "stop"):
                     w.stop()
             except Exception:
                 pass
-        self.store.save()
+        for w in list(self._workers):
+            try:
+                if w.isRunning():
+                    w.wait(timeout)
+            except Exception:
+                pass
+        try:
+            shutdown_all_threads(timeout)
+        except Exception:
+            pass
+
+    def closeEvent(self, event) -> None:  # noqa: N802
+        self.shutdown_workers()
+        try:
+            self.store.save()
+        except Exception:
+            pass
         super().closeEvent(event)
