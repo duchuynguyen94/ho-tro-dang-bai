@@ -67,8 +67,9 @@ class Store:
         if "ollama" in providers:
             providers.pop("ollama", None)
         providers.setdefault("deepseek", {"api_key_enc": "", "model": "deepseek-chat"})
-        providers.setdefault("chatgpt", {"session_file": "", "project": ""})
+        providers.setdefault("chatgpt", {"session_file": "", "project": "", "project_url": ""})
         providers.get("chatgpt", {}).setdefault("project", "")
+        providers.get("chatgpt", {}).setdefault("project_url", "")
         self.data["ai_content"]["providers"] = providers
 
         default_order = ["gemini", "groq", "openrouter", "deepseek", "chatgpt", "openai"]

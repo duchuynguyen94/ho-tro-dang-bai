@@ -716,11 +716,14 @@ class AIContentPanel(QScrollArea):
             note.setProperty("class", "hint")
             note.setWordWrap(True)
             body.addWidget(note)
-            body.addWidget(QLabel("Tên dự án (Project)"))
-            project_edit = QLineEdit(pcfg.get("project", ""))
-            project_edit.setPlaceholderText("vd: Đăng bài WordPress")
+            body.addWidget(QLabel("URL Project"))
+            project_edit = QLineEdit(pcfg.get("project_url", ""))
+            project_edit.setPlaceholderText("https://chatgpt.com/g/g-p-xxxx-ten-du-an/project")
             body.addWidget(project_edit)
-            pnote = QLabel("Để trống nếu dùng ChatGPT thường. Nếu có, phần mềm sẽ mở đúng Project này.")
+            pnote = QLabel(
+                "Mở Project trên ChatGPT → copy URL trên thanh địa chỉ → dán vào đây. "
+                "Để trống nếu muốn chat ở ChatGPT thường. Nội dung sẽ được tạo <b>trong đúng Project này</b>."
+            )
             pnote.setProperty("class", "hint")
             pnote.setWordWrap(True)
             body.addWidget(pnote)
@@ -751,7 +754,7 @@ class AIContentPanel(QScrollArea):
             if row.get("model") is not None and row["model"].text().strip():
                 p["model"] = row["model"].text().strip()
             if row.get("project") is not None:
-                p["project"] = row["project"].text().strip()
+                p["project_url"] = row["project"].text().strip()
             if row["radio"].isChecked():
                 cfg["active"] = key
         cfg["order"] = self.list.keys()

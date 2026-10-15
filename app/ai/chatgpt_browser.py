@@ -41,34 +41,21 @@ def _last_answer(page) -> str:
         return ""
 
 
-def _open_project(page, project: str, log=None) -> None:
-    """Thử mở đúng Project theo tên (best-effort)."""
-    if not project:
+def _open_project(page, project_url: str, log=None) -> None:
+    """Mở thẳng URL Project đã cấu hình."""
+    if not project_url:
         return
-    try:
-        btn = page.get_by_role("button", name="Projects")
-        if btn.count():
-            btn.first.click(timeout=4000)
-            page.wait_for_timeout(800)
-    except Exception:
-        pass
-    try:
-        item = page.get_by_text(project, exact=False).first
-        item.click(timeout=6000)
-        page.wait_for_timeout(1500)
-        if log:
-            log(f"Đã mở Project “{project}”.")
-        return
-    except Exception:
-        if log:
-            log(f"Không mở được Project “{project}” — dùng ChatGPT thường.")
+    if log:
+        log("Đang mở Project đã cấu hình…")
+    page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
+    page.wait_for_timeout(2500)
 
 
 def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 240) -> str:
     """Mở ChatGPT bằng trình duyệt riêng, gửi prompt, trả về câu trả lời."""
     from ..wp import WPBrowser
 
-    project = (pcfg or {}).get("project", "") or ""
+    project_url = (pcfg or {}).get("project_url", "") or ""
     br = WPBrowser(headless=False, site_id="chatgpt")
     try:
         if log:
@@ -81,8 +68,13 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 240)
         if box is None:
             raise AIError(LOGIN_HINT)
 
-        if project:
-            _open_project(page, project, log)
+        if project_url:
+            _open_project(page, project_url, log)
+            if _composer(page) is None:
+                raise AIError(
+                    "Không mở được Project. Kiểm tra lại URL Project trong "
+                    "Cấu hình → AI nội dung → ChatGPT."
+                )
 
         box = _composer(page) or box
         if log:
