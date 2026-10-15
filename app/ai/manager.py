@@ -69,6 +69,7 @@ Nội dung:
 {images_hint}
 
 === YÊU CẦU ĐẦU RA ===
+ĐIỀN NỘI DUNG THẬT vào JSON (KHÔNG trả lại nguyên mẫu).
 CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng định dạng:
 {{
   "title": "tiêu đề theo quy định",
