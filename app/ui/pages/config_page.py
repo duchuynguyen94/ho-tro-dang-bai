@@ -730,7 +730,10 @@ class AIContentPanel(QScrollArea):
             pnote.setProperty("class", "hint")
             pnote.setWordWrap(True)
             body.addWidget(pnote)
-            btn = QPushButton("Đăng nhập ChatGPT")
+            self.show_browser = QCheckBox("Hiện cửa sổ Chrome khi tạo nội dung")
+            self.show_browser.setChecked(bool(pcfg.get("show_browser", False)))
+            body.addWidget(self.show_browser)
+            btn = QPushButton("Đăng nhập / Mở trình duyệt xem")
             btn.setProperty("class", "ghost")
             btn.clicked.connect(lambda _=False, b=btn: self._login_chatgpt(b))
             body.addWidget(btn)
@@ -758,6 +761,8 @@ class AIContentPanel(QScrollArea):
                 p["model"] = row["model"].text().strip()
             if row.get("project") is not None:
                 p["project_url"] = row["project"].text().strip()
+            if key == "chatgpt" and getattr(self, "show_browser", None) is not None:
+                p["show_browser"] = self.show_browser.isChecked()
             if row["radio"].isChecked():
                 cfg["active"] = key
         cfg["order"] = self.list.keys()

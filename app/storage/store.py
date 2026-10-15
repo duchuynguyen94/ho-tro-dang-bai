@@ -75,6 +75,7 @@ class Store:
         providers.setdefault("chatgpt", {"session_file": "", "project": "", "project_url": ""})
         providers.get("chatgpt", {}).setdefault("project", "")
         providers.get("chatgpt", {}).setdefault("project_url", "")
+        providers.get("chatgpt", {}).setdefault("show_browser", False)
         self.data["ai_content"]["providers"] = providers
 
         default_order = ["gemini", "groq", "deepseek", "chatgpt", "openai"]

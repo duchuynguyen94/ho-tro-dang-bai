@@ -449,13 +449,43 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
             pass
 
 
-def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
-                      should_stop=None) -> str:
-    """1 tin nhắn: trả về JSON SEO ở đầu + nội dung bài viết phía sau."""
+def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,
+                  log=None, timeout: int = 420, should_stop=None) -> str:
     from ..wp import WPBrowser
 
+    br = WPBrowser(headless=headless, site_id="chatgpt")
+    try:
+        page = _open_page(br, project_url, log, should_stop)
+        if log:
+            log("Đang gửi yêu cầu cho ChatGPT (nội dung + SEO)…")
+        _send(page, prompt)
+        return _wait_reply_full(page, prompt, timeout, should_stop)
+    finally:
+        try:
+            br.close()
+        except Exception:
+            pass
+
+
+def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
+                      should_stop=None) -> str:
+    """1 tin nhắn: JSON SEO + nội dung. Có thể chạy ẩn (không hiện cửa sổ)."""
     project_url = (pcfg or {}).get("project_url", "") or ""
-    br = WPBrowser(headless=False, site_id="chatgpt")
+    show = bool((pcfg or {}).get("show_browser", False))
+    if not show and log:
+        log("Đang chạy ChatGPT ở chế độ ẩn (bật “Hiện cửa sổ Chrome” nếu muốn xem).")
+    try:
+        return _run_combined(pcfg, prompt, project_url, not show, log, timeout, should_stop)
+    except AIError as exc:
+        if show or "Đã dừng" in str(exc):
+            raise
+        if log:
+            log("Chế độ ẩn không chạy được — mở cửa sổ Chrome và thử lại…")
+        return _run_combined(pcfg, prompt, project_url, False, log, timeout, should_stop)
+
+
+def _unused_generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
+                              should_stop=None) -> str:
     try:
         page = _open_page(br, project_url, log, should_stop)
         if log:
