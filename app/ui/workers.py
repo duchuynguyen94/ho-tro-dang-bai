@@ -166,6 +166,8 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         brand_pos = tuple(o.get("brand_pos") or (0.965, 0.035))
         logo_scale = float(o.get("logo_scale", 1.0) or 1.0)
         brand_scale = float(o.get("brand_scale", 1.0) or 1.0)
+        brand_nobg = bool(o.get("brand_nobg", False))
+        brand_hidden = bool(o.get("brand_hidden", False))
         product_scale = float(o.get("product_scale", 1.0) or 1.0)
         uploads = o.get("uploads") or None
         product_positions = o.get("product_pos") or None
@@ -204,6 +206,8 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             brand_pos=brand_pos,
             logo_scale=logo_scale,
             brand_scale=brand_scale,
+            brand_nobg=brand_nobg,
+            brand_hidden=brand_hidden,
             product_scale=product_scale,
             product_positions=product_positions,
             product_scales=product_scales,

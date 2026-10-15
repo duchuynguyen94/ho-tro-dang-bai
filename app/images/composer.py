@@ -151,6 +151,8 @@ def compose(
     brand_pos: tuple[float, float] = (0.965, 0.035),
     logo_scale: float = 1.0,
     brand_scale: float = 1.0,
+    brand_nobg: bool = False,
+    brand_hidden: bool = False,
     product_scale: float = 1.0,
     product_positions: list | None = None,
     product_scales: list | None = None,
@@ -229,7 +231,9 @@ def compose(
         base.alpha_composite(logo, (lx, ly))
 
     # --- logo thương hiệu (trên-phải) ---
-    brand = _load_rgba(brand_logo)
+    brand = None if brand_hidden else _load_rgba(brand_logo)
+    if brand is not None and brand_nobg:
+        brand = remove_background_auto(brand, remove_bg_thresh)
     if brand is not None:
         brand = _fit(brand, int(size * 0.34 * brand_scale), int(size * 0.13 * brand_scale))
         bx = int(brand_pos[0] * size) - brand.size[0]

@@ -91,6 +91,10 @@ class DraggableImage(QLabel):
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
         if event.button() != Qt.LeftButton:
+            self._mode = ""          # tránh kẹt trạng thái kéo
+            self._press = None
+            self._start = None
+            super().mousePressEvent(event)   # để Qt hiện menu ngữ cảnh
             return
         pos = event.position().toPoint()
         w, h, z = self.width(), self.height(), self.RESIZE_ZONE
@@ -148,7 +152,7 @@ class DraggableImage(QLabel):
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802
         # chỉ áp dụng cho THÀNH PHẦN SẢN PHẨM (không áp cho logo/watermark/thanh thông tin)
-        if self.kind not in ("product", "upload"):
+        if self.kind not in ("product", "upload", "brand"):
             return
         menu = QMenu(self)
         act_bg = menu.addAction("Xoá nền → trong suốt")
@@ -368,6 +372,16 @@ class ImageEditorPanel(QFrame):
                                            self.s_logo.value() / 100.0)
         brand_pm, bw, bh = self._pixmap_for(self._preview.get("brand", ""), 0.34, 0.13,
                                             self.s_brand.value() / 100.0)
+        if self._opts.get("brand_hidden"):
+            brand_pm, bw, bh = QPixmap(), 0, 0
+        elif self._opts.get("brand_nobg") and not brand_pm.isNull():
+            bpath = self._preview.get("brand", "")
+            brand_pm = self._display_pixmap(bpath, True)
+            if not brand_pm.isNull():
+                brand_pm = brand_pm.scaled(max(8, int(brand_pm.width() * CANVAS / SRC)),
+                                           max(8, int(brand_pm.height() * CANVAS / SRC)),
+                                           Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                bw, bh = brand_pm.width(), brand_pm.height()
         for item, pm, w, h in ((self.logo_item, logo_pm, lw, lh),
                                (self.brand_item, brand_pm, bw, bh)):
             item.setPixmap(pm)
@@ -375,6 +389,8 @@ class ImageEditorPanel(QFrame):
             item.setFixedSize(max(1, w), max(1, h))
             item.setVisible(not pm.isNull())
             item.enable_grips(not pm.isNull())
+            item.on_remove_bg = self._ctx_remove_bg
+            item.on_remove = self._ctx_remove_component
 
         lp = self._opts.get("logo_pos") or [0.035, 0.035]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
@@ -575,6 +591,9 @@ class ImageEditorPanel(QFrame):
                 ups[item.index]["nobg"] = True
                 self._opts["uploads"] = ups
                 self._layout_uploads()
+        elif item.kind == "brand":
+            self._opts["brand_nobg"] = True
+            self._layout_items()
         self._schedule_save()
 
     def _ctx_remove_component(self, item) -> None:
@@ -591,6 +610,9 @@ class ImageEditorPanel(QFrame):
                 ups.pop(item.index)
             self._opts["uploads"] = ups
             self._layout_uploads()
+        elif item.kind == "brand":
+            self._opts["brand_hidden"] = True
+            self._layout_items()
         self._schedule_save()
 
     def _on_product_moved(self) -> None:  # noqa: D401
