@@ -1,4 +1,4 @@
-# Ghi chú — 10 mục cần fix (CHỜ LỆNH)
+# Ghi chú — 11 mục cần fix (CHỜ LỆNH)
 
 > Trạng thái: **CHƯA LÀM** — chỉ thực hiện khi người dùng nói **"fix"**.
 > Ngày ghi: 2026-10-16
@@ -99,7 +99,22 @@
 
 ---
 
-## Ghi chú phụ (ngoài 10 mục — bàn riêng, chưa chốt)
+## Mục 11 — Nút "Lưu" ghim cố định (fixed) phía TRÊN ở cấu hình AI nội dung & AI ảnh
+- Lý do người dùng nêu: sau này có **nhiều provider**, phải **kéo xuống đáy** mới bấm được **Lưu** → mất thời gian.
+- Hiện trạng code: `AIContentPanel` và `AIImagePanel` (`app/ui/pages/config_page.py`) **là chính `QScrollArea`** và nút **Lưu nằm ở cuối phần cuộn** (`v.addWidget(save, alignment=Qt.AlignRight)` ở đáy) → phải cuộn xuống mới thấy.
+- Yêu cầu: nút **Lưu luôn hiện, ghim (fixed/sticky) ở phía trên** panel.
+- Hướng làm:
+  1. Tách mỗi panel thành **2 phần**:
+     - **Header cố định (không cuộn):** tiêu đề bên trái + **nút "Lưu cấu hình …"** căn **phải**, luôn hiển thị.
+     - **Phần thân cuộn:** `QScrollArea` chứa danh sách provider + các tuỳ chọn (chỉ phần này cuộn).
+  2. Đổi class panel từ `QScrollArea` → **`QWidget` container** (bọc `QScrollArea` bên trong). Vì 2 panel chỉ được dùng nội bộ trong `ConfigPage` (`ai_c`, `ai_i` → `self.stack.addWidget`) nên đổi an toàn.
+  3. Giữ nguyên hành vi `_save()` và style nút (`class="primary"`).
+  4. (Tuỳ chọn — nếu muốn đồng bộ) áp cùng kiểu header-ghim cho **Format Rule** và các tab site dài. *Người dùng chỉ yêu cầu 2 panel AI — chờ xác nhận có mở rộng không.*
+- Kết quả mong muốn: cuộn bao nhiêu provider cũng luôn bấm được **Lưu** ngay trên đầu panel.
+
+---
+
+## Ghi chú phụ (ngoài 11 mục — bàn riêng, chưa chốt)
 - **AI chỉnh ảnh free:** đã tư vấn. Nổi bật:
   - `rembg` (offline, free) → thay thuật toán xoá nền flood-fill hiện tại, chất lượng tốt hơn hẳn.
   - `IOPaint / LaMa` (offline, free) → xoá vật thể / thành phần.
