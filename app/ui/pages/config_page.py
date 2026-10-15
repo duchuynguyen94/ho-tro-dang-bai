@@ -8,6 +8,7 @@ from PySide6.QtCore import QMimeData, Qt, Signal
 from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import (
     QApplication,
+    QButtonGroup,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -645,6 +646,8 @@ class AIContentPanel(QScrollArea):
         self.store = store
         self.setWidgetResizable(True)
         self._rows: dict[str, dict] = {}
+        self._group = QButtonGroup(self)      # đảm bảo "Mặc định" là duy nhất
+        self._group.setExclusive(True)
         self._build()
 
     def _build(self) -> None:
@@ -700,6 +703,7 @@ class AIContentPanel(QScrollArea):
         card.add_header_widget(badge)
         radio = QCheckBox("Mặc định")
         radio.setChecked(self.store.ai_content.get("active") == key)
+        self._group.addButton(radio)
         card.add_header_widget(radio)
 
         body = card.body
@@ -817,12 +821,15 @@ class AIImagePanel(QScrollArea):
         c3 = Card("AI chỉnh sửa ảnh")
         grid = QGridLayout()
         self._img_rows: dict[str, dict] = {}
+        self._img_group = QButtonGroup(self)
+        self._img_group.setExclusive(True)
         for i, (key, pcfg) in enumerate(cfg["providers"].items()):
             label = {"gemini": "Google Gemini 2.5 Flash Image", "fal": "fal.ai — Flux Kontext",
                      "openai": "OpenAI Images", "off": "Tắt AI chỉnh ảnh"}.get(key, key)
             card = Card(label)
             radio = QCheckBox("Mặc định")
             radio.setChecked(cfg.get("active") == key)
+            self._img_group.addButton(radio)
             card.add_header_widget(radio)
             if key == "off":
                 hint = QLabel("Chỉ dùng Pillow (cắt ghép, không gọi AI).")

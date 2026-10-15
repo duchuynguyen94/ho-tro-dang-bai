@@ -189,6 +189,7 @@ STATUS_REVIEW = "review"
 STATUS_POSTING = "posting"
 STATUS_DONE = "done"
 STATUS_ERROR = "error"
+STATUS_CANCELLED = "cancelled"
 
 STATUS_LABELS = {
     STATUS_QUEUED: "Đang chờ",
@@ -197,6 +198,7 @@ STATUS_LABELS = {
     STATUS_POSTING: "Đang đăng bài...",
     STATUS_DONE: "Đã đăng",
     STATUS_ERROR: "Lỗi",
+    STATUS_CANCELLED: "Đã dừng",
 }
 
 

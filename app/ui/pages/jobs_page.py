@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...storage.models import (
+    STATUS_CANCELLED,
     STATUS_DONE,
     STATUS_ERROR,
     STATUS_GENERATING,
@@ -137,6 +138,7 @@ class JobsPage(QWidget):
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
     apply_image_opts = Signal(object, dict)  # (task, tuỳ chọn ảnh)
+    cancel_task = Signal(object)             # (task) dừng đang tạo
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -216,6 +218,10 @@ class JobsPage(QWidget):
         self.loading_note.setAlignment(Qt.AlignCenter)
         self.loading_note.setWordWrap(True)
         lv.addWidget(self.loading_note)
+        self.stop_btn = QPushButton("■ Dừng")
+        self.stop_btn.setProperty("class", "danger")
+        self.stop_btn.clicked.connect(lambda: self.current and self.cancel_task.emit(self.current))
+        lv.addWidget(self.stop_btn, alignment=Qt.AlignHCenter)
         lv.addStretch(1)
         self.stack.addWidget(self.page_loading)
 
@@ -416,6 +422,15 @@ class JobsPage(QWidget):
                 f"Đang tạo nội dung cho {task.site_name}…"
             )
             self.stack.setCurrentWidget(self.page_loading)
+            return
+
+        if task.status == STATUS_CANCELLED:
+            self.footer.hide()
+            self.error_label.setText(
+                "<b>Đã dừng tạo nội dung.</b><br><br>"
+                "<span style='color:#64748b'>Bấm “Thử tạo lại” nếu muốn chạy lại.</span>"
+            )
+            self.stack.setCurrentWidget(self.page_error)
             return
 
         if task.status == STATUS_ERROR:

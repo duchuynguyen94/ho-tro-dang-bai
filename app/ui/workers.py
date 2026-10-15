@@ -13,6 +13,10 @@ from ..config import output_dir
 from ..images import compose, save_composed
 
 
+class _Cancelled(Exception):
+    """Người dùng bấm Dừng."""
+
+
 def _remove_bg_opts(store) -> tuple[bool, int]:
     cfg = (store.ai_image or {}).get("remove_bg") or {}
     enabled = cfg.get("mode", "off") != "off"
@@ -109,17 +113,27 @@ class ContentWorker(QThread):
     progress = Signal(int)
     ok = Signal(dict)
     failed = Signal(str)
+    cancelled = Signal()
 
     def __init__(self, store, task, site) -> None:
         super().__init__()
         self.store = store
         self.task = task
         self.site = site
+        self._cancel = False
+
+    def cancel(self) -> None:
+        self._cancel = True
+
+    def _stopped(self) -> bool:
+        return self._cancel
 
     def run(self) -> None:
         t, site = self.task, self.site
         try:
             self.progress.emit(5)
+            if self._stopped():
+                raise _Cancelled()
             self.log.emit("Đang đọc link nguồn…")
             page = src.fetch_source(t.source_url)
             self.progress.emit(25)
@@ -134,7 +148,11 @@ class ContentWorker(QThread):
                     self.log.emit(f"  bỏ qua 1 ảnh: {exc}")
             self.progress.emit(45)
 
+            if self._stopped():
+                raise _Cancelled()
             data = generate_content(self.store, page, log=self.log.emit)
+            if self._stopped():
+                raise _Cancelled()
             # chèn 1 link external vào tên sản phẩm + link cho tên miền www.
             pname = extract_product_name(
                 data.get("raw_content", ""), page.get("title", "") or data.get("title", "")
@@ -157,6 +175,8 @@ class ContentWorker(QThread):
             if not brand_logo:
                 self.log.emit("Không tìm được logo thương hiệu — bỏ qua (có thể thêm ở Cấu hình).")
 
+            if self._stopped():
+                raise _Cancelled()
             # Ghép ảnh theo mẫu
             self.log.emit(f"Đang ghép {t.image_count} ảnh theo mẫu…")
             rb, th = _remove_bg_opts(self.store)
@@ -176,6 +196,9 @@ class ContentWorker(QThread):
                 }
             )
             self.ok.emit(result)
+        except _Cancelled:
+            self.log.emit("Đã dừng theo yêu cầu.")
+            self.cancelled.emit()
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))

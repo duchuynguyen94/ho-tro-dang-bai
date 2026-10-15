@@ -16,6 +16,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..storage.models import (
+    STATUS_CANCELLED,
     STATUS_DONE,
     STATUS_ERROR,
     STATUS_GENERATING,
@@ -51,6 +52,7 @@ class MainWindow(QMainWindow):
         self.resize(1240, 820)
         self.setFont(app_font())
         self._workers: list = []
+        self._content_workers: dict = {}
         self.record_worker = None
         self._build()
 
@@ -113,6 +115,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.stop_record.connect(self._on_stop_record)
         self.jobs_page.ai_edit.connect(self._on_ai_edit)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
+        self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -164,10 +167,13 @@ class MainWindow(QMainWindow):
         self._refresh_count()
 
         worker = ContentWorker(self.store, task, site)
+        self._content_workers[task.id] = worker
         worker.log.connect(self._on_worker_log)
         worker.ok.connect(lambda res: self._on_content_ok(task, res))
         worker.failed.connect(lambda err: self._on_content_failed(task, err))
-        worker.finished.connect(lambda: self._cleanup(worker))
+        worker.cancelled.connect(lambda: self._on_content_cancelled(task))
+        worker.finished.connect(lambda: (self._content_workers.pop(task.id, None),
+                                         self._cleanup(worker)))
         self._workers.append(worker)
         worker.start()
         self.status(f"Đang tạo nội dung cho {site.name}…")
@@ -188,6 +194,24 @@ class MainWindow(QMainWindow):
         self.jobs_page.refresh()
         self._refresh_count()
         self.status("Xong — vào tab Công việc đang làm để duyệt.")
+
+    def _on_cancel_task(self, task) -> None:
+        worker = self._content_workers.get(task.id)
+        if worker and worker.isRunning():
+            worker.cancel()
+            self.status("Đang dừng…")
+        else:
+            self.status("Sẵn sàng")
+
+    def _on_content_cancelled(self, task) -> None:
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh.status = STATUS_CANCELLED
+        fresh.message = "Đã dừng theo yêu cầu"
+        self.store.upsert_task(fresh)
+        self.store.save()
+        self.jobs_page.refresh()
+        self.jobs_page.select_task(fresh.id)
+        self.status("Đã dừng tạo nội dung.")
 
     def _on_content_failed(self, task, err: str) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
