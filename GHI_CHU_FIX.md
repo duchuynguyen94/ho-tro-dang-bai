@@ -66,10 +66,14 @@
     - `app/ui/widgets/image_editor.py` → `keep = [...][:3]`
   - Nút **"+ Thêm hình"** đặt cùng hàng/cạnh dãy thumbnail trong mục **"Ảnh"** của panel kết quả (`jobs_page.py`, `images_row`).
   - **Xoá ảnh (bổ sung):** thêm **nút Xoá** nằm **bên phải chữ "Ảnh 1", "Ảnh 2", "Ảnh 3"…** (ngay trên caption của mỗi thumbnail).
-    - Bấm → xoá **ảnh đó**: bỏ entry tương ứng trong `task.result["images"]` **và** `task.result["image_opts_list"]`, xoá cả file ảnh đã ghép (nếu có) trong `posts/` / thư mục tạm.
+    - Bấm → **hiện popup xác nhận Yes / No**; **mặc định là "Yes"** (bấm **Enter** = Yes, giống dialog xoá công việc).
+    - Xoá **ảnh đó**: bỏ entry tương ứng trong `task.result["images"]` **và** `task.result["image_opts_list"]`, xoá cả file ảnh đã ghép (nếu có) trong `posts/` / thư mục tạm.
     - Sau khi xoá → **đánh số lại** caption (Ảnh 1, 2, 3…) và chuyển **ảnh đang chọn** (`_sel_index`) về ảnh hợp lệ.
-    - (Đề xuất) **không cho xoá ảnh cuối cùng** — luôn giữ **tối thiểu 1 ảnh**. *Chờ người dùng chốt.*
-    - (Đề xuất) xoá có **xác nhận** (hỏi trước khi xoá) để tránh mất công chỉnh. *Chờ người dùng chốt.*
+    - **Giữ lại TỐI THIỂU 1 ẢNH** (người dùng đã chốt) → không cho xoá ảnh cuối cùng (nút Xoá ẩn/khoá khi chỉ còn 1 ảnh).
+  - **Sắp xếp ảnh (bổ sung — người dùng yêu cầu):** cho phép **đổi thứ tự ảnh** bằng **kéo–thả thumbnail**.
+    - Kéo thumbnail này sang vị trí khác → đổi thứ tự trong `images` + `image_opts_list` (tuỳ chọn **đi kèm ảnh**), **đánh số lại** caption.
+    - **Thứ tự xuất file theo Rule ảnh** (`{index}` / thứ tự dòng Rule ảnh) **bám theo thứ tự mới**.
+    - ⚠️ Lưu ý: thanh thông tin đang **luân phiên 1→2→1→2 theo từng ảnh**; sau khi sắp xếp lại, thứ tự luân phiên có thể **không còn đúng** — *(chờ chốt)* có **tự động gán lại luân phiên 1→2 theo vị trí mới** hay **giữ nguyên như từng ảnh đang có**.
 
 ---
 
