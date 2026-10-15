@@ -1,6 +1,7 @@
 """Tạo nội dung bằng ChatGPT qua trình duyệt riêng của phần mềm (miễn phí)."""
 from __future__ import annotations
 
+import json
 import re
 import time
 
@@ -75,15 +76,53 @@ def _looks_logged_out(page) -> bool:
     return any(m in body for m in NEED_LOGIN_MARKERS)
 
 
-def _last_answer(page) -> str:
+def _reply_text(page) -> str:
+    """Lấy nội dung tin nhắn trả lời mới nhất (thử nhiều kiểu giao diện)."""
+    selectors = [
+        '[data-message-author-role="assistant"]',
+        "div[data-message-author-role='assistant'] .markdown",
+        "article .markdown",
+        "div.markdown",
+    ]
+    for sel in selectors:
+        try:
+            loc = page.locator(sel)
+            n = loc.count()
+            if n:
+                txt = (loc.nth(n - 1).inner_text() or "").strip()
+                if txt:
+                    return txt
+        except Exception:
+            continue
+    return ""
+
+
+def _try_extract_json(text: str) -> dict | None:
+    """Tìm JSON kết quả trong câu trả lời."""
+    if not text:
+        return None
+    t = text.strip()
+    if t.startswith("```"):
+        parts = t.split("```")
+        if len(parts) >= 2:
+            t = parts[1]
+            if t.lower().lstrip().startswith("json"):
+                t = t.lstrip()[4:]
+    start, end = t.find("{"), t.rfind("}")
+    if start == -1 or end <= start:
+        return None
     try:
-        loc = page.locator('[data-message-author-role="assistant"]')
-        n = loc.count()
-        if n == 0:
-            return ""
-        return (loc.nth(n - 1).inner_text() or "").strip()
-    except Exception:
-        return ""
+        data = json.loads(t[start:end + 1])
+    except (json.JSONDecodeError, ValueError):
+        return None
+    if not isinstance(data, dict):
+        return None
+    content = str(data.get("content_html", "")).strip()
+    if not data.get("title") and not content:
+        return None
+    if content.strip(". ") == "" or content == "...":
+        return None
+    return data
 
 
 def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300) -> str:
@@ -129,25 +168,34 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300)
         page.wait_for_timeout(400)
         page.keyboard.press("Enter")
 
-        # Chờ câu trả lời ổn định
+        # Chờ câu trả lời: nhận diện ngay khi thấy JSON kết quả
         deadline = time.time() + timeout
         last = ""
         stable = 0
+        result_text = ""
         while time.time() < deadline:
             page.wait_for_timeout(1500)
-            text = _last_answer(page)
+            text = _reply_text(page)
+            data = _try_extract_json(text)
+            if data is not None:
+                result_text = json.dumps(data, ensure_ascii=False)
+                if log:
+                    log("Đã nhận kết quả từ ChatGPT.")
+                break
             if text and text == last and len(text) > 20:
                 stable += 1
                 if stable >= 2:
+                    result_text = text
                     break
             else:
                 stable = 0
                 last = text
-        if not last:
+            if log and text:
+                log(f"ChatGPT đang viết… ({len(text)} ký tự)")
+
+        if not result_text:
             raise AIError("ChatGPT không trả về nội dung (quá thời gian chờ).")
-        if log:
-            log("ChatGPT đã trả lời.")
-        return last
+        return result_text
     finally:
         try:
             br.close()
