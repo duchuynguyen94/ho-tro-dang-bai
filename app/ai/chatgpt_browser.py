@@ -1,22 +1,28 @@
 """Tạo nội dung bằng ChatGPT qua trình duyệt riêng của phần mềm (miễn phí)."""
 from __future__ import annotations
 
+import re
 import time
 
 from .providers import AIError
 
+CHATGPT_URL = "https://chatgpt.com/"
+
+# Ô nhập tin nhắn (ChatGPT đổi giao diện thường xuyên nên thử nhiều kiểu)
 COMPOSER_SELECTORS = [
     "#prompt-textarea",
-    "div[contenteditable='true'][id='prompt-textarea']",
+    "div[contenteditable='true']#prompt-textarea",
+    "div.ProseMirror[contenteditable='true']",
+    "div[contenteditable='true']",
     "textarea[data-id]",
     "form textarea",
-    "div[contenteditable='true']",
 ]
 
 LOGIN_HINT = (
     "Chưa đăng nhập ChatGPT. Vào Cấu hình → AI nội dung → ChatGPT → "
     "bấm “Đăng nhập ChatGPT” rồi đăng nhập, sau đó thử lại."
 )
+NEED_LOGIN_MARKERS = ("log in", "sign up", "đăng nhập", "đăng ký")
 
 
 def _composer(page):
@@ -30,6 +36,45 @@ def _composer(page):
     return None
 
 
+def _wait_composer(page, timeout: float = 25.0):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        box = _composer(page)
+        if box is not None:
+            return box
+        try:
+            page.wait_for_timeout(500)
+        except Exception:
+            return None
+    return None
+
+
+def _dismiss_modals(page) -> None:
+    """Đóng popup (ví dụ 'Requires upgrade') nếu có."""
+    for _ in range(2):
+        try:
+            page.keyboard.press("Escape")
+            page.wait_for_timeout(200)
+        except Exception:
+            break
+    for name in ("Dismiss", "Close", "Đóng", "Stay with free plan", "Stay on free"):
+        try:
+            btn = page.get_by_role("button", name=name)
+            if btn.count():
+                btn.first.click(timeout=1500)
+                page.wait_for_timeout(300)
+        except Exception:
+            continue
+
+
+def _looks_logged_out(page) -> bool:
+    try:
+        body = page.inner_text("body")[:500].lower()
+    except Exception:
+        return False
+    return any(m in body for m in NEED_LOGIN_MARKERS)
+
+
 def _last_answer(page) -> str:
     try:
         loc = page.locator('[data-message-author-role="assistant"]')
@@ -41,17 +86,7 @@ def _last_answer(page) -> str:
         return ""
 
 
-def _open_project(page, project_url: str, log=None) -> None:
-    """Mở thẳng URL Project đã cấu hình."""
-    if not project_url:
-        return
-    if log:
-        log("Đang mở Project đã cấu hình…")
-    page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(2500)
-
-
-def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 240) -> str:
+def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300) -> str:
     """Mở ChatGPT bằng trình duyệt riêng, gửi prompt, trả về câu trả lời."""
     from ..wp import WPBrowser
 
@@ -61,22 +96,34 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 240)
         if log:
             log("Đang mở ChatGPT…")
         page = br.open()
-        page.goto("https://chatgpt.com/", wait_until="domcontentloaded", timeout=60000)
-        page.wait_for_timeout(2500)
+        page.goto(CHATGPT_URL, wait_until="domcontentloaded", timeout=60000)
+        _wait_composer(page, 8)
+        _dismiss_modals(page)
 
-        box = _composer(page)
+        if project_url and project_url.startswith("http"):
+            if log:
+                log("Đang mở Project đã cấu hình…")
+            try:
+                page.goto(project_url, wait_until="domcontentloaded", timeout=60000)
+            except Exception as exc:
+                raise AIError(f"Không mở được URL Project: {exc}") from exc
+            page.wait_for_timeout(1200)
+            _dismiss_modals(page)
+
+        box = _wait_composer(page, 25)
         if box is None:
-            raise AIError(LOGIN_HINT)
+            if _looks_logged_out(page):
+                raise AIError(LOGIN_HINT)
+            try:
+                title = page.title()
+                body = re.sub(r"\s+", " ", page.inner_text("body"))[:200]
+            except Exception:
+                title, body = "", ""
+            raise AIError(
+                f"Không tìm thấy ô nhập tin nhắn của ChatGPT (tiêu đề: {title}; nội dung: {body}). "
+                "Hãy mở lại ChatGPT trên trình duyệt của phần mềm rồi thử lại."
+            )
 
-        if project_url:
-            _open_project(page, project_url, log)
-            if _composer(page) is None:
-                raise AIError(
-                    "Không mở được Project. Kiểm tra lại URL Project trong "
-                    "Cấu hình → AI nội dung → ChatGPT."
-                )
-
-        box = _composer(page) or box
         if log:
             log("Đang gửi yêu cầu cho ChatGPT…")
         try:
@@ -87,7 +134,7 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 240)
             box.fill(prompt)
         except Exception:
             page.keyboard.type(prompt[:4000])
-        page.wait_for_timeout(300)
+        page.wait_for_timeout(400)
         page.keyboard.press("Enter")
 
         # Chờ câu trả lời ổn định

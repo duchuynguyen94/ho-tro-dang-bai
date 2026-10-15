@@ -21,9 +21,6 @@ def _openai_compatible(base_url: str, model: str, prompt: str, api_key: str) -> 
     headers = {"Content-Type": "application/json", **UA}
     if api_key:
         headers["Authorization"] = f"Bearer {api_key}"
-    if "openrouter" in base_url:
-        headers["HTTP-Referer"] = "https://localhost"
-        headers["X-Title"] = "Ho Tro Dang Bai"
     body = {
         "model": model,
         "messages": [
@@ -120,11 +117,6 @@ def generate_text(provider: str, cfg: dict[str, Any], prompt: str, api_key: str 
         return _openai_compatible(
             "https://api.groq.com/openai/v1/chat/completions",
             model or "llama-3.3-70b-versatile", prompt, api_key,
-        )
-    if provider == "openrouter":
-        return _openai_compatible(
-            "https://openrouter.ai/api/v1/chat/completions",
-            model or "meta-llama/llama-3.3-70b-instruct:free", prompt, api_key,
         )
     if provider == "openai":
         return _openai_compatible(

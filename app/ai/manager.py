@@ -140,7 +140,7 @@ def generate_field(store, source: dict, field: str, current: str = "", log=None)
     for provider in _active_chain(cfg):
         pcfg = cfg.get("providers", {}).get(provider, {})
         api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
-        if provider in ("gemini", "groq", "openrouter", "openai", "deepseek") and not api_key:
+        if provider in ("gemini", "groq", "openai", "deepseek") and not api_key:
             errors.append(f"{provider}: thiếu API key")
             continue
         try:
@@ -170,7 +170,7 @@ def generate_content(store, source: dict, log=None) -> dict:
     for provider in _active_chain(cfg):
         pcfg = cfg.get("providers", {}).get(provider, {})
         api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
-        if provider in ("gemini", "groq", "openrouter", "openai", "deepseek") and not api_key:
+        if provider in ("gemini", "groq", "openai", "deepseek") and not api_key:
             errors.append(f"{provider}: thiếu API key")
             continue
         if log:

@@ -520,12 +520,11 @@ class SitePanel(QWidget):
 PROVIDER_LABELS = {
     "gemini": "Google Gemini",
     "groq": "Groq",
-    "openrouter": "OpenRouter",
     "deepseek": "DeepSeek",
     "chatgpt": "ChatGPT (qua trình duyệt)",
     "openai": "OpenAI API",
 }
-FREE = {"gemini": "FREE", "groq": "FREE", "openrouter": "FREE", "deepseek": "RẺ",
+FREE = {"gemini": "FREE", "groq": "FREE", "deepseek": "RẺ",
         "chatgpt": "FREE*", "openai": "TRẢ PHÍ"}
 
 

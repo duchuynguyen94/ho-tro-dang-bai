@@ -69,7 +69,7 @@ class MainWindow(QMainWindow):
         name = QLabel("WP Multi Poster")
         tl.addWidget(name)
         tl.addStretch(1)
-        self.status_pill = QLabel("● Sẵn sàng")
+        self.status_pill = QLabel("Sẵn sàng")
         self.status_pill.setStyleSheet(
             "color:#4ade80;background:rgba(22,163,74,.15);border:1px solid rgba(74,222,128,.35);"
             "border-radius:10px;padding:3px 10px;font-size:11px;"
@@ -129,8 +129,9 @@ class MainWindow(QMainWindow):
             self.status("Chưa có website — vào tab Cấu hình để thêm.")
 
     def status(self, text: str) -> None:
+        """Chỉ hiển thị việc ĐANG LÀM (không dùng cho báo lỗi)."""
         self.statusBar().showMessage(text)
-        self.status_pill.setText("● " + text[:40])
+        self.status_pill.setText(text[:44] if text else "Sẵn sàng")
 
     def _go(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
@@ -204,7 +205,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.select_task(fresh.id)
         self._refresh_count()
         self._log_err("Tạo nội dung", err)
-        self.status("Lỗi tạo nội dung — xem chi tiết trong panel bên phải.")
+        self.status("Sẵn sàng")
 
     def _on_delete_task(self, task_id: str) -> None:
         self.store.set_tasks([t for t in self.store.tasks if t.id != task_id])
@@ -225,7 +226,7 @@ class MainWindow(QMainWindow):
         worker = ImagesWorker(self.store, site, task, footer_mode)
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda images: self._on_images_ok(task, images))
-        worker.failed.connect(lambda err: self.status("Lỗi tạo ảnh: " + err[:80]))
+        worker.failed.connect(lambda err: (self._log_err("Tạo ảnh", err), self.status("Sẵn sàng")))
         worker.finished.connect(lambda: self._cleanup(worker))
         self._workers.append(worker)
         worker.start()
@@ -267,7 +268,7 @@ class MainWindow(QMainWindow):
         worker = FieldWorker(self.store, site, task, field, current)
         worker.log.connect(self._on_worker_log)
         worker.ok.connect(lambda f, v: self._on_field_ok(task, f, v))
-        worker.failed.connect(lambda err: self.status("Lỗi: " + err[:80]))
+        worker.failed.connect(lambda err: (self._log_err("Tạo nội dung", err), self.status("Sẵn sàng")))
         worker.finished.connect(lambda: self._cleanup(worker))
         self._workers.append(worker)
         worker.start()
@@ -333,7 +334,7 @@ class MainWindow(QMainWindow):
         self.store.save()
         self._log_err("Đăng bài", err)
         self.jobs_page.refresh()
-        QMessageBox.warning(self, "Lỗi đăng bài", err)
+        self.status("Sẵn sàng")
 
     def _maybe_sheets(self, task) -> None:
         cfg = self.store.sheets
@@ -345,7 +346,7 @@ class MainWindow(QMainWindow):
             append_row(cfg, task.source_url, task.result.get("result_url", ""), task.site_name)
             self.status("Đã ghi kết quả vào Google Sheets.")
         except Exception as exc:
-            self.status(f"Không ghi được Google Sheets: {exc}")
+            self._log_err("Google Sheets", str(exc))
 
     # ------------------------------------------------------------------ #
     def _log_err(self, source: str, message: str) -> None:
@@ -398,7 +399,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.set_recording(False)
         self.record_worker = None
         self._log_err("Ghi kịch bản", err)
-        self.status("Lỗi ghi kịch bản — xem tab Log lỗi.")
+        self.status("Sẵn sàng")
 
     def _on_ai_edit(self, task, index: int, prompt: str) -> None:
         if not self.store.get_site(task.site_id):
@@ -414,7 +415,7 @@ class MainWindow(QMainWindow):
 
     def _on_ai_edit_failed(self, err: str) -> None:
         self._log_err("AI sửa ảnh", err)
-        self.status("Lỗi AI sửa ảnh — xem tab Log lỗi.")
+        self.status("Sẵn sàng")
 
     def _on_ai_edit_ok(self, task, index: int, path: str) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)

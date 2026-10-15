@@ -231,11 +231,10 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "ai_content": {
         "active": "gemini",
         "fallback": True,
-        "order": ["gemini", "groq", "openrouter", "deepseek", "chatgpt", "openai"],
+        "order": ["gemini", "groq", "deepseek", "chatgpt", "openai"],
         "providers": {
             "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash"},
             "groq": {"api_key_enc": "", "model": "llama-3.3-70b-versatile"},
-            "openrouter": {"api_key_enc": "", "model": "meta-llama/llama-3.3-70b-instruct:free"},
             "deepseek": {"api_key_enc": "", "model": "deepseek-chat"},
             "chatgpt": {"session_file": "", "project": "", "project_url": ""},
             "openai": {"api_key_enc": "", "model": "gpt-4o-mini"},
