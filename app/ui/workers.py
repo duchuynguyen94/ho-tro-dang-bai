@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import random
 import traceback
+from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
 
@@ -15,6 +16,52 @@ from ..images import compose, save_composed
 
 class _Cancelled(Exception):
     """Người dùng bấm Dừng."""
+
+
+def _image_name(rule: str, ctx: dict, index: int) -> str:
+    import re as _re
+
+    from ..wp import render_value
+
+    name = ""
+    if rule:
+        name = _re.sub(r"[^\w\-\. ]+", "", render_value(rule, {**ctx, "index": index + 1})).strip()
+        name = name.replace(" ", "-")[:80]
+    return (name or f"anh-{index + 1}") + ".png"
+
+
+def export_post_images(store, task) -> list[str]:
+    """Lưu 3 ảnh vào thư mục tên = ID công việc (để upload lên website)."""
+    import shutil
+
+    from ..config import posts_dir
+
+    r = task.result or {}
+    images = r.get("images") or []
+    if not images:
+        return []
+    base = posts_dir() / task.id
+    base.mkdir(parents=True, exist_ok=True)
+    rules = list(store.image_rules or [])
+    ctx = {
+        "title": r.get("title", ""),
+        "focus_keyword": r.get("focus_keyword", ""),
+        "keyword": r.get("focus_keyword", ""),
+        "site": task.site_name,
+        "description": r.get("description", ""),
+    }
+    out: list[str] = []
+    for i, im in enumerate(images[:3]):
+        src = Path(im.get("path", ""))
+        if not src.exists():
+            continue
+        dest = base / _image_name(rules[i] if i < len(rules) else "", ctx, i)
+        try:
+            shutil.copy2(src, dest)
+            out.append(str(dest))
+        except OSError:
+            continue
+    return out
 
 
 def _remove_bg_opts(store) -> tuple[bool, int]:
@@ -102,8 +149,8 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         product_positions = o.get("product_pos") or None
         if product_positions:
             product_positions = [tuple(p) for p in product_positions]
-        wm_opacity = int(o.get("watermark_opacity", 20) or 0)
-        wm_size = float(o.get("watermark_size", 1.0) or 1.0)
+        wm_opacity = int(o.get("watermark_opacity", 7) or 0)
+        wm_size = float(o.get("watermark_size", 1.5) or 1.5)
         product_scales = o.get("product_scales") or None
         rb = remove_bg if o.get("remove_bg") is None else bool(o["remove_bg"])
         mode_i = o.get("footer_mode") or footer_mode or mode
@@ -360,7 +407,8 @@ class PostWorker(QThread):
                     "focus_keyword": self.result.get("focus_keyword", ""),
                     "description": self.result.get("description", ""),
                     "tags": self.result.get("tags", ""),
-                    "__upload_files": [im["path"] for im in self.result.get("images", [])],
+                    "__upload_files": (self.result.get("post_images")
+                                       or [im["path"] for im in self.result.get("images", [])]),
                 }
                 play_script(page, site.script, ctx, log=self.log.emit)
             else:

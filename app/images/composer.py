@@ -91,8 +91,8 @@ def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Ima
     return img
 
 
-def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 20,
-                             scale: float = 1.0) -> None:
+def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 7,
+                             scale: float = 1.5) -> None:
     if not text:
         return
     alpha = max(0, min(255, int(opacity * 255 / 100)))     # 0..100 -> 0..255
@@ -140,8 +140,8 @@ def compose(
     footer_bar: str = "",
     frame: str = "",
     watermark: str = "",
-    watermark_opacity: int = 20,
-    watermark_size: float = 1.0,
+    watermark_opacity: int = 7,
+    watermark_size: float = 1.5,
     transparent_bg: bool = False,
     remove_bg: bool = False,
     remove_bg_thresh: int = 42,

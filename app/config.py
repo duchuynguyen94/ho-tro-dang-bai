@@ -71,6 +71,11 @@ def output_dir() -> Path:
     return _sub("output")
 
 
+def posts_dir() -> Path:
+    """Mỗi công việc 1 thư mục riêng (tên = ID công việc) để upload lên web."""
+    return _sub("posts")
+
+
 def sessions_dir() -> Path:
     """Session đăng nhập (cookie) của từng website."""
     return _sub("sessions")

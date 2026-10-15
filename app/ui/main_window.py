@@ -34,6 +34,7 @@ from .pages.post_page import PostPage
 from .style import app_font
 from .workers import (
     ContentWorker,
+    export_post_images,
     ImageRefetchWorker,
     _opts_list_of,
     FieldWorker,
@@ -337,6 +338,20 @@ class MainWindow(QMainWindow):
             if ans == QMessageBox.Yes:
                 self._on_create_script(task)
                 return
+
+        # lưu 3 ảnh vào thư mục tên = ID công việc (để upload lên website)
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        try:
+            paths = export_post_images(self.store, fresh)
+            if paths:
+                fresh.result = dict(fresh.result or {})
+                fresh.result["post_images"] = paths
+                self.store.upsert_task(fresh)
+                self.store.save()
+                task = fresh
+                self.status(f"Đã lưu {len(paths)} ảnh vào thư mục {fresh.id[:8]}…")
+        except Exception as exc:
+            self._log_err("Lưu ảnh đăng bài", str(exc))
 
         task.status = STATUS_POSTING
         self.store.upsert_task(task)
