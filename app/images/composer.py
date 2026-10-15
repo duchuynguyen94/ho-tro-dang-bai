@@ -45,12 +45,14 @@ def _load_rgba(path: str) -> Image.Image | None:
         return None
 
 
-def _fit(img: Image.Image, max_w: int, max_h: int) -> Image.Image:
-    """Thu ảnh theo tỉ lệ để lọt trong khung."""
+def _fit(img: Image.Image, max_w: int, max_h: int, upscale: bool = True) -> Image.Image:
+    """Thu/phóng ảnh theo tỉ lệ để lọt trong khung (mặc định cho phép phóng to)."""
     w, h = img.size
     if w <= 0 or h <= 0:
         return img
-    ratio = min(max_w / w, max_h / h, 1.0)
+    ratio = min(max_w / w, max_h / h)
+    if not upscale:
+        ratio = min(ratio, 1.0)
     return img.resize((max(1, int(w * ratio)), max(1, int(h * ratio))), Image.LANCZOS)
 
 

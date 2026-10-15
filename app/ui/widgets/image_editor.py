@@ -293,10 +293,10 @@ class ImageEditorPanel(QFrame):
     # ---------------- logo ---------------- #
     @staticmethod
     def _fit_size(iw: int, ih: int, max_w: int, max_h: int) -> tuple[int, int]:
-        """Giống composer._fit: vừa trong max_w × max_h, KHÔNG phóng to."""
+        """Giống composer._fit: vừa trong max_w × max_h (cho phép phóng to)."""
         if iw <= 0 or ih <= 0:
             return 0, 0
-        ratio = min(max_w / iw, max_h / ih, 1.0)
+        ratio = min(max_w / iw, max_h / ih)
         return max(1, int(iw * ratio)), max(1, int(ih * ratio))
 
     def _composed_size(self, path: str, base_w: float, base_h: float,
