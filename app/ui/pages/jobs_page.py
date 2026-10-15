@@ -69,19 +69,14 @@ class TaskRow(QFrame):
         v = QVBoxLayout()
         v.setSpacing(3)
 
-        title = QLabel((task.result.get("title") or task.source_url or "(chưa có)")[:70])
-        title.setObjectName("taskTitle")
-        title.setWordWrap(True)
-        v.addWidget(title)
+        url = QLabel(task.source_url or "(chưa có link)")
+        url.setObjectName("taskTitle")
+        url.setWordWrap(True)
+        v.addWidget(url)
 
         meta = QLabel(f"{STATUS_LABELS.get(task.status, task.status)}  ·  {task.site_name}")
         meta.setObjectName("taskMeta")
         v.addWidget(meta)
-
-        url = QLabel(task.source_url)
-        url.setObjectName("taskUrl")
-        url.setWordWrap(True)
-        v.addWidget(url)
 
         if task.status == STATUS_GENERATING:
             bar = QProgressBar()
