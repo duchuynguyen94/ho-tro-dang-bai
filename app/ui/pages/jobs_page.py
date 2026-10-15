@@ -410,10 +410,17 @@ class JobsPage(QWidget):
 
         if task.status == STATUS_ERROR:
             self.footer.hide()
+            msg = task.message or "Lỗi không xác định."
+            if "giới hạn" in msg.lower():
+                hint = ("Chờ tới khi lượt được làm mới, hoặc đổi provider khác "
+                        "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung.")
+                title = "AI đang bị giới hạn."
+            else:
+                hint = "Kiểm tra API key / model trong Cấu hình → AI nội dung."
+                title = "Không tạo được nội dung."
             self.error_label.setText(
-                "<b>Không tạo được nội dung.</b><br><br>"
-                + (task.message or "Lỗi không xác định.")
-                + "<br><br><span style='color:#64748b'>Kiểm tra API key / model trong Cấu hình → AI nội dung.</span>"
+                f"<b>{title}</b><br><br>{msg}"
+                f"<br><br><span style='color:#64748b'>{hint}</span>"
             )
             self.stack.setCurrentWidget(self.page_error)
             return

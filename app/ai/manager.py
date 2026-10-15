@@ -207,4 +207,7 @@ def generate_content(store, source: dict, log=None) -> dict:
             if log:
                 log(f"{provider} lỗi → thử provider khác…")
 
+    limit = next((e for e in errors if "GIỚI HẠN" in e.upper()), "")
+    if limit:
+        raise providers.AIError(limit.split(":", 1)[-1].strip())
     raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))

@@ -94,8 +94,19 @@ LIMIT_MARKERS = (
     "reached the limit",
     "usage limit",
     "chat paused",
-    "hết lượt",
     "limit will reset",
+    "you've reached",
+    "limit for chats",
+    "resets at",
+    "hết lượt",
+    "giới hạn",
+    "tạm dừng",
+)
+
+LIMIT_MSG = (
+    "ChatGPT BỊ GIỚI HẠN (đã hết lượt dùng miễn phí). "
+    "Hãy chờ tới khi lượt được làm mới, hoặc đổi sang provider khác "
+    "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung."
 )
 
 
@@ -118,12 +129,14 @@ def _reply_text(page) -> str:
     return ""
 
 
-def _limit_reached(page) -> str:
+def _limit_reached(page, extra_text: str = "") -> str:
     """Kiểm tra ChatGPT có báo hết lượt miễn phí không."""
+    body = ""
     try:
         body = page.inner_text("body").lower()
     except Exception:
-        return ""
+        body = ""
+    body += " " + (extra_text or "").lower()
     for marker in LIMIT_MARKERS:
         if marker in body:
             i = body.find(marker)
@@ -226,10 +239,7 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
                     log("Đã nhận kết quả từ ChatGPT.")
                 break
             if _limit_reached(page):
-                raise AIError(
-                    "ChatGPT đã hết lượt dùng miễn phí. Chờ đến khi lượt được làm mới, "
-                    "hoặc chuyển sang provider khác (Gemini/DeepSeek…) trong Cấu hình → AI nội dung."
-                )
+                raise AIError(LIMIT_MSG)
             if text and text == last and len(text) > 20:
                 stable += 1
                 if stable >= 2:
@@ -246,6 +256,8 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
                 log(f"ChatGPT đang viết… ({len(text)} ký tự)")
 
         if not result_text:
+            if _limit_reached(page, last):
+                raise AIError(LIMIT_MSG)
             if require_json:
                 raise AIError(
                     "ChatGPT không trả về JSON hợp lệ (có thể chỉ trả lại mẫu). Thử lại hoặc dùng provider khác."
