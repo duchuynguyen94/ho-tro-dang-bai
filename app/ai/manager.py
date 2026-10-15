@@ -90,8 +90,8 @@ Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <
 và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
 GIỮ ĐÚNG ĐỊNH DẠNG CỦA RULE CONTENT, kể cả các ký hiệu/icon đầu dòng (●, ▪, ►, ✅…).
 
-2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TRÍCH XUẤT TỪ CHÍNH NỘI DUNG TRÊN
-(điền nội dung THẬT, không trả lại mẫu):
+2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TẠO THEO **RULE SEO Ở TRÊN**
+và TRÍCH XUẤT TỪ CHÍNH NỘI DUNG VỪA VIẾT (điền nội dung THẬT, không trả lại mẫu):
 {SEO_JSON_SPEC}
 
 Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
