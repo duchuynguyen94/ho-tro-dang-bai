@@ -1,30 +1,39 @@
-"""Điều phối AI viết nội dung: ghép quy định (file format) + link nguồn -> JSON."""
+"""Điều phối AI viết nội dung: 2 bước Content (rule_content) → SEO (rule_seo)."""
 from __future__ import annotations
 
+import html
 import json
+import re
 from pathlib import Path
 
 from ..storage import crypto
 from . import providers
 
-def _is_placeholder(value) -> bool:
-    """Giá trị chỉ gồm dấu chấm/ellipsis => AI trả lại mẫu, không phải nội dung thật."""
-    t = str(value or "").strip()
-    return (not t) or all(ch in ".-_…~ " for ch in t)
+API_PROVIDERS = ("gemini", "groq", "openai", "deepseek")
+
+REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags")
+
+# Kết quả bước 1 (theo Rule Content)
+CONTENT_OUTPUT_SPEC = (
+    "• Tiêu đề bài viết\n"
+    "• Nội dung bài viết\n"
+    "• Danh sách Product Models\n"
+    "• Bảng thông số kỹ thuật\n"
+    "• Thông tin liên hệ"
+)
+
+# Kết quả bước 2 (theo Rule SEO)
+SEO_JSON_SPEC = """{
+  "title": "tiêu đề SEO",
+  "focus_keyword": "từ khóa chính",
+  "description": "mô tả ngắn",
+  "tags": "thẻ 1, thẻ 2, thẻ 3"
+}"""
 
 
-def _fmt_errors(errors: list[str]) -> str:
-    if not errors:
-        return "Không rõ nguyên nhân."
-    head = " | ".join(errors[:3])
-    if len(errors) > 3:
-        head += f" (+{len(errors) - 3} lỗi khác)"
-    return head
-
-
-REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags", "content_html")
-
-
+# --------------------------------------------------------------------------- #
+# Đọc file rule
+# --------------------------------------------------------------------------- #
 def read_rule(path: str, limit: int = 12000) -> str:
     """Đọc file rule: .txt/.html/.md/.doc/.docx đọc thẳng, .pdf trích text."""
     if not path:
@@ -47,51 +56,88 @@ def read_rule(path: str, limit: int = 12000) -> str:
         return ""
 
 
-def build_prompt(rules, source: dict) -> str:
-    rule_content = read_rule(getattr(rules, "content", ""))
-    rule_seo = read_rule(getattr(rules, "seo", ""))
-    rule_extractor = read_rule(getattr(rules, "extractor", ""))
-
+# --------------------------------------------------------------------------- #
+# Prompt bước 1 — CONTENT
+# --------------------------------------------------------------------------- #
+def build_content_prompt(rules, source: dict) -> str:
+    rule = read_rule(getattr(rules, "content", ""))
     images_hint = "\n".join(f"- {u}" for u in source.get("images", [])[:6])
+    return f"""Bạn là chuyên gia viết nội dung kỹ thuật. Hãy tạo BÀI VIẾT cho website WordPress
+dựa trên BÀI VIẾT NGUỒN và TUYỆT ĐỐI tuân thủ QUY ĐỊNH (RULE CONTENT) dưới đây.
 
-    return f"""Bạn là chuyên gia content SEO tiếng Việt. Hãy tạo bài viết cho website WordPress dựa trên BÀI VIẾT NGUỒN và TUYỆT ĐỐI tuân thủ QUY ĐỊNH dưới đây.
-
-=== QUY ĐỊNH NỘI DUNG (RULE CONTENT) ===
-{rule_content or "(Không có quy định riêng — viết nội dung rõ ràng, có thẻ <h2>, <p>, <ul>.)"}
-
-=== QUY ĐỊNH SEO / ĐẦU RA (RULE SEO) ===
-{rule_seo or "(Không có quy định riêng — tiêu đề hấp dẫn có từ khóa, mô tả SEO dưới 160 ký tự, 4-8 thẻ.)"}
-
-=== QUY ĐỊNH TRÍCH XUẤT MODEL (RULE MODEL EXTRACTOR) ===
-{rule_extractor or "(Không có quy định riêng.)"}
+=== RULE CONTENT ===
+{rule or "(Không có quy định riêng.)"}
 
 === BÀI VIẾT NGUỒN ===
 Tiêu đề gốc: {source.get('title', '')}
 URL: {source.get('url', '')}
 Nội dung:
-{source.get('text', '')[:5000]}
+{source.get('text', '')[:6000]}
 
 Ảnh trong bài nguồn (tham khảo):
 {images_hint}
 
-=== YÊU CẦU ĐẦU RA ===
-ĐIỀN NỘI DUNG THẬT vào JSON (KHÔNG trả lại nguyên mẫu).
-CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng định dạng:
-{{
-  "title": "tiêu đề theo quy định",
-  "focus_keyword": "từ khóa chính",
-  "description": "mô tả SEO",
-  "tags": "thẻ 1, thẻ 2, thẻ 3",
-  "content_html": "<h2>...</h2><p>...</p>"
-}}
+=== YÊU CẦU ĐẦU RA (đủ các mục, theo đúng thứ tự) ===
+{CONTENT_OUTPUT_SPEC}
+
+Chỉ trả về nội dung bài viết (được phép dùng Markdown), không giải thích thêm.
 """
 
 
+def build_content_short_prompt(source: dict) -> str:
+    """Prompt ngắn cho ChatGPT (rule nằm trong Project đã đính kèm)."""
+    return f"""Đọc bài viết tại link dưới đây và viết lại thành 1 bài viết mới,
+TUYỆT ĐỐI tuân thủ tài liệu đã đính kèm (sources) trong Project này — cụ thể là file **rule_content.pdf**.
+
+Link bài viết nguồn: {source.get('url', '')}
+
+Trả về đủ các mục sau, đúng thứ tự:
+{CONTENT_OUTPUT_SPEC}
+
+Chỉ trả về nội dung, không giải thích thêm.
+"""
+
+
+# --------------------------------------------------------------------------- #
+# Prompt bước 2 — SEO
+# --------------------------------------------------------------------------- #
+def build_seo_prompt(rules, raw_content: str) -> str:
+    rule = read_rule(getattr(rules, "seo", ""))
+    return f"""Dưới đây là BÀI VIẾT đã hoàn thành. Hãy tạo thông tin SEO cho bài viết này,
+TUYỆT ĐỐI tuân thủ QUY ĐỊNH (RULE SEO) dưới đây.
+
+=== RULE SEO ===
+{rule or "(Không có quy định riêng.)"}
+
+=== BÀI VIẾT ===
+{raw_content[:12000]}
+
+=== YÊU CẦU ĐẦU RA ===
+ĐIỀN NỘI DUNG THẬT vào JSON (KHÔNG trả lại nguyên mẫu).
+CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng định dạng:
+{SEO_JSON_SPEC}
+"""
+
+
+def build_seo_short_prompt(raw_content: str) -> str:
+    return f"""Dựa vào BÀI VIẾT dưới đây, hãy tạo thông tin SEO theo đúng tài liệu đã đính kèm
+(sources) trong Project này — cụ thể là file **rule_seo.pdf**.
+
+=== BÀI VIẾT ===
+{raw_content[:12000]}
+
+CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích:
+{SEO_JSON_SPEC}
+"""
+
+
+# --------------------------------------------------------------------------- #
+# Gọi provider (có fallback)
+# --------------------------------------------------------------------------- #
 def _active_chain(cfg: dict) -> list[str]:
-    """Thứ tự thử provider: cái đang chọn trước, rồi theo thứ tự người dùng sắp (fallback)."""
-    providers = [p for p in (cfg.get("providers") or {})]
-    order = [p for p in (cfg.get("order") or []) if p in providers]
-    order += [p for p in providers if p not in order]
+    providers_order = [p for p in (cfg.get("providers") or {})]
+    order = [p for p in (cfg.get("order") or []) if p in providers_order]
+    order += [p for p in providers_order if p not in order]
     active = cfg.get("active") or (order[0] if order else "")
     if active in order:
         order.remove(active)
@@ -101,94 +147,60 @@ def _active_chain(cfg: dict) -> list[str]:
     return chain
 
 
-FIELD_RULES = {
-    "title": ("Tiêu đề", "seo"),
-    "focus_keyword": ("Focus keyword (từ khóa chính)", "seo"),
-    "description": ("Description (mô tả SEO)", "seo"),
-    "tags": ("Search tags (thẻ, cách nhau bởi dấu phẩy)", "seo"),
-    "content_html": ("Nội dung dạng HTML", "content"),
-}
+def _fmt_errors(errors: list[str]) -> str:
+    if not errors:
+        return "Không rõ nguyên nhân."
+    head = " | ".join(errors[:3])
+    if len(errors) > 3:
+        head += f" (+{len(errors) - 3} lỗi khác)"
+    return head
 
 
-CHATGPT_SHORT_PROMPT = """Đọc bài viết tại link dưới đây và viết lại thành 1 bài viết mới,
-TUYỆT ĐỐI tuân thủ tài liệu / quy định đã được đính kèm (sources) trong Project này nhé.
-
-Link bài viết nguồn: {url}
-
-ĐIỀN NỘI DUNG THẬT vào JSON dưới đây (KHÔNG trả lại nguyên mẫu).
-CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng định dạng:
-{{"title": "...", "focus_keyword": "...", "description": "...", "tags": "thẻ 1, thẻ 2", "content_html": "<h2>...</h2><p>...</p>"}}
-"""
+def _is_placeholder(value) -> bool:
+    t = str(value or "").strip()
+    return (not t) or all(ch in ".-_…~ " for ch in t)
 
 
-def build_short_prompt(source: dict) -> str:
-    """Prompt ngắn cho ChatGPT (nội dung/quy định nằm trong Project đã đính kèm)."""
-    return CHATGPT_SHORT_PROMPT.format(url=source.get("url", ""))
-
-
-def build_field_prompt(rules, source: dict, field: str, current: str = "") -> str:
-    label, rule_key = FIELD_RULES.get(field, ("Nội dung", None))
-    rules_text = read_rule(getattr(rules, rule_key, "") if rule_key else "")
-    return f"""Bạn là chuyên gia content SEO tiếng Việt. Hãy tạo lại DUY NHẤT trường "{label}" cho bài viết.
-
-=== QUY ĐỊNH ===
-{rules_text or "(Không có quy định riêng.)"}
-
-=== BÀI VIẾT NGUỒN ===
-Tiêu đề gốc: {source.get('title', '')}
-URL: {source.get('url', '')}
-Nội dung:
-{source.get('text', '')[:4000]}
-
-=== BẢN HIỆN TẠI (cần viết lại KHÁC đi, hay hơn) ===
-{current}
-
-CHỈ trả về đúng nội dung của trường "{label}", không thêm nhãn, không giải thích, không bọc JSON.
-"""
-
-
-def generate_field(store, source: dict, field: str, current: str = "", log=None) -> str:
-    prompt = build_field_prompt(store.formats, source, field, current)
+def _call_ai(store, prompt: str, short_prompt: str, log=None) -> str:
+    """Gọi provider đang chọn (ChatGPT dùng prompt ngắn + Project)."""
     cfg = store.ai_content
     errors: list[str] = []
     for provider in _active_chain(cfg):
-        pcfg = cfg.get("providers", {}).get(provider, {})
+        pcfg = (cfg.get("providers") or {}).get(provider, {})
         api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
-        if provider in ("gemini", "groq", "openai", "deepseek") and not api_key:
-            errors.append(f"{provider}: thiếu API key")
-            continue
-        try:
-            if provider == "chatgpt":
-                from .chatgpt_browser import generate_with_chatgpt
-
-                label = FIELD_RULES.get(field, ("Nội dung", None))[0]
-                short = (
-                    f"Đọc bài viết tại link dưới đây và viết lại DUY NHẤT trường “{label}” "
-                    "theo tài liệu / quy định đã đính kèm trong Project này.\n"
-                    f"Link bài viết nguồn: {source.get('url', '')}\n"
-                    f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
-                )
-                return generate_with_chatgpt(pcfg, short, log).strip()
-            return providers.generate_text(provider, pcfg, prompt, api_key).strip()
-        except Exception as exc:
-            errors.append(f"{provider}: {exc}")
-    raise providers.AIError("Không tạo được trường này. " + _fmt_errors(errors))
-
-
-def generate_content(store, source: dict, log=None) -> dict:
-    prompt = build_prompt(store.formats, source)
-    short_prompt = build_short_prompt(source)
-    cfg = store.ai_content
-    errors: list[str] = []
-
-    for provider in _active_chain(cfg):
-        pcfg = cfg.get("providers", {}).get(provider, {})
-        api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
-        if provider in ("gemini", "groq", "openai", "deepseek") and not api_key:
+        if provider in API_PROVIDERS and not api_key:
             errors.append(f"{provider}: thiếu API key")
             continue
         if log:
             log(f"Đang gọi AI: {provider}…")
+        try:
+            if provider == "chatgpt":
+                from .chatgpt_browser import generate_with_chatgpt
+
+                return generate_with_chatgpt(pcfg, short_prompt, log)
+            return providers.generate_text(provider, pcfg, prompt, api_key)
+        except Exception as exc:
+            errors.append(f"{provider}: {exc}")
+            if log:
+                log(f"{provider} lỗi → thử provider khác…")
+    limit = next((e for e in errors if "GIỚI HẠN" in e.upper()), "")
+    if limit:
+        raise providers.AIError(limit.split(":", 1)[-1].strip())
+    raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))
+
+
+def _call_ai_json(store, prompt: str, short_prompt: str, log=None) -> dict:
+    """Như _call_ai nhưng bắt buộc trả JSON (cho bước SEO)."""
+    cfg = store.ai_content
+    errors: list[str] = []
+    for provider in _active_chain(cfg):
+        pcfg = (cfg.get("providers") or {}).get(provider, {})
+        api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
+        if provider in API_PROVIDERS and not api_key:
+            errors.append(f"{provider}: thiếu API key")
+            continue
+        if log:
+            log(f"Đang gọi AI (SEO): {provider}…")
         try:
             if provider == "chatgpt":
                 from .chatgpt_browser import generate_with_chatgpt
@@ -200,23 +212,169 @@ def generate_content(store, source: dict, log=None) -> dict:
             missing = [k for k in REQUIRED_KEYS if not str(data.get(k, "")).strip()]
             if missing:
                 raise providers.AIError(f"thiếu trường {missing}")
-            # Kiểm tra mẫu rỗng chỉ áp dụng cho luồng ChatGPT
-            if provider == "chatgpt" and (
-                _is_placeholder(data.get("title")) or _is_placeholder(data.get("content_html"))
-            ):
-                raise providers.AIError(
-                    "AI trả về mẫu rỗng (title/content chỉ có dấu …). "
-                    "Thử lại hoặc đổi provider."
-                )
-            if log:
-                log(f"Xong bằng {provider}.")
+            if _is_placeholder(data.get("title")):
+                raise providers.AIError("AI trả về mẫu rỗng cho tiêu đề.")
             return data
-        except Exception as exc:  # thử provider kế tiếp
+        except Exception as exc:
             errors.append(f"{provider}: {exc}")
             if log:
                 log(f"{provider} lỗi → thử provider khác…")
-
     limit = next((e for e in errors if "GIỚI HẠN" in e.upper()), "")
     if limit:
         raise providers.AIError(limit.split(":", 1)[-1].strip())
-    raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))
+    raise providers.AIError("Không tạo được thông tin SEO. " + _fmt_errors(errors))
+
+
+# --------------------------------------------------------------------------- #
+# Chuyển text (markdown đơn giản) -> HTML
+# --------------------------------------------------------------------------- #
+def text_to_html(text: str) -> str:
+    if not text:
+        return ""
+    lines = text.splitlines()
+    out: list[str] = []
+    in_ul = False
+    in_table = False
+
+    def close_lists() -> None:
+        nonlocal in_ul, in_table
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+        if in_table:
+            out.append("</table>")
+            in_table = False
+
+    for raw in lines:
+        line = raw.rstrip()
+        s = line.strip()
+        if not s:
+            close_lists()
+            continue
+        # bảng markdown
+        if s.startswith("|") and s.endswith("|"):
+            cells = [c.strip() for c in s.strip("|").split("|")]
+            if all(set(c) <= set("-: ") for c in cells):
+                continue  # dòng phân cách
+            if not in_table:
+                close_lists()
+                out.append("<table>")
+                in_table = True
+            out.append("<tr>" + "".join(f"<td>{html.escape(c)}</td>" for c in cells) + "</tr>")
+            continue
+        if in_table:
+            out.append("</table>")
+            in_table = False
+        # tiêu đề
+        m = re.match(r"^(#{1,6})\s+(.*)$", s)
+        if m:
+            close_lists()
+            lvl = min(6, len(m.group(1)) + 1)
+            out.append(f"<h{lvl}>{html.escape(m.group(2).strip())}</h{lvl}>")
+            continue
+        # gạch đầu dòng
+        if re.match(r"^[•\-*+]\s+", s):
+            if not in_ul:
+                out.append("<ul>")
+                in_ul = True
+            out.append("<li>" + html.escape(re.sub(r"^[•\-*+]\s+", "", s)) + "</li>")
+            continue
+        if in_ul:
+            out.append("</ul>")
+            in_ul = False
+        # đậm/nghiêng đơn giản
+        safe = html.escape(s)
+        safe = re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", safe)
+        out.append(f"<p>{safe}</p>")
+
+    close_lists()
+    return "\n".join(out)
+
+
+# --------------------------------------------------------------------------- #
+# Luồng chính: 2 bước
+# --------------------------------------------------------------------------- #
+def generate_content(store, source: dict, log=None) -> dict:
+    rules = store.formats
+    if log:
+        log("Bước 1/2 — viết nội dung theo Rule Content…")
+    raw_content = _call_ai(
+        store,
+        build_content_prompt(rules, source),
+        build_content_short_prompt(source),
+        log,
+    )
+    if not raw_content.strip():
+        raise providers.AIError("AI không trả về nội dung bài viết.")
+
+    if log:
+        log("Bước 2/2 — tạo thông tin SEO theo Rule SEO…")
+    seo = _call_ai_json(
+        store,
+        build_seo_prompt(rules, raw_content),
+        build_seo_short_prompt(raw_content),
+        log,
+    )
+    seo["content_html"] = text_to_html(raw_content)
+    seo["raw_content"] = raw_content
+    if log:
+        log("Đã có kết quả cuối (SEO).")
+    return seo
+
+
+# --------------------------------------------------------------------------- #
+# Random 1 trường
+# --------------------------------------------------------------------------- #
+FIELD_RULES = {
+    "title": ("Tiêu đề SEO", "seo"),
+    "focus_keyword": ("Từ khóa chính", "seo"),
+    "description": ("Mô tả ngắn", "seo"),
+    "tags": ("Thẻ sản phẩm (tags)", "seo"),
+    "content_html": ("Nội dung bài viết", "content"),
+}
+
+
+def build_field_prompt(rules, source: dict, field: str, current: str = "") -> str:
+    label, rule_key = FIELD_RULES.get(field, ("Nội dung", "content"))
+    rule = read_rule(getattr(rules, rule_key, ""))
+    return f"""Bạn là chuyên gia SEO tiếng Việt. Hãy tạo lại DUY NHẤT trường "{label}".
+
+=== QUY ĐỊNH ({rule_key.upper()}) ===
+{rule or "(Không có quy định riêng.)"}
+
+=== BÀI VIẾT NGUỒN ===
+Tiêu đề gốc: {source.get('title', '')}
+URL: {source.get('url', '')}
+Nội dung:
+{source.get('text', '')[:5000]}
+
+=== BẢN HIỆN TẠI (cần viết lại KHÁC đi, hay hơn) ===
+{current}
+
+CHỈ trả về đúng nội dung của trường "{label}", không thêm nhãn, không giải thích.
+"""
+
+
+def generate_field(store, source: dict, field: str, current: str = "", log=None) -> str:
+    rules = store.formats
+    label, rule_key = FIELD_RULES.get(field, ("Nội dung", "content"))
+    full = build_field_prompt(rules, source, field, current)
+    if rule_key == "seo":
+        short = (
+            f"Dựa vào bài viết tại link dưới đây, hãy tạo DUY NHẤT trường “{label}” theo đúng "
+            "tài liệu đã đính kèm (sources) trong Project này — cụ thể là file **rule_seo.pdf**.\n"
+            f"Link bài viết nguồn: {source.get('url', '')}\n"
+            f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
+        )
+    else:
+        short = (
+            f"Dựa vào bài viết tại link dưới đây, hãy viết lại DUY NHẤT trường “{label}” theo đúng "
+            "tài liệu đã đính kèm (sources) trong Project này — cụ thể là file **rule_content.pdf**.\n"
+            f"Link bài viết nguồn: {source.get('url', '')}\n"
+            f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
+        )
+    return _call_ai(store, full, short, log).strip()
+
+
+def parse_json_response(text: str) -> dict:  # tương thích ngược
+    return providers.parse_json_response(text)
