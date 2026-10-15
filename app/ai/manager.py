@@ -98,7 +98,7 @@ FIELD_RULES = {
 
 
 CHATGPT_SHORT_PROMPT = """Đọc bài viết tại link dưới đây và viết lại thành 1 bài viết mới,
-TUYỆT ĐỐI tuân thủ tài liệu / quy định đã được đính kèm trong Project này.
+TUYỆT ĐỐI tuân thủ tài liệu / quy định đã được đính kèm (sources) trong Project này nhé.
 
 Link bài viết nguồn: {url}
 
