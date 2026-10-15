@@ -1,4 +1,4 @@
-# Ghi chú — 8 mục cần fix (CHỜ LỆNH)
+# Ghi chú — 9 mục cần fix (CHỜ LỆNH)
 
 > Trạng thái: **CHƯA LÀM** — chỉ thực hiện khi người dùng nói **"fix"**.
 > Ngày ghi: 2026-10-16
@@ -50,9 +50,24 @@
 - Hiện `Tắt AI chỉnh ảnh` (`off`) đang **lẫn trong danh sách provider** → phải **tách ra, đặt phía trên** dưới dạng **công tắc chung**.
 - **Bổ sung:** khi **"Tắt AI chỉnh ảnh"** đang bật → trong **trình sửa ảnh** (panel Kết quả / Công việc) phải **ẩn nút "AI sửa"**.
 
+## Mục 9 — Nút "+ Thêm hình" trong mục Ảnh (panel Kết quả / Công việc)
+- Bối cảnh: nhập **URL nguồn** → tạo nội dung AI → panel kết quả có **số hình theo lựa chọn trước đó** (ở **Đăng bài** có ô chọn *3 ảnh / 1 ảnh / 2 ảnh / 4 ảnh / 5 ảnh*, mặc định 3 → `task.image_count`).
+- Yêu cầu: trong khu **"Ảnh"** (dãy thumbnail) thêm **nút "+ Thêm hình"**.
+  - Ví dụ đang có **Ảnh 1, 2, 3** → bấm **+ Thêm hình** → thành **Ảnh 1, 2, 3, 4**.
+  - Bấm vào **Ảnh 4** → **chỉnh sửa riêng của Ảnh 4** (kéo/thả, resize, watermark, chọn thanh thông tin 1/2, tải ảnh, AI sửa, lấy lại ảnh…) — độc lập với 3 ảnh kia.
+- Chi tiết kỹ thuật:
+  - Thêm 1 entry vào `task.result["images"]` **và** 1 entry tương ứng vào `task.result["image_opts_list"]` (mỗi ảnh có bộ tuỳ chọn riêng).
+  - Ảnh mới lấy nguồn: (đề xuất) **sao chép từ ảnh cuối** hoặc **để trống chờ tải lên** — *chờ người dùng chốt*.
+  - Các chỗ đang **cứng `[:3]`** phải đổi thành **theo số ảnh thực tế** để ảnh thêm vào vẫn được xuất & có sản phẩm:
+    - `app/ui/workers.py` → `export_post_images()` (`images[:3]`)
+    - `app/ui/workers.py` → `product_urls = page.get("images", [])[:3]` và `products=prods[:3]`
+    - `app/images/composer.py` → `prods = prods[:3]`
+    - `app/ui/widgets/image_editor.py` → `keep = [...][:3]`
+  - Nút **"+ Thêm hình"** đặt cùng hàng/cạnh dãy thumbnail trong mục **"Ảnh"** của panel kết quả (`jobs_page.py`, `images_row`).
+
 ---
 
-## Ghi chú phụ (ngoài 8 mục — bàn riêng, chưa chốt)
+## Ghi chú phụ (ngoài 9 mục — bàn riêng, chưa chốt)
 - **AI chỉnh ảnh free:** đã tư vấn. Nổi bật:
   - `rembg` (offline, free) → thay thuật toán xoá nền flood-fill hiện tại, chất lượng tốt hơn hẳn.
   - `IOPaint / LaMa` (offline, free) → xoá vật thể / thành phần.
