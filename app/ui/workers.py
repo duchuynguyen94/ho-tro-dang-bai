@@ -8,7 +8,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import autolink_html
+from ..ai.manager import autolink_html, extract_product_name
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -117,9 +117,12 @@ class ContentWorker(QThread):
             self.progress.emit(45)
 
             data = generate_content(self.store, page, log=self.log.emit)
-            # tự chèn link website + link mã sản phẩm vào nội dung
+            # chèn 1 link external vào tên sản phẩm + link cho tên miền www.
+            pname = extract_product_name(
+                data.get("raw_content", ""), page.get("title", "") or data.get("title", "")
+            )
             data["content_html"] = autolink_html(
-                data.get("content_html", ""), site.url or "", site.name or ""
+                data.get("content_html", ""), site.url or "", site.name or "", pname
             )
             self.progress.emit(70)
 

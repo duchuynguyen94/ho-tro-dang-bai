@@ -248,32 +248,51 @@ def text_to_html(text: str) -> str:
 
 
 def _site_tokens(site_url: str, site_name: str) -> list[str]:
-    """Chỉ lấy các biến thể tên miền CÓ 'www.' để tự chèn link."""
+    """Các biến thể tên miền CÓ 'www.' để chèn link (tự thêm www nếu site chưa có)."""
     tokens: list[str] = []
     for raw in (site_name or "", site_url or ""):
         t = (raw or "").strip().rstrip("/")
         if not t:
             continue
-        t = re.sub(r"^https?://", "", t)
-        if t.startswith("www.") and t not in tokens:
-            tokens.append(t)
+        t = re.sub(r"^https?://", "", t).lower()
+        if not t:
+            continue
+        bare = t[4:] if t.startswith("www.") else t
+        for cand in (t, f"www.{bare}"):
+            if cand.startswith("www.") and cand not in tokens:
+                tokens.append(cand)
     return sorted(tokens, key=len, reverse=True)
 
 
-def autolink_html(html_text: str, site_url: str = "", site_name: str = "") -> str:
-    """Tự chèn link cho tên website dạng 'www....' -> URL website."""
+def extract_product_name(raw_content: str, fallback: str = "") -> str:
+    """Lấy tên sản phẩm: dòng ngay sau 'Tiêu đề bài viết' (nếu có)."""
+    text = raw_content or ""
+    m = re.search(r"Tiêu đề bài viết[^\n]*\n+\s*([^\n]{3,200})", text, re.I)
+    if m:
+        name = m.group(1).strip(" •-*#\t")
+        if name:
+            return name
+    return (fallback or "").strip()
+
+
+def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
+                  product_name: str = "") -> str:
+    """Chèn link external: (1) một lần vào TÊN SẢN PHẨM, (2) cho tên miền dạng www."""
     if not html_text:
         return html_text
     base = (site_url or "").strip().rstrip("/")
     if base and not base.startswith("http"):
         base = "https://" + base
-    tokens = _site_tokens(site_url, site_name)
-    if not base or not tokens:
+    if not base:
         return html_text
 
+    tokens = _site_tokens(site_url, site_name)
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
     in_a = False
+    product_done = False
+    pname = (product_name or "").strip()
+
     for part in parts:
         if part.startswith("<"):
             low = part.lower()
@@ -288,6 +307,14 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "") -> st
             continue
 
         text = part
+        # (1) chèn 1 lần link external vào tên sản phẩm
+        if pname and not product_done:
+            idx = text.find(pname)
+            if idx >= 0:
+                text = (text[:idx] + f'<a href="{base}">{pname}</a>'
+                        + text[idx + len(pname):])
+                product_done = True
+        # (2) chèn link cho tên miền dạng www.
         for tok in tokens:
             pattern = re.compile(rf"(?<![\w./-])({re.escape(tok)})(?![\w/-])", re.I)
             text = pattern.sub(lambda m: f'<a href="{base}">{m.group(1)}</a>', text)
