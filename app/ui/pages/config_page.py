@@ -403,7 +403,6 @@ class SitePanel(QWidget):
             show_toast(self, "Không chọn được ảnh", 3200, ok=False)
             return
         edit.setText(new_path)
-        show_toast(self, "Đã chọn ảnh — bấm Lưu để áp dụng", 2600)
 
     # ------------------------------------------------------------------ #
     def _save_steps(self) -> None:
