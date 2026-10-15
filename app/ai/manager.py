@@ -83,14 +83,16 @@ Nội dung:
 {images_hint}
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
-1) ĐẦU TIÊN: DUY NHẤT 1 khối JSON thông tin SEO (điền nội dung THẬT, không trả lại mẫu):
-{SEO_JSON_SPEC}
-
-2) NGAY SAU KHỐI JSON: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật**, đủ các mục:
+1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật**, đủ các mục:
 {CONTENT_OUTPUT_SPEC}
 
 Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <ul><li> cho danh sách;
 và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
+GIỮ ĐÚNG ĐỊNH DẠNG CỦA RULE CONTENT, kể cả các ký hiệu/icon đầu dòng (●, ▪, ►, ✅…).
+
+2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TRÍCH XUẤT TỪ CHÍNH NỘI DUNG TRÊN
+(điền nội dung THẬT, không trả lại mẫu):
+{SEO_JSON_SPEC}
 
 Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 """
@@ -105,14 +107,15 @@ cũng trong Project này.
 Link bài viết nguồn: {source.get('url', '')}
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
-1) ĐẦU TIÊN: DUY NHẤT 1 khối JSON thông tin SEO (điền nội dung THẬT, không trả lại mẫu):
-{SEO_JSON_SPEC}
-
-2) NGAY SAU KHỐI JSON: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật** theo rule_content.pdf, đủ các mục:
+1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật** theo rule_content.pdf, đủ các mục:
 {CONTENT_OUTPUT_SPEC}
 
 Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <ul><li> cho danh sách;
 và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
+GIỮ ĐÚNG ĐỊNH DẠNG rule_content.pdf, kể cả các ký hiệu/icon đầu dòng (●, ▪, ►, ✅…).
+
+2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TRÍCH XUẤT TỪ CHÍNH NỘI DUNG TRÊN:
+{SEO_JSON_SPEC}
 
 Không giải thích gì thêm.
 """
@@ -276,13 +279,21 @@ def _looks_like_html(text: str) -> bool:
 
 
 def extract_product_name(raw_content: str, fallback: str = "") -> str:
-    """Lấy tên sản phẩm: dòng ngay sau 'Tiêu đề bài viết' (chấp nhận cả HTML)."""
-    text = re.sub(r"<[^>]+>", "\n", raw_content or "")
-    m = re.search(r"Tiêu đề bài viết[^\n]*\n+\s*([^\n]{3,200})", text, re.I)
+    """Lấy tên sản phẩm trong nội dung (ưu tiên dòng sau 'Tiêu đề bài viết')."""
+    raw = raw_content or ""
+    plain = re.sub(r"<[^>]+>", "\n", raw)
+    m = re.search(r"Tiêu đề bài viết[^\n]*\n+\s*([^\n]{3,200})", plain, re.I)
     if m:
         name = m.group(1).strip(" •-*#\t")
         if name:
             return name
+    # dự phòng: thẻ <h1> hoặc <h2> đầu tiên
+    for tag in ("h1", "h2"):
+        mm = re.search(rf"<{tag}[^>]*>(.*?)</{tag}>", raw, re.S | re.I)
+        if mm:
+            name = re.sub(r"<[^>]+>", "", mm.group(1)).strip(" •-*#\t")
+            if 3 <= len(name) <= 200 and "tiêu đề bài viết" not in name.lower():
+                return name
     return (fallback or "").strip()
 
 

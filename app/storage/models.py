@@ -193,7 +193,7 @@ STATUS_ERROR = "error"
 STATUS_LABELS = {
     STATUS_QUEUED: "Đang chờ",
     STATUS_GENERATING: "Đang tạo nội dung...",
-    STATUS_REVIEW: "Chờ duyệt",
+    STATUS_REVIEW: "Chờ đăng",
     STATUS_POSTING: "Đang đăng bài...",
     STATUS_DONE: "Đã đăng",
     STATUS_ERROR: "Lỗi",

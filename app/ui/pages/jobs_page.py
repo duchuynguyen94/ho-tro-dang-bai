@@ -451,8 +451,6 @@ class JobsPage(QWidget):
             self.images_row.addWidget(self._image_box(i, im))
         self.images_row.addStretch(1)
 
-        n = len(images)
-        self.check_label.setText(f"Kiểm tra: đúng format & đủ {task.image_count} ảnh (hiện có {n})")
         self.stack.setCurrentWidget(self.editor_scroll)
         self.footer.show()
 

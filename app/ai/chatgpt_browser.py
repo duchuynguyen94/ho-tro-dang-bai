@@ -336,15 +336,28 @@ def _find_json_block(text: str):
 
 
 def split_reply(text: str) -> tuple[dict | None, str]:
-    """Tách câu trả lời thành (JSON SEO, nội dung bài viết)."""
-    data, _i, j = _find_json_block(text or "")
+    """Tách câu trả lời thành (JSON SEO, nội dung bài viết).
+
+    Chấp nhận JSON ở đầu HOẶC ở cuối; phần còn lại (bỏ khối JSON) là nội dung.
+    """
+    raw = text or ""
+    data, i, j = _find_json_block(raw)
     if data is None:
-        return None, (text or "").strip()
-    content = (text or "")[j + 1:].strip()
-    # bỏ dấu ``` thừa ở hai đầu nội dung
-    content = re.sub(r"^```[a-zA-Z]*\s*", "", content)
-    content = re.sub(r"\s*```$", "", content).strip()
+        return None, _strip_fences(raw)
+
+    before = raw[:i]
+    after = raw[j:]
+    content = _strip_fences(before + "\n" + after)
+    if not content:
+        content = _strip_fences(after or before)
     return data, content
+
+
+def _strip_fences(text: str) -> str:
+    t = (text or "").strip()
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+    t = re.sub(r"\s*```$", "", t)
+    return t.strip()
 
 
 def _wait_reply_full(page, prompt: str, timeout: int = 420) -> str:
