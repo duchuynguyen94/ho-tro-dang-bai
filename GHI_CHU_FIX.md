@@ -16,8 +16,11 @@
 ## Mục 3 — Giữ chọn PNG / JPG khi xuất ảnh, và làm cho nó CÓ TÁC DỤNG THẬT
 - Giữ ô chọn **Định dạng xuất: PNG / JPG**.
 - Hiện `pillow.output_format` **chưa được dùng** — định dạng thật đang lấy theo **Rule ảnh** (`.jpg`/`.png`).
-- **Làm rõ:** định dạng này áp cho **ảnh xuất ra và lưu vào** `posts/<task_id>/` khi bấm đăng bài (cùng chỗ với Mục 4).
-- ⚠️ Cần chốt **thứ tự ưu tiên** khi mâu thuẫn: tên file theo **Rule ảnh** đuôi `.png` nhưng cấu hình chọn **JPG** → (đề xuất) **Rule ảnh thắng**, cấu hình chỉ dùng khi Rule ảnh không ghi đuôi. *Chờ người dùng xác nhận.*
+- **Làm rõ (người dùng xác nhận):** định dạng này áp cho **ảnh xuất ra và lưu vào** `posts/<task_id>/` khi bấm đăng bài (cùng chỗ với Mục 4).
+- **Rule ảnh chỉ là TÊN ẢNH (không gồm đuôi):** ví dụ trong **Format Rule → card Ảnh**, input 1 = `{title}`, input 2 = `Tổng kho hàng sẵn {title}`.
+- → **Đuôi file do lựa chọn PNG/JPG ở trên quyết định** (lựa chọn **thắng**): ghép thêm `.png` hoặc `.jpg` vào tên theo Rule ảnh.
+  - Nếu tên theo Rule ảnh **có sẵn** đuôi (`.png`/`.jpg`) → **thay** bằng đuôi theo lựa chọn.
+  - Nếu **không** ghi đuôi → **thêm** đuôi theo lựa chọn.
 - → Nối cấu hình này vào bước xuất ảnh (`export_post_images()`) sao cho lựa chọn có hiệu lực thật.
 
 ## Mục 4 — Giữ "Kích thước ảnh xuất", và làm cho nó CÓ TÁC DỤNG THẬT
