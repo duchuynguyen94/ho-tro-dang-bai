@@ -97,6 +97,21 @@ FIELD_RULES = {
 }
 
 
+CHATGPT_SHORT_PROMPT = """Đọc bài viết tại link dưới đây và viết lại thành 1 bài viết mới,
+TUYỆT ĐỐI tuân thủ tài liệu / quy định đã được đính kèm trong Project này.
+
+Link bài viết nguồn: {url}
+
+CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng định dạng:
+{{"title": "...", "focus_keyword": "...", "description": "...", "tags": "thẻ 1, thẻ 2", "content_html": "<h2>...</h2><p>...</p>"}}
+"""
+
+
+def build_short_prompt(source: dict) -> str:
+    """Prompt ngắn cho ChatGPT (nội dung/quy định nằm trong Project đã đính kèm)."""
+    return CHATGPT_SHORT_PROMPT.format(url=source.get("url", ""))
+
+
 def build_field_prompt(rules, source: dict, field: str, current: str = "") -> str:
     label, rule_key = FIELD_RULES.get(field, ("Nội dung", None))
     rules_text = read_rule(getattr(rules, rule_key, "") if rule_key else "")
@@ -132,7 +147,14 @@ def generate_field(store, source: dict, field: str, current: str = "", log=None)
             if provider == "chatgpt":
                 from .chatgpt_browser import generate_with_chatgpt
 
-                return generate_with_chatgpt(pcfg, prompt, log).strip()
+                label = FIELD_RULES.get(field, ("Nội dung", None))[0]
+                short = (
+                    f"Đọc bài viết tại link dưới đây và viết lại DUY NHẤT trường “{label}” "
+                    "theo tài liệu / quy định đã đính kèm trong Project này.\n"
+                    f"Link bài viết nguồn: {source.get('url', '')}\n"
+                    f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
+                )
+                return generate_with_chatgpt(pcfg, short, log).strip()
             return providers.generate_text(provider, pcfg, prompt, api_key).strip()
         except Exception as exc:
             errors.append(f"{provider}: {exc}")
@@ -141,13 +163,14 @@ def generate_field(store, source: dict, field: str, current: str = "", log=None)
 
 def generate_content(store, source: dict, log=None) -> dict:
     prompt = build_prompt(store.formats, source)
+    short_prompt = build_short_prompt(source)
     cfg = store.ai_content
     errors: list[str] = []
 
     for provider in _active_chain(cfg):
         pcfg = cfg.get("providers", {}).get(provider, {})
         api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
-        if provider in ("gemini", "groq", "openrouter", "openai") and not api_key:
+        if provider in ("gemini", "groq", "openrouter", "openai", "deepseek") and not api_key:
             errors.append(f"{provider}: thiếu API key")
             continue
         if log:
@@ -156,7 +179,7 @@ def generate_content(store, source: dict, log=None) -> dict:
             if provider == "chatgpt":
                 from .chatgpt_browser import generate_with_chatgpt
 
-                raw = generate_with_chatgpt(pcfg, prompt, log)
+                raw = generate_with_chatgpt(pcfg, short_prompt, log)
             else:
                 raw = providers.generate_text(provider, pcfg, prompt, api_key)
             data = providers.parse_json_response(raw)
