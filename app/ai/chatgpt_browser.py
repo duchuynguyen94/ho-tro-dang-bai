@@ -159,7 +159,16 @@ def _try_extract_json(text: str) -> dict | None:
     return data
 
 
-def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300) -> str:
+def _is_placeholder(value) -> bool:
+    """True nếu giá trị chỉ là dấu chấm/ellipsis (mẫu rỗng do AI trả lại)."""
+    s = str(value or "").strip()
+    if not s:
+        return True
+    return all(ch in ".-_…~ " for ch in s)
+
+
+def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
+                          require_json: bool = False) -> str:
     """Mở ChatGPT bằng trình duyệt riêng, gửi prompt, trả về câu trả lời."""
     from ..wp import WPBrowser
 
@@ -224,8 +233,12 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300)
             if text and text == last and len(text) > 20:
                 stable += 1
                 if stable >= 2:
-                    result_text = text
-                    break
+                    if require_json:
+                        # trả lời không phải JSON -> tiếp tục chờ, không nhận mẫu rỗng
+                        stable = 0
+                    else:
+                        result_text = text
+                        break
             else:
                 stable = 0
                 last = text
@@ -233,6 +246,10 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300)
                 log(f"ChatGPT đang viết… ({len(text)} ký tự)")
 
         if not result_text:
+            if require_json:
+                raise AIError(
+                    "ChatGPT không trả về JSON hợp lệ (có thể chỉ trả lại mẫu). Thử lại hoặc dùng provider khác."
+                )
             raise AIError("ChatGPT không trả về nội dung (quá thời gian chờ).")
         return result_text
     finally:

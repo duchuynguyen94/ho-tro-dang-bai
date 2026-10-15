@@ -7,6 +7,12 @@ from pathlib import Path
 from ..storage import crypto
 from . import providers
 
+def _is_placeholder(value) -> bool:
+    """Giá trị chỉ gồm dấu chấm/ellipsis => AI trả lại mẫu, không phải nội dung thật."""
+    t = str(value or "").strip()
+    return (not t) or all(ch in ".-_…~ " for ch in t)
+
+
 def _fmt_errors(errors: list[str]) -> str:
     if not errors:
         return "Không rõ nguyên nhân."
@@ -102,6 +108,7 @@ TUYỆT ĐỐI tuân thủ tài liệu / quy định đã được đính kèm (
 
 Link bài viết nguồn: {url}
 
+ĐIỀN NỘI DUNG THẬT vào JSON dưới đây (KHÔNG trả lại nguyên mẫu).
 CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng định dạng:
 {{"title": "...", "focus_keyword": "...", "description": "...", "tags": "thẻ 1, thẻ 2", "content_html": "<h2>...</h2><p>...</p>"}}
 """
@@ -179,13 +186,18 @@ def generate_content(store, source: dict, log=None) -> dict:
             if provider == "chatgpt":
                 from .chatgpt_browser import generate_with_chatgpt
 
-                raw = generate_with_chatgpt(pcfg, short_prompt, log)
+                raw = generate_with_chatgpt(pcfg, short_prompt, log, require_json=True)
             else:
                 raw = providers.generate_text(provider, pcfg, prompt, api_key)
             data = providers.parse_json_response(raw)
             missing = [k for k in REQUIRED_KEYS if not str(data.get(k, "")).strip()]
             if missing:
                 raise providers.AIError(f"thiếu trường {missing}")
+            if _is_placeholder(data.get("title")) or _is_placeholder(data.get("content_html")):
+                raise providers.AIError(
+                    "AI trả về mẫu rỗng (title/content chỉ có dấu …). "
+                    "Thử lại hoặc đổi provider."
+                )
             if log:
                 log(f"Xong bằng {provider}.")
             return data
