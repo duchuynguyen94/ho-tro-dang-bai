@@ -34,6 +34,7 @@ from .pages.history_page import HistoryPage
 from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
 from .style import app_font
+from .toast import show_toast
 from .workers import (
     ContentWorker,
     export_post_images,
@@ -403,13 +404,26 @@ class MainWindow(QMainWindow):
 
     def _on_post_failed(self, task, err: str) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        fresh.status = STATUS_ERROR
+        r = fresh.result or {}
+        has_content = bool(r.get("content_html") or r.get("title"))
+        # Nội dung đã có -> GIỮ NGUYÊN "Chờ đăng", KHÔNG chuyển sang trang tạo lại
+        fresh.status = STATUS_REVIEW if has_content else STATUS_ERROR
         fresh.message = err
         self.store.upsert_task(fresh)
         self.store.save()
         self._log_err("Đăng bài", err)
-        self.jobs_page.refresh()
-        self.status("Sẵn sàng")
+        try:
+            self.jobs_page.refresh()
+            self.jobs_page.select_task(fresh.id)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Hiển thị kết quả", str(exc))
+        self._refresh_count()
+        if has_content:
+            show_toast(self, "Đăng bài lỗi — nội dung vẫn được giữ nguyên", 3600, ok=False)
+            self.status("Đăng bài lỗi — nội dung vẫn giữ. Xem tab Log lỗi.")
+        else:
+            self.status("Sẵn sàng")
 
     def _maybe_sheets(self, task) -> None:
         cfg = self.store.sheets

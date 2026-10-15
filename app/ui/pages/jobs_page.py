@@ -585,14 +585,9 @@ class JobsPage(QWidget):
         self.current = task
         for tid, row in self._rows.items():
             row.set_selected(tid == task_id)
-        r = task.result or {}
         self.result_card.set_title(f"Kết quả AI — {task.site_name}")
-        used = r.get("provider_used") or self.store.ai_content.get("active", "")
-        configured = self.store.ai_content.get("active", "")
-        if used and configured and used != configured:
-            self.provider_badge.setText(f"Provider: {used} (dự phòng, thay {configured})")
-        else:
-            self.provider_badge.setText(f"Provider: {used}" if used else "")
+        active = self.store.ai_content.get("active", "")
+        self.provider_badge.setText(f"Provider: {active}" if active else "")
         self._show_state()
 
     def set_loading_message(self, text: str) -> None:
