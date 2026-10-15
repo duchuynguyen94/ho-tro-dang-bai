@@ -256,9 +256,8 @@ class ImageEditorPanel(QFrame):
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
         self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 180, 100)
-        self.s_brand = self._slider(grid, 1, "Logo thương hiệu — kích thước", 50, 180, 100)
-        self.s_wm = self._slider(grid, 2, "Watermark — độ mờ", 0, 100, 7)
-        self.s_wm_size = self._slider(grid, 3, "Watermark — kích thước", 50, 200, 100)
+        self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 7)
+        self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
         right.addLayout(grid)
 
         foot_row = QHBoxLayout()
@@ -272,14 +271,13 @@ class ImageEditorPanel(QFrame):
         body.addLayout(right, 1)
 
         self.s_logo.valueChanged.connect(lambda _v: self._layout_items())
-        self.s_brand.valueChanged.connect(lambda _v: self._layout_items())
 
         # tự động lưu sau khi ngừng thao tác
         self._autosave = QTimer(self)
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(700)
         self._autosave.timeout.connect(self._emit_opts)
-        for w in (self.s_logo, self.s_brand, self.s_wm, self.s_wm_size):
+        for w in (self.s_logo, self.s_wm, self.s_wm_size):
             w.valueChanged.connect(self._schedule_save)
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
 
@@ -322,7 +320,6 @@ class ImageEditorPanel(QFrame):
             self.canvas.setText("(chưa có ảnh)")
 
         self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0)) * 100))
-        self.s_brand.setValue(int(float(self._opts.get("brand_scale", 1.0)) * 100))
         self.s_wm.setValue(int(self._opts.get("watermark_opacity", 7) or 0))
         self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
         mode = self._opts.get("footer_mode") or footer_mode or "bar1"
@@ -352,15 +349,17 @@ class ImageEditorPanel(QFrame):
         return self._fit_size(src.width(), src.height(),
                               int(SRC * base_w * scale), int(SRC * base_h * scale))
 
-    def _pixmap_for(self, path: str, base_w: float, base_h: float,
-                    scale: float) -> tuple[QPixmap, int, int]:
-        p = Path(path or "")
-        if not p.exists():
+    def _pixmap_for(self, path: str, base_w: float, base_h: float, scale: float,
+                    src: QPixmap | None = None) -> tuple[QPixmap, int, int]:
+        if src is None:
+            p = Path(path or "")
+            if not p.exists():
+                return QPixmap(), 0, 0
+            src = QPixmap(str(p))
+        if src is None or src.isNull():
             return QPixmap(), 0, 0
-        src = QPixmap(str(p))
-        if src.isNull():
-            return QPixmap(), 0, 0
-        cw, ch = self._composed_size(path, base_w, base_h, scale)
+        cw, ch = self._fit_size(src.width(), src.height(),
+                                int(SRC * base_w * scale), int(SRC * base_h * scale))
         if cw <= 0:
             return QPixmap(), 0, 0
         disp_w = max(8, int(cw * CANVAS / SRC))
@@ -370,18 +369,17 @@ class ImageEditorPanel(QFrame):
     def _layout_items(self) -> None:
         logo_pm, lw, lh = self._pixmap_for(self._preview.get("logo", ""), 0.26, 0.12,
                                            self.s_logo.value() / 100.0)
-        brand_pm, bw, bh = self._pixmap_for(self._preview.get("brand", ""), 0.34, 0.13,
-                                            self.s_brand.value() / 100.0)
+        brand_path = self._preview.get("brand", "")
+        brand_src = None
+        if self._opts.get("brand_nobg") and brand_path:
+            pm_nb = self._display_pixmap(brand_path, True)
+            if pm_nb is not None and not pm_nb.isNull():
+                brand_src = pm_nb
+        brand_pm, bw, bh = self._pixmap_for(brand_path, 0.34, 0.13,
+                                            float(self._opts.get("brand_scale", 1.0) or 1.0),
+                                            brand_src)
         if self._opts.get("brand_hidden"):
             brand_pm, bw, bh = QPixmap(), 0, 0
-        elif self._opts.get("brand_nobg") and not brand_pm.isNull():
-            bpath = self._preview.get("brand", "")
-            brand_pm = self._display_pixmap(bpath, True)
-            if not brand_pm.isNull():
-                brand_pm = brand_pm.scaled(max(8, int(brand_pm.width() * CANVAS / SRC)),
-                                           max(8, int(brand_pm.height() * CANVAS / SRC)),
-                                           Qt.KeepAspectRatio, Qt.SmoothTransformation)
-                bw, bh = brand_pm.width(), brand_pm.height()
         for item, pm, w, h in ((self.logo_item, logo_pm, lw, lh),
                                (self.brand_item, brand_pm, bw, bh)):
             item.setPixmap(pm)
@@ -650,10 +648,10 @@ class ImageEditorPanel(QFrame):
         w1, _h1 = self._composed_size(path, bw, bh, 1.0)
         disp1 = max(1, int(w1 * CANVAS / SRC))
         scale = max(0.3, min(2.5, width / max(1.0, disp1)))
-        slider = self.s_logo if which == "logo" else self.s_brand
-        slider.blockSignals(True)
-        slider.setValue(int(scale * 100))
-        slider.blockSignals(False)
+        if which == "logo":
+            self.s_logo.blockSignals(True)
+            self.s_logo.setValue(int(scale * 100))
+            self.s_logo.blockSignals(False)
         self._opts["logo_scale" if which == "logo" else "brand_scale"] = round(scale, 3)
         self._schedule_save()
 
@@ -670,7 +668,6 @@ class ImageEditorPanel(QFrame):
     def _reset(self) -> None:
         self._opts = {}
         self.s_logo.setValue(100)
-        self.s_brand.setValue(100)
         self.s_wm.setValue(7)
         self.s_wm_size.setValue(100)
         self._layout_items()
@@ -686,7 +683,6 @@ class ImageEditorPanel(QFrame):
         opts = dict(self._opts)
         opts.update({
             "logo_scale": self.s_logo.value() / 100.0,
-            "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "watermark_size": self.s_wm_size.value() / 100.0,
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
@@ -701,7 +697,6 @@ class ImageEditorPanel(QFrame):
         opts = dict(self._opts)
         opts.update({
             "logo_scale": self.s_logo.value() / 100.0,
-            "brand_scale": self.s_brand.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "watermark_size": self.s_wm_size.value() / 100.0,
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
