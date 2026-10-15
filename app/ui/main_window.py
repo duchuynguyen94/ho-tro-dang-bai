@@ -48,6 +48,7 @@ class MainWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.store = Store()
+        self.store.reset_stale_tasks()
         self.setWindowTitle("Hỗ Trợ Đăng Bài — WordPress")
         self.resize(1240, 820)
         self.setFont(app_font())

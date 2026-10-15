@@ -166,6 +166,17 @@ class Store:
     def has_format_content(self) -> bool:
         return bool((self.data.get("formats") or {}).get("content"))
 
+    def reset_stale_tasks(self) -> None:
+        """Khi mở app: việc đang chạy dở (do tắt app) -> đánh dấu đã dừng."""
+        changed = False
+        for t in self.data.get("tasks", []):
+            if t.get("status") in ("queued", "generating", "posting"):
+                t["status"] = "cancelled"
+                t["message"] = "Đã dừng (ứng dụng đã đóng khi việc đang chạy)"
+                changed = True
+        if changed:
+            self.save()
+
     # ------------------------------------------------------------------ #
     # Log lỗi
     # ------------------------------------------------------------------ #

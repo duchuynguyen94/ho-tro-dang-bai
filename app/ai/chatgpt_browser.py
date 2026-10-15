@@ -132,9 +132,11 @@ def _click_send(page) -> bool:
     return False
 
 
-def _wait_composer(page, timeout: float = 25.0):
+def _wait_composer(page, timeout: float = 25.0, should_stop=None):
     deadline = time.time() + timeout
     while time.time() < deadline:
+        if should_stop and should_stop():
+            raise AIError("Đã dừng theo yêu cầu.")
         box = _composer(page)
         if box is not None:
             return box
@@ -259,9 +261,11 @@ def _try_extract_json(text: str) -> dict | None:
 # --------------------------------------------------------------------------- #
 # Mở trang + gửi / chờ trả lời
 # --------------------------------------------------------------------------- #
-def _open_page(br, project_url: str, log=None):
+def _open_page(br, project_url: str, log=None, should_stop=None):
     if log:
         log("Đang mở ChatGPT…")
+    if should_stop and should_stop():
+        raise AIError("Đã dừng theo yêu cầu.")
     page = br.open()
     target = project_url if project_url.startswith("http") else CHATGPT_URL
     page.goto(target, wait_until="domcontentloaded", timeout=60000)
@@ -360,12 +364,14 @@ def _strip_fences(text: str) -> str:
     return t.strip()
 
 
-def _wait_reply_full(page, prompt: str, timeout: int = 420) -> str:
-    """Chờ tới khi câu trả lời có đủ JSON SEO + nội dung và đã ổn định."""
+def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None) -> str:
+    """Chờ tới khi câu trả lời có đủ JSON + nội dung và đã ổn định."""
     deadline = time.time() + timeout
     last = ""
     stable = 0
     while time.time() < deadline:
+        if should_stop and should_stop():
+            raise AIError("Đã dừng theo yêu cầu.")
         page.wait_for_timeout(1500)
         text = _reply_text(page, prompt)
         data, i, j = _find_json_block(text)
@@ -387,12 +393,15 @@ def _wait_reply_full(page, prompt: str, timeout: int = 420) -> str:
     )
 
 
-def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = False) -> str:
+def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = False,
+                should_stop=None) -> str:
     deadline = time.time() + timeout
     last = ""
     stable = 0
     result = ""
     while time.time() < deadline:
+        if should_stop and should_stop():
+            raise AIError("Đã dừng theo yêu cầu.")
         page.wait_for_timeout(1500)
         text = _reply_text(page, prompt)
         if require_json:
@@ -440,18 +449,19 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
             pass
 
 
-def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420) -> str:
+def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
+                      should_stop=None) -> str:
     """1 tin nhắn: trả về JSON SEO ở đầu + nội dung bài viết phía sau."""
     from ..wp import WPBrowser
 
     project_url = (pcfg or {}).get("project_url", "") or ""
     br = WPBrowser(headless=False, site_id="chatgpt")
     try:
-        page = _open_page(br, project_url, log)
+        page = _open_page(br, project_url, log, should_stop)
         if log:
             log("Đang gửi yêu cầu cho ChatGPT (nội dung + SEO)…")
         _send(page, prompt)
-        return _wait_reply_full(page, prompt, timeout)
+        return _wait_reply_full(page, prompt, timeout, should_stop)
     finally:
         try:
             br.close()

@@ -150,7 +150,8 @@ class ContentWorker(QThread):
 
             if self._stopped():
                 raise _Cancelled()
-            data = generate_content(self.store, page, log=self.log.emit)
+            data = generate_content(self.store, page, log=self.log.emit,
+                                     should_stop=self._stopped)
             if self._stopped():
                 raise _Cancelled()
             # chèn 1 link external vào tên sản phẩm + link cho tên miền www.
@@ -200,6 +201,10 @@ class ContentWorker(QThread):
             self.log.emit("Đã dừng theo yêu cầu.")
             self.cancelled.emit()
         except Exception as exc:
+            if self._cancel or "Đã dừng" in str(exc):
+                self.log.emit("Đã dừng theo yêu cầu.")
+                self.cancelled.emit()
+                return
             traceback.print_exc()
             self.failed.emit(str(exc))
 

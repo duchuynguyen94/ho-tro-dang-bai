@@ -347,7 +347,7 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
 # --------------------------------------------------------------------------- #
 # Luồng chính: 1 lần gọi (JSON SEO trước, nội dung sau)
 # --------------------------------------------------------------------------- #
-def generate_content(store, source: dict, log=None) -> dict:
+def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
     """1 lần gọi: AI trả JSON SEO TRƯỚC, rồi tới nội dung bài viết."""
     rules = store.formats
     cfg = store.ai_content
@@ -362,10 +362,12 @@ def generate_content(store, source: dict, log=None) -> dict:
             errors.append(f"{provider}: thiếu API key")
             continue
         try:
+            if should_stop and should_stop():
+                raise providers.AIError("Đã dừng theo yêu cầu.")
             if provider == "chatgpt":
                 from .chatgpt_browser import generate_combined
 
-                raw = generate_combined(pcfg, short, log)
+                raw = generate_combined(pcfg, short, log, should_stop=should_stop)
             else:
                 if log:
                     log("Đang gọi AI (SEO + nội dung)…")
