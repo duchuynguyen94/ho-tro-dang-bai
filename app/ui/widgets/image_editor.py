@@ -403,7 +403,7 @@ class ImageEditorPanel(QFrame):
             item.on_remove_bg = self._ctx_remove_bg
             item.on_remove = self._ctx_remove_component
 
-        lp = self._opts.get("logo_pos") or [0.035, 0.035]
+        lp = self._opts.get("logo_pos") or [0.015, 0.0]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
         self.logo_item.move(int(lp[0] * CANVAS), int(lp[1] * CANVAS))
         self.brand_item.move(
