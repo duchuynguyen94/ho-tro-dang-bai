@@ -7,6 +7,15 @@ from pathlib import Path
 from ..storage import crypto
 from . import providers
 
+def _fmt_errors(errors: list[str]) -> str:
+    if not errors:
+        return "Không rõ nguyên nhân."
+    head = " | ".join(errors[:3])
+    if len(errors) > 3:
+        head += f" (+{len(errors) - 3} lỗi khác)"
+    return head
+
+
 REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags", "content_html")
 
 
@@ -116,14 +125,18 @@ def generate_field(store, source: dict, field: str, current: str = "", log=None)
     for provider in _active_chain(cfg):
         pcfg = cfg.get("providers", {}).get(provider, {})
         api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
-        if provider in ("gemini", "groq", "openrouter", "openai") and not api_key:
+        if provider in ("gemini", "groq", "openrouter", "openai", "deepseek") and not api_key:
             errors.append(f"{provider}: thiếu API key")
             continue
         try:
+            if provider == "chatgpt":
+                from .chatgpt_browser import generate_with_chatgpt
+
+                return generate_with_chatgpt(pcfg, prompt, log).strip()
             return providers.generate_text(provider, pcfg, prompt, api_key).strip()
         except Exception as exc:
             errors.append(f"{provider}: {exc}")
-    raise providers.AIError("Không tạo được trường này. " + " | ".join(errors[-4:]))
+    raise providers.AIError("Không tạo được trường này. " + _fmt_errors(errors))
 
 
 def generate_content(store, source: dict, log=None) -> dict:
@@ -140,7 +153,12 @@ def generate_content(store, source: dict, log=None) -> dict:
         if log:
             log(f"Đang gọi AI: {provider}…")
         try:
-            raw = providers.generate_text(provider, pcfg, prompt, api_key)
+            if provider == "chatgpt":
+                from .chatgpt_browser import generate_with_chatgpt
+
+                raw = generate_with_chatgpt(pcfg, prompt, log)
+            else:
+                raw = providers.generate_text(provider, pcfg, prompt, api_key)
             data = providers.parse_json_response(raw)
             missing = [k for k in REQUIRED_KEYS if not str(data.get(k, "")).strip()]
             if missing:
@@ -153,4 +171,4 @@ def generate_content(store, source: dict, log=None) -> dict:
             if log:
                 log(f"{provider} lỗi → thử provider khác…")
 
-    raise providers.AIError("Không tạo được nội dung. " + " | ".join(errors[-4:]))
+    raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))
