@@ -4,8 +4,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QMimeData, Qt, Signal
+from PySide6.QtGui import QDrag
 from PySide6.QtWidgets import (
+    QApplication,
     QCheckBox,
     QComboBox,
     QFileDialog,
@@ -30,7 +32,7 @@ from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
 from ..style import Card
 from ..toast import show_toast
-from ..workers import LoginWorker
+from ..workers import LoginWorker, OpenLoginWorker
 
 IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
 FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.pdf *.doc *.docx);;Tất cả (*.*)"
@@ -519,12 +521,123 @@ PROVIDER_LABELS = {
     "gemini": "Google Gemini",
     "groq": "Groq",
     "openrouter": "OpenRouter",
-    "ollama": "Ollama (local)",
+    "deepseek": "DeepSeek",
     "chatgpt": "ChatGPT (qua trình duyệt)",
     "openai": "OpenAI API",
 }
-FREE = {"gemini": "FREE", "groq": "FREE", "openrouter": "FREE", "ollama": "OFFLINE",
+FREE = {"gemini": "FREE", "groq": "FREE", "openrouter": "FREE", "deepseek": "RẺ",
         "chatgpt": "FREE*", "openai": "TRẢ PHÍ"}
+
+
+class DragHandle(QLabel):
+    """Tay cầm kéo-thả để sắp xếp thứ tự provider."""
+
+    def __init__(self, key: str, parent=None) -> None:
+        super().__init__("⠿", parent)
+        self.key = key
+        self.setFixedWidth(18)
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.OpenHandCursor)
+        self.setToolTip("Kéo để đổi thứ tự ưu tiên (trên = ưu tiên cao hơn)")
+        self.setStyleSheet("color:#94a3b8;font-size:16px;")
+        self._press = None
+
+    def mousePressEvent(self, event) -> None:  # noqa: N802
+        if event.button() == Qt.LeftButton:
+            self._press = event.pos()
+
+    def mouseMoveEvent(self, event) -> None:  # noqa: N802
+        if self._press is None:
+            return
+        if (event.pos() - self._press).manhattanLength() < QApplication.startDragDistance():
+            return
+        self._press = None
+        card = self.parentWidget()
+        drag = QDrag(self)
+        mime = QMimeData()
+        mime.setText(self.key)
+        drag.setMimeData(mime)
+        pm = card.grab()
+        drag.setPixmap(pm.scaled(pm.width() // 2, pm.height() // 2,
+                                 Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        drag.exec(Qt.MoveAction)
+
+    def mouseReleaseEvent(self, event) -> None:  # noqa: N802
+        self._press = None
+
+
+class ProviderList(QWidget):
+    """Danh sách provider cho phép kéo-thả đổi thứ tự."""
+
+    orderChanged = Signal()
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setAcceptDrops(True)
+        self.vbox = QVBoxLayout(self)
+        self.vbox.setContentsMargins(0, 0, 0, 0)
+        self.vbox.setSpacing(10)
+        self.cards: dict[str, QWidget] = {}
+        self.number_labels: dict[str, QLabel] = {}
+
+    def add_card(self, key: str, card: QWidget, number_label: QLabel) -> None:
+        self.cards[key] = card
+        self.number_labels[key] = number_label
+        card.setAcceptDrops(False)
+        for child in card.findChildren(QWidget):
+            child.setAcceptDrops(False)
+        self.vbox.addWidget(card)
+        self.renumber()
+
+    def keys(self) -> list[str]:
+        out: list[str] = []
+        for i in range(self.vbox.count()):
+            w = self.vbox.itemAt(i).widget()
+            if w is None:
+                continue
+            for k, c in self.cards.items():
+                if c is w:
+                    out.append(k)
+                    break
+        return out
+
+    def renumber(self) -> None:
+        for i, key in enumerate(self.keys(), 1):
+            lab = self.number_labels.get(key)
+            if lab:
+                lab.setText(f"{i}")
+
+    # ---- drag & drop ----
+    def dragEnterEvent(self, event) -> None:  # noqa: N802
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dragMoveEvent(self, event) -> None:  # noqa: N802
+        if event.mimeData().hasText():
+            event.acceptProposedAction()
+
+    def dropEvent(self, event) -> None:  # noqa: N802
+        key = event.mimeData().text()
+        card = self.cards.get(key)
+        if card is None:
+            return
+        pos = event.position().toPoint().y()
+        idx = self.vbox.count()
+        for i in range(self.vbox.count()):
+            w = self.vbox.itemAt(i).widget()
+            if w is None or w is card:
+                continue
+            if pos < w.y() + w.height() // 2:
+                idx = i
+                break
+        cur = self.vbox.indexOf(card)
+        self.vbox.removeWidget(card)
+        if cur < idx:
+            idx -= 1
+        self.vbox.insertWidget(max(0, idx), card)
+        self.renumber()
+        self.orderChanged.emit()
+        event.acceptProposedAction()
 
 
 class AIContentPanel(QScrollArea):
@@ -542,38 +655,30 @@ class AIContentPanel(QScrollArea):
         title = QLabel("AI nội dung")
         title.setProperty("class", "h2")
         v.addWidget(title)
-        sub = QLabel("Ưu tiên miễn phí — có thể chuyển đổi (switch) giữa nhiều model. Chọn 1 provider làm mặc định.")
+        sub = QLabel(
+            "Ưu tiên miễn phí. <b>Kéo ⠿ để đổi thứ tự</b> — thứ tự này là thứ tự gọi khi bật "
+            "<b>Fallback tự động</b>. Chọn 1 provider làm mặc định (gọi trước tiên)."
+        )
         sub.setProperty("class", "sub")
+        sub.setWordWrap(True)
         v.addWidget(sub)
 
         cfg = self.store.ai_content
-        grid = QGridLayout()
-        grid.setSpacing(12)
-        for i, (key, pcfg) in enumerate(cfg["providers"].items()):
-            card = Card(PROVIDER_LABELS.get(key, key))
-            badge = QLabel(FREE.get(key, ""))
-            badge.setStyleSheet("color:#047857;font-size:11px;font-weight:700;")
-            card.add_header_widget(badge)
-            radio = QCheckBox("Mặc định")
-            radio.setChecked(cfg.get("active") == key)
-            card.add_header_widget(radio)
-            body = card.body
-            key_edit = QLineEdit()
-            key_edit.setEchoMode(QLineEdit.Password)
-            key_edit.setPlaceholderText("API Key")
-            key_edit.setText(crypto.decrypt(pcfg.get("api_key_enc", "")))
-            model_edit = QLineEdit(pcfg.get("model", ""))
-            if key == "ollama":
-                body.addWidget(QLabel("Địa chỉ"))
-                body.addWidget(QLineEdit(pcfg.get("base_url", "")))
-            body.addWidget(key_edit)
-            body.addWidget(model_edit)
-            self._rows[key] = {"key": key_edit, "model": model_edit, "radio": radio}
-            grid.addWidget(card, i // 2, i % 2)
+        order = [p for p in (cfg.get("order") or []) if p in cfg["providers"]]
+        order += [p for p in cfg["providers"] if p not in order]
 
-        v.addLayout(grid)
+        self.list = ProviderList()
+        self.list.orderChanged.connect(self._save)
+        for key in order:
+            pcfg = cfg["providers"].get(key, {})
+        # nạp theo đúng thứ tự
+        for key in order:
+            pcfg = cfg["providers"].get(key, {})
+            card, num = self._make_card(key, pcfg)
+            self.list.add_card(key, card, num)
+        v.addWidget(self.list)
 
-        self.fallback = QCheckBox("Fallback tự động (provider lỗi/hết lượt → chuyển provider kế tiếp)")
+        self.fallback = QCheckBox("Fallback tự động (provider lỗi/hết lượt → chuyển provider kế tiếp theo thứ tự trên)")
         self.fallback.setChecked(bool(cfg.get("fallback", True)))
         v.addWidget(self.fallback)
 
@@ -584,18 +689,77 @@ class AIContentPanel(QScrollArea):
         v.addStretch(1)
         self.setWidget(root)
 
+    def _make_card(self, key: str, pcfg: dict):
+        card = Card(PROVIDER_LABELS.get(key, key))
+        num = QLabel("")
+        num.setObjectName("chipBlue")
+        handle = DragHandle(key)
+        card.header_layout.insertWidget(0, handle)
+        card.header_layout.insertWidget(1, num)
+        badge = QLabel(FREE.get(key, ""))
+        badge.setStyleSheet("color:#047857;font-size:11px;font-weight:700;")
+        card.add_header_widget(badge)
+        radio = QCheckBox("Mặc định")
+        radio.setChecked(self.store.ai_content.get("active") == key)
+        card.add_header_widget(radio)
+
+        body = card.body
+        key_edit = None
+        model_edit = None
+
+        if key == "chatgpt":
+            note = QLabel(
+                "Không cần API key. Phần mềm dùng <b>trình duyệt riêng</b> để mở ChatGPT; "
+                "bạn đăng nhập 1 lần, phiên được lưu lại."
+            )
+            note.setProperty("class", "hint")
+            note.setWordWrap(True)
+            body.addWidget(note)
+            btn = QPushButton("Đăng nhập ChatGPT")
+            btn.setProperty("class", "ghost")
+            btn.clicked.connect(lambda _=False, b=btn: self._login_chatgpt(b))
+            body.addWidget(btn)
+        else:
+            key_edit = QLineEdit()
+            key_edit.setEchoMode(QLineEdit.Password)
+            key_edit.setPlaceholderText("API Key")
+            key_edit.setText(crypto.decrypt(pcfg.get("api_key_enc", "")))
+            body.addWidget(key_edit)
+            body.addWidget(QLabel("Model"))
+            model_edit = QLineEdit(pcfg.get("model", ""))
+            body.addWidget(model_edit)
+
+        self._rows[key] = {"key": key_edit, "model": model_edit, "radio": radio}
+        return card, num
+
     def _save(self) -> None:
         cfg = self.store.ai_content
         for key, row in self._rows.items():
-            p = cfg["providers"][key]
-            p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
-            if row["model"].text().strip():
+            p = cfg["providers"].setdefault(key, {})
+            if row.get("key") is not None:
+                p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
+            if row.get("model") is not None and row["model"].text().strip():
                 p["model"] = row["model"].text().strip()
             if row["radio"].isChecked():
                 cfg["active"] = key
+        cfg["order"] = self.list.keys()
         cfg["fallback"] = self.fallback.isChecked()
         self.store.save()
         show_toast(self, "Đã lưu AI nội dung")
+
+    def _login_chatgpt(self, btn) -> None:
+        if getattr(self, "_chatgpt_worker", None) and self._chatgpt_worker.isRunning():
+            self._chatgpt_worker.stop()
+            self._chatgpt_worker = None
+            btn.setText("Đăng nhập ChatGPT")
+            return
+        w = OpenLoginWorker("https://chatgpt.com/", "chatgpt", title="ChatGPT")
+        self._chatgpt_worker = w
+        w.log.connect(lambda m: show_toast(self, m, 2500))
+        w.failed.connect(lambda e: show_toast(self, "Lỗi: " + e[:40], 3000))
+        w.finished.connect(lambda: btn.setText("Đăng nhập ChatGPT"))
+        w.start()
+        btn.setText("■ Đóng trình duyệt")
 
 
 class AIImagePanel(QScrollArea):
@@ -646,6 +810,14 @@ class AIImagePanel(QScrollArea):
             radio = QCheckBox("Mặc định")
             radio.setChecked(cfg.get("active") == key)
             card.add_header_widget(radio)
+            if key == "off":
+                hint = QLabel("Chỉ dùng Pillow (cắt ghép, không gọi AI).")
+                hint.setProperty("class", "hint")
+                hint.setWordWrap(True)
+                card.body.addWidget(hint)
+                self._img_rows[key] = {"key": None, "model": None, "radio": radio}
+                grid.addWidget(card, i // 2, i % 2)
+                continue
             key_edit = QLineEdit()
             key_edit.setEchoMode(QLineEdit.Password)
             key_edit.setPlaceholderText("API Key")

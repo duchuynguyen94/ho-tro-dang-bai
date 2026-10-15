@@ -265,6 +265,49 @@ class PostWorker(QThread):
             self.failed.emit(str(exc))
 
 
+class OpenLoginWorker(QThread):
+    """Mở trình duyệt riêng để người dùng đăng nhập 1 dịch vụ (ví dụ ChatGPT)."""
+
+    log = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, url: str, profile_id: str, title: str = "") -> None:
+        super().__init__()
+        self.url = url
+        self.profile_id = profile_id
+        self.title = title or url
+        self._running = True
+
+    def stop(self) -> None:
+        self._running = False
+
+    def run(self) -> None:
+        from ..wp import WPBrowser
+
+        br = None
+        try:
+            br = WPBrowser(headless=False, site_id=self.profile_id)
+            page = br.open()
+            page.goto(self.url, wait_until="domcontentloaded", timeout=30000)
+            self.log.emit(f"Đã mở {self.title}. Hãy đăng nhập, rồi đóng trình duyệt.")
+            while self._running:
+                try:
+                    if page.is_closed():
+                        break
+                    page.wait_for_timeout(300)
+                except Exception:
+                    break
+        except Exception as exc:
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+        finally:
+            try:
+                if br:
+                    br.close()
+            except Exception:
+                pass
+
+
 class LoginWorker(QThread):
     """Mở trình duyệt (có hiển thị) để đăng nhập và cho người dùng xem."""
 

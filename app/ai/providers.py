@@ -131,6 +131,11 @@ def generate_text(provider: str, cfg: dict[str, Any], prompt: str, api_key: str 
             "https://api.openai.com/v1/chat/completions",
             model or "gpt-4o-mini", prompt, api_key,
         )
+    if provider == "deepseek":
+        return _openai_compatible(
+            "https://api.deepseek.com/chat/completions",
+            model or "deepseek-chat", prompt, api_key,
+        )
     if provider == "ollama":
         base = (cfg.get("base_url") or "http://localhost:11434").rstrip("/")
         return _openai_compatible(

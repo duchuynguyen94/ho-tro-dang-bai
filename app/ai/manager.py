@@ -66,9 +66,14 @@ CHỈ trả về DUY NHẤT 1 JSON hợp lệ, không giải thích, đúng đ�
 
 
 def _active_chain(cfg: dict) -> list[str]:
-    order = ["gemini", "groq", "openrouter", "ollama", "openai"]
-    active = cfg.get("active", "gemini")
-    chain = [active] + [p for p in order if p != active]
+    """Thứ tự thử provider: cái đang chọn trước, rồi theo thứ tự người dùng sắp (fallback)."""
+    providers = [p for p in (cfg.get("providers") or {})]
+    order = [p for p in (cfg.get("order") or []) if p in providers]
+    order += [p for p in providers if p not in order]
+    active = cfg.get("active") or (order[0] if order else "")
+    if active in order:
+        order.remove(active)
+    chain = ([active] if active else []) + order
     if not cfg.get("fallback", True):
         chain = [active]
     return chain

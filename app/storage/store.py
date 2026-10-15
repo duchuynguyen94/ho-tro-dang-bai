@@ -62,6 +62,21 @@ class Store:
         # cập nhật model Gemini cũ đã bị Google bỏ
         old_models = {"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"}
         providers = (self.data.get("ai_content") or {}).get("providers") or {}
+
+        # bỏ Ollama, thêm DeepSeek
+        if "ollama" in providers:
+            providers.pop("ollama", None)
+        providers.setdefault("deepseek", {"api_key_enc": "", "model": "deepseek-chat"})
+        self.data["ai_content"]["providers"] = providers
+
+        default_order = ["gemini", "groq", "openrouter", "deepseek", "chatgpt", "openai"]
+        order = [p for p in (self.data["ai_content"].get("order") or []) if p in providers]
+        order += [p for p in default_order if p in providers and p not in order]
+        order += [p for p in providers if p not in order]
+        self.data["ai_content"]["order"] = order
+        if self.data["ai_content"].get("active") == "ollama":
+            self.data["ai_content"]["active"] = order[0] if order else "gemini"
+
         g = providers.get("gemini") or {}
         if g.get("model") in old_models:
             g["model"] = "gemini-3.8-flash"
