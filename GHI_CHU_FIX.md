@@ -16,12 +16,16 @@
 ## Mục 3 — Giữ chọn PNG / JPG khi xuất ảnh, và làm cho nó CÓ TÁC DỤNG THẬT
 - Giữ ô chọn **Định dạng xuất: PNG / JPG**.
 - Hiện `pillow.output_format` **chưa được dùng** — định dạng thật đang lấy theo **Rule ảnh** (`.jpg`/`.png`).
-- → Nối cấu hình này vào bước xuất ảnh sao cho lựa chọn có hiệu lực thật.
+- **Làm rõ:** định dạng này áp cho **ảnh xuất ra và lưu vào** `posts/<task_id>/` khi bấm đăng bài (cùng chỗ với Mục 4).
+- ⚠️ Cần chốt **thứ tự ưu tiên** khi mâu thuẫn: tên file theo **Rule ảnh** đuôi `.png` nhưng cấu hình chọn **JPG** → (đề xuất) **Rule ảnh thắng**, cấu hình chỉ dùng khi Rule ảnh không ghi đuôi. *Chờ người dùng xác nhận.*
+- → Nối cấu hình này vào bước xuất ảnh (`export_post_images()`) sao cho lựa chọn có hiệu lực thật.
 
 ## Mục 4 — Giữ "Kích thước ảnh xuất", và làm cho nó CÓ TÁC DỤNG THẬT
 - Giữ ô **Kích thước ảnh xuất** (mặc định 1080).
 - Hiện giá trị này **chưa được dùng** — ảnh luôn xuất 1080×1080.
-- → Nối cấu hình này vào bước xuất ảnh sao cho lựa chọn có hiệu lực thật.
+- **Làm rõ (người dùng xác nhận):** kích thước này là **kích thước của các hình ảnh được xuất ra và lưu vào thư mục** `posts/<task_id>/` **sau khi bấm nút đăng bài** ("OK — Đăng bài").
+- → Khi bấm đăng bài, ảnh xuất ra phải được **resize theo đúng kích thước đã chọn** trong cấu hình.
+- Vị trí code liên quan: `app/ui/workers.py` → `export_post_images()` (hiện chỉ copy / chuyển JPEG–WEBP, **không resize**).
 
 ## Mục 5 — Đổi tiêu đề "Google Gemini 2.5 Flash Image" → "Google Gemini"
 - Vị trí: **Cấu hình → AI ảnh → card provider**.
