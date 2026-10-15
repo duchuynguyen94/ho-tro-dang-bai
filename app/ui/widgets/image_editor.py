@@ -216,6 +216,7 @@ class ImageEditorPanel(QFrame):
         self.canvas.setObjectName("imgCanvas")
         self.canvas.setFixedSize(CANVAS, CANVAS)
         self.canvas.setAlignment(Qt.AlignCenter)
+        self.canvas.setFocusPolicy(Qt.ClickFocus)      # bấm vào canvas -> nhận con trỏ (để dán ảnh)
         left.addWidget(self.canvas)
 
         self.logo_item = DraggableImage(self.canvas, dashed=True, kind="logo")

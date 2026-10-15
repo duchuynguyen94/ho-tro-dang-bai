@@ -941,11 +941,16 @@ class JobsPage(QWidget):
         return w is not None and w.inherits("QTextEdit")
 
     def eventFilter(self, obj, event) -> bool:  # noqa: N802
-        """Bắt Ctrl/Cmd+V toàn app: nếu clipboard có ẢNH -> dán vào canvas."""
+        """Ctrl/Cmd+V: dán ảnh vào canvas của hình ĐANG CHỌN để chỉnh sửa.
+
+        Ở ô nhập liệu (Tiêu đề / Nội dung…) thì để widget tự dán text như bình thường.
+        """
         try:
             if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Paste):
                 fw = QApplication.focusWidget()
-                if not self._is_text_widget(fw) and self.isVisible() and self.current:
+                if self._is_text_widget(fw):
+                    return False
+                if self.isVisible() and self.current:
                     if clipboard_image_path():
                         self._paste_clipboard_image()
                         return True
