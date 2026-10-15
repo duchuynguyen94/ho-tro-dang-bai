@@ -203,9 +203,20 @@ def text_to_html(text: str) -> str:
                 continue  # dòng phân cách
             if not in_table:
                 close_lists()
-                out.append("<table>")
+                out.append(
+                    '<table border="1" cellspacing="0" cellpadding="6" '
+                    'style="border-collapse:collapse;width:100%">'
+                )
                 in_table = True
-            out.append("<tr>" + "".join(f"<td>{html.escape(c)}</td>" for c in cells) + "</tr>")
+                first_row = True
+            else:
+                first_row = False
+            cells_html = "".join(
+                f'<td style="border:1px solid #999;padding:6px">'
+                f'{"<b>" + html.escape(c) + "</b>" if first_row else html.escape(c)}</td>'
+                for c in cells
+            )
+            out.append(f"<tr>{cells_html}</tr>")
             continue
         if in_table:
             out.append("</table>")
@@ -236,8 +247,64 @@ def text_to_html(text: str) -> str:
     return "\n".join(out)
 
 
+# Mã sản phẩm: chữ HOA + số, có dấu - hoặc /
+MODEL_RE = re.compile(r"\b(?=[A-Z0-9]*(?:\d))(?=[A-Z0-9\-/]{5,}\b)[A-Z0-9]+(?:[-/][A-Z0-9]+)+\b")
+
+
+def _site_tokens(site_url: str, site_name: str) -> list[str]:
+    """Các biến thể tên miền cần tự động chèn link."""
+    tokens: list[str] = []
+    for raw in (site_name or "", site_url or ""):
+        t = (raw or "").strip().rstrip("/")
+        if not t:
+            continue
+        t = re.sub(r"^https?://", "", t)
+        for cand in (t, t[4:] if t.startswith("www.") else f"www.{t}"):
+            if cand and cand not in tokens:
+                tokens.append(cand)
+    return sorted(tokens, key=len, reverse=True)
+
+
+def autolink_html(html_text: str, site_url: str = "", site_name: str = "") -> str:
+    """Tự chèn link: tên website -> URL website; mã sản phẩm -> trang tìm kiếm website."""
+    if not html_text:
+        return html_text
+    base = (site_url or "").strip().rstrip("/")
+    if base and not base.startswith("http"):
+        base = "https://" + base
+    tokens = _site_tokens(site_url, site_name)
+
+    parts = re.split(r"(<[^>]+>)", html_text)
+    out: list[str] = []
+    in_a = False
+    for part in parts:
+        if part.startswith("<"):
+            low = part.lower()
+            if low.startswith("<a "):
+                in_a = True
+            elif low.startswith("</a"):
+                in_a = False
+            out.append(part)
+            continue
+        if in_a or not part.strip():
+            out.append(part)
+            continue
+
+        text = part
+        if base and tokens:
+            for tok in tokens:
+                pattern = re.compile(rf"(?<![\w./-])({re.escape(tok)})(?![\w/-])", re.I)
+                text = pattern.sub(lambda m: f'<a href="{base}">{m.group(1)}</a>', text)
+        if base:
+            text = MODEL_RE.sub(
+                lambda m: f'<a href="{base}/?s={m.group(0)}">{m.group(0)}</a>', text
+            )
+        out.append(text)
+    return "".join(out)
+
+
 # --------------------------------------------------------------------------- #
-# Luồng chính: 2 bước
+# Luồng chính: 1 lần gọi (JSON SEO trước, nội dung sau)
 # --------------------------------------------------------------------------- #
 def generate_content(store, source: dict, log=None) -> dict:
     """1 lần gọi: AI trả JSON SEO TRƯỚC, rồi tới nội dung bài viết."""

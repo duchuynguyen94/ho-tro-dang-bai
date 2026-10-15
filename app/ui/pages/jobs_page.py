@@ -178,6 +178,13 @@ class JobsPage(QWidget):
         self.provider_badge = QLabel("")
         self.provider_badge.setObjectName("chipGreen")
         right.add_header_widget(self.provider_badge)
+        self.regen_all_btn = QPushButton("↻ Random lại")
+        self.regen_all_btn.setProperty("class", "ghost")
+        self.regen_all_btn.setToolTip("Tạo lại toàn bộ nội dung (tiêu đề, từ khóa, mô tả, tags, nội dung)")
+        self.regen_all_btn.clicked.connect(
+            lambda: self.current and self.regenerate.emit(self.current, "")
+        )
+        right.add_header_widget(self.regen_all_btn)
 
         self.stack = QStackedWidget()
         right.body.addWidget(self.stack, 1)
@@ -233,17 +240,17 @@ class JobsPage(QWidget):
         ev2.setSpacing(10)
 
         self.title_edit = QLineEdit()
-        ev2.addLayout(self._field("Tiêu đề", self.title_edit, "title"))
+        ev2.addLayout(self._field("Tiêu đề", self.title_edit))
         self.kw_edit = QLineEdit()
-        ev2.addLayout(self._field("Focus keyword", self.kw_edit, "focus_keyword"))
+        ev2.addLayout(self._field("Focus keyword", self.kw_edit))
         self.desc_edit = QPlainTextEdit()
         self.desc_edit.setFixedHeight(62)
-        ev2.addLayout(self._field("Description (mô tả SEO)", self.desc_edit, "description"))
+        ev2.addLayout(self._field("Description (mô tả SEO)", self.desc_edit))
         self.tags_edit = QLineEdit()
-        ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit, "tags"))
+        ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit))
         self.content_edit = RichEditor()
         ev2.addLayout(self._field("Nội dung (soạn thảo trực tiếp — chèn được link/ảnh & sửa HTML)",
-                                  self.content_edit, "content_html"))
+                                  self.content_edit))
 
         img_head = QHBoxLayout()
         img_lab = QLabel("Ảnh (thumbnail + slider)")
@@ -315,17 +322,18 @@ class JobsPage(QWidget):
         split.setSizes([330, 900])
         outer.addWidget(split)
 
-    def _field(self, label: str, widget: QWidget, field: str) -> QVBoxLayout:
+    def _field(self, label: str, widget: QWidget, field: str | None = None) -> QVBoxLayout:
         box = QVBoxLayout()
         row = QHBoxLayout()
         lab = QLabel(label)
         lab.setStyleSheet("font-weight:600;")
         row.addWidget(lab)
         row.addStretch(1)
-        btn = QPushButton("↻ Random")
-        btn.setProperty("class", "ghost")
-        btn.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, field))
-        row.addWidget(btn)
+        if field:
+            btn = QPushButton("↻ Random")
+            btn.setProperty("class", "ghost")
+            btn.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, field))
+            row.addWidget(btn)
         box.addLayout(row)
         box.addWidget(widget)
         return box
