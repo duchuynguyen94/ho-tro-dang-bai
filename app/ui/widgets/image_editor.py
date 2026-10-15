@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, Qt, Signal
-from PySide6.QtGui import QPixmap
+from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -203,11 +203,7 @@ class ImageEditorPanel(QFrame):
         reset = QPushButton("Đặt lại")
         reset.setProperty("class", "ghost")
         reset.clicked.connect(self._reset)
-        apply_btn = QPushButton("Lưu && áp dụng")
-        apply_btn.setProperty("class", "primary")
-        apply_btn.clicked.connect(self._apply)
         tools.addWidget(reset)
-        tools.addWidget(apply_btn)
         right.addLayout(tools)
 
         grid = QGridLayout()
@@ -235,7 +231,22 @@ class ImageEditorPanel(QFrame):
         self.s_logo.valueChanged.connect(lambda _v: self._layout_items())
         self.s_brand.valueChanged.connect(lambda _v: self._layout_items())
 
+        # tự động lưu sau khi ngừng thao tác
+        self._autosave = QTimer(self)
+        self._autosave.setSingleShot(True)
+        self._autosave.setInterval(700)
+        self._autosave.timeout.connect(self._emit_opts)
+        for w in (self.s_product, self.s_logo, self.s_brand, self.s_wm):
+            w.valueChanged.connect(self._schedule_save)
+        self.remove_bg.toggled.connect(self._schedule_save)
+        self.footer_combo.currentIndexChanged.connect(self._schedule_save)
+
     # ------------------------------------------------------------------ #
+    def _schedule_save(self, *_a) -> None:
+        if getattr(self, "_emitting", False):
+            return
+        self._autosave.start()
+
     def _slider(self, grid: QGridLayout, row: int, label: str,
                 lo: int, hi: int, value: int) -> QSlider:
         lab = QLabel(label)
@@ -389,13 +400,14 @@ class ImageEditorPanel(QFrame):
         if self.wm_label is not None:
             self.wm_label.raise_()      # watermark luôn nằm TRÊN thành phần
 
-    def _on_upload_moved(self) -> None:
+    def _on_upload_moved(self) -> None:  # noqa: D401
         ups = list(self._opts.get("uploads") or [])
         for i, it in enumerate(self._upload_items):
             if i < len(ups) and isinstance(ups[i], dict):
                 ups[i]["pos"] = [round((it.x() + it.width() / 2) / CANVAS, 4),
                                  round((it.y() + it.height() / 2) / CANVAS, 4)]
         self._opts["uploads"] = ups
+        self._schedule_save()
 
     def _on_upload_resized(self, index: int, width: int) -> None:
         base = product_box(SRC, 1.0) * CANVAS / SRC
@@ -414,22 +426,35 @@ class ImageEditorPanel(QFrame):
             self.wm_label = None
         if not text:
             return
-        lab = QLabel(text, self.canvas)
-        lab.setStyleSheet(
-            "color: rgba(15,23,42,0.22); font-weight:700; font-size:13px;"
-            "background: transparent;"
-        )
+        pm = QPixmap(CANVAS, CANVAS)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing)
+        font = QFont()
+        font.setPixelSize(13)
+        font.setBold(True)
+        painter.setFont(font)
+        painter.setPen(QColor(15, 23, 42, 56))
+        painter.translate(CANVAS / 2, CANVAS / 2)
+        painter.rotate(-34)                       # chéo như ảnh thật
+        w = painter.fontMetrics().horizontalAdvance(text)
+        painter.drawText(int(-w / 2), 0, text)
+        painter.end()
+
+        lab = QLabel(self.canvas)
+        lab.setPixmap(pm)
+        lab.setFixedSize(CANVAS, CANVAS)
         lab.setAttribute(Qt.WA_TransparentForMouseEvents, True)
-        lab.adjustSize()
-        lab.move(max(4, (CANVAS - lab.width()) // 2), max(4, (CANVAS - lab.height()) // 2))
+        lab.move(0, 0)
         lab.show()
         lab.raise_()
         self.wm_label = lab
 
-    def _on_product_moved(self) -> None:
+    def _on_product_moved(self) -> None:  # noqa: D401
         self._opts["product_pos"] = [
             [round(it.x() / CANVAS, 4), round(it.y() / CANVAS, 4)] for it in self._product_items
         ]
+        self._schedule_save()
 
     def _on_product_resized(self, index: int, width: int) -> None:
         base = product_box(SRC, 1.0) * CANVAS / SRC
@@ -448,8 +473,9 @@ class ImageEditorPanel(QFrame):
         slider.setValue(int(scale * 100))
         slider.blockSignals(False)
         self._opts["logo_scale" if which == "logo" else "brand_scale"] = round(scale, 3)
+        self._schedule_save()
 
-    def _on_moved(self) -> None:
+    def _on_moved(self) -> None:  # noqa: D401
         lp = self.logo_item.pos()
         bp = self.brand_item.pos()
         self._opts["logo_pos"] = [round(lp.x() / CANVAS, 4), round(lp.y() / CANVAS, 4)]
@@ -457,6 +483,7 @@ class ImageEditorPanel(QFrame):
             round((bp.x() + self.brand_item.width()) / CANVAS, 4),
             round(bp.y() / CANVAS, 4),
         ]
+        self._schedule_save()
 
     def _reset(self) -> None:
         self._opts = {}
@@ -469,6 +496,24 @@ class ImageEditorPanel(QFrame):
         self._layout_products()
         self._layout_uploads()
         self._layout_watermark()
+
+    def _emit_opts(self) -> None:
+        self._emitting = True
+        self._on_moved()
+        self._on_product_moved()
+        self._on_upload_moved()
+        opts = dict(self._opts)
+        opts.update({
+            "product_scale": self.s_product.value() / 100.0,
+            "logo_scale": self.s_logo.value() / 100.0,
+            "brand_scale": self.s_brand.value() / 100.0,
+            "watermark_opacity": self.s_wm.value(),
+            "remove_bg": self.remove_bg.isChecked(),
+            "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
+        })
+        self._opts = opts
+        self.apply_opts.emit(opts)
+        self._emitting = False
 
     def _apply(self) -> None:
         self._on_moved()

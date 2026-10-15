@@ -499,22 +499,9 @@ class ImageRefetchWorker(QThread):
                     continue
 
             if not paths:
-                query = (extract_product_name(
-                    (self.task.result or {}).get("content_html", ""),
-                    page.get("title", "") or (self.task.result or {}).get("title", ""),
-                ) or (self.task.result or {}).get("focus_keyword", "")
-                    or (self.task.result or {}).get("title", ""))
-                if query:
-                    self.log.emit(f"Không thấy ảnh ở nguồn — tìm ảnh trên mạng: “{query[:60]}”…")
-                    for u in src.search_images(query, 4):
-                        try:
-                            paths.append(src.download_image(u, prefix="web"))
-                        except Exception:
-                            continue
-                        if len(paths) >= 3:
-                            break
-            if not paths:
-                raise RuntimeError("Không lấy được ảnh sản phẩm (cả từ link nguồn và tìm trên mạng).")
+                raise RuntimeError(
+                    "Link nguồn không có ảnh sản phẩm nào để lấy."
+                )
             r = self.task.result or {}
             r["product_images"] = paths
             rb, th = _remove_bg_opts(self.store)
