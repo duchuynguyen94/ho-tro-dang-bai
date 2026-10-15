@@ -73,10 +73,11 @@
   - **Sắp xếp ảnh (bổ sung — người dùng yêu cầu):** cho phép **đổi thứ tự ảnh** bằng **kéo–thả thumbnail**.
     - Kéo thumbnail này sang vị trí khác → đổi thứ tự trong `images` + `image_opts_list`, **đánh số lại** caption.
       - Các tuỳ chọn **của riêng ảnh** (vị trí logo/brand/sản phẩm, watermark, ảnh tải lên…) **đi theo ảnh**.
-      - **Riêng thanh thông tin** thì gán lại **theo vị trí mới** (xem dòng dưới).
-    - **Thứ tự xuất file theo Rule ảnh bám theo VỊ TRÍ SAU KHI SẮP XẾP (người dùng đã chốt):** ảnh ở **vị trí 1** dùng **dòng Rule ảnh số 1**, vị trí 2 dùng dòng 2… (`{index}` = số thứ tự mới).
-    - → Rule ảnh **gán theo số đã sắp xếp**, **không** đi theo ảnh gốc.
-    - **Thanh thông tin:** gán lại **luân phiên 1→2→1→2 theo vị trí mới** (vị trí 1 = thanh 1, vị trí 2 = thanh 2…) — thống nhất với cách Rule ảnh gán theo vị trí.
+      - **Riêng thanh thông tin** thì gán lại **theo index mới** (xem dòng dưới).
+    - **Đánh lại INDEX sau khi sắp xếp (người dùng chốt):** ảnh theo thứ tự mới được đánh lại **index 1, 2, 3, 4…** (caption "Ảnh 1, Ảnh 2, Ảnh 3, Ảnh 4…").
+    - **Tên ảnh khi xuất:** gán theo **Rule ảnh**, dùng **dãy index MỚI** → `{index}` lần lượt = **1, 2, 3, 4…** theo thứ tự đã sắp xếp (Rule ảnh dòng 1 cho ảnh index 1, dòng 2 cho index 2…).
+      - Ví dụ Rule ảnh dòng 1 = `{title}`, dòng 2 = `Tổng kho hàng sẵn {title}` → ảnh ở vị trí 1 xuất tên `<tiêu đề>`, vị trí 2 xuất `Tổng kho hàng sẵn <tiêu đề>`, …
+    - **Thanh thông tin:** gán lại **luân phiên 1→2→1→2 theo index mới** (index 1 = thanh 1, index 2 = thanh 2…).
 
 ---
 
