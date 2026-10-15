@@ -172,8 +172,15 @@ class ContentWorker(QThread):
             pname = extract_product_name(
                 raw_html, page.get("title", "") or data.get("title", "")
             )
+            # liên kết NGOÀI: lấy site khác trong danh sách (trừ site đang đăng)
+            others = [x for x in self.store.sites if x.id != site.id and (x.url or "").strip()]
+            link_site = others[0] if others else site
+            if others:
+                self.log.emit(f"Chèn liên kết ngoài tới {link_site.name}.")
+            else:
+                self.log.emit("Chỉ có 1 website trong danh sách — dùng chính site này để chèn link.")
             data["content_html"] = autolink_html(
-                raw_html, site.url or "", site.name or "", pname,
+                raw_html, link_site.url or "", link_site.name or "", pname,
                 keywords=[data.get("focus_keyword", ""), data.get("title", ""),
                           page.get("title", "")],
             )
