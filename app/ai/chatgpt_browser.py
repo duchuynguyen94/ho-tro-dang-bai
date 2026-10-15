@@ -69,14 +69,67 @@ _REPLY_JS = r"""() => {
 # Tiện ích
 # --------------------------------------------------------------------------- #
 def _composer(page):
-    for sel in COMPOSER_SELECTORS:
+    """Ô nhập tin nhắn: ưu tiên các selector đặc trưng, cuối cùng lấy contenteditable CUỐI."""
+    for sel in (
+        "#prompt-textarea",
+        "div.ProseMirror[contenteditable='true']",
+        "textarea[data-id]",
+        "form textarea",
+    ):
         try:
-            loc = page.locator(sel).first
+            loc = page.locator(sel).last
             if loc.count() > 0 and loc.is_visible():
                 return loc
         except Exception:
             continue
+    try:
+        loc = page.locator("div[contenteditable='true']")
+        n = loc.count()
+        for i in range(n - 1, -1, -1):     # ô nhập nằm dưới cùng
+            el = loc.nth(i)
+            if el.is_visible():
+                return el
+    except Exception:
+        pass
     return None
+
+
+def _composer_text(page) -> str:
+    try:
+        return (page.evaluate(
+            """() => {
+            const els = [...document.querySelectorAll('#prompt-textarea, div[contenteditable="true"], textarea')];
+            const el = els.filter(e => e.offsetParent !== null).pop();
+            if (!el) return '';
+            return (el.value !== undefined ? el.value : el.innerText) || '';
+        }"""
+        ) or "").strip()
+    except Exception:
+        return ""
+
+
+def _click_send(page) -> bool:
+    """Bấm nút Gửi nếu có."""
+    for name in ("Send", "Gửi", "Send message", "Send prompt"):
+        try:
+            btn = page.get_by_role("button", name=name)
+            if btn.count():
+                b = btn.last
+                if b.is_visible() and b.is_enabled():
+                    b.click(timeout=2500)
+                    return True
+        except Exception:
+            continue
+    try:
+        btn = page.locator('[data-testid="send-button"], button[aria-label*="Send"], button[aria-label*="Gửi"]')
+        if btn.count():
+            b = btn.last
+            if b.is_visible() and b.is_enabled():
+                b.click(timeout=2500)
+                return True
+    except Exception:
+        pass
+    return False
 
 
 def _wait_composer(page, timeout: float = 25.0):
@@ -241,8 +294,87 @@ def _send(page, text: str) -> None:
         box.fill(text)
     except Exception:
         page.keyboard.type(text[:4000])
-    page.wait_for_timeout(400)
-    page.keyboard.press("Enter")
+    page.wait_for_timeout(500)
+
+    # Gửi (thử nút Gửi, nếu không có thì Enter) + kiểm tra đã gửi
+    for _ in range(4):
+        _click_send(page)
+        try:
+            page.keyboard.press("Enter")
+        except Exception:
+            pass
+        page.wait_for_timeout(900)
+        if not _composer_text(page):
+            return
+    raise AIError(
+        "Không gửi được tin nhắn cho ChatGPT (ô nhập vẫn còn nội dung). "
+        "Thử lại hoặc gửi bằng tay trên cửa sổ trình duyệt."
+    )
+
+
+def _find_json_block(text: str):
+    """Tìm khối JSON đầu tiên có 'title'. Trả về (data, start, end)."""
+    if not text:
+        return None, -1, -1
+    n = len(text)
+    for i, ch in enumerate(text):
+        if ch != "{":
+            continue
+        depth = 0
+        for j in range(i, n):
+            if text[j] == "{":
+                depth += 1
+            elif text[j] == "}":
+                depth -= 1
+                if depth == 0:
+                    try:
+                        data = json.loads(text[i:j + 1])
+                    except (json.JSONDecodeError, ValueError):
+                        data = None
+                    if isinstance(data, dict) and str(data.get("title", "")).strip() \
+                            and not _is_placeholder(data.get("title")):
+                        return data, i, j
+                    break
+    return None, -1, -1
+
+
+def split_reply(text: str) -> tuple[dict | None, str]:
+    """Tách câu trả lời thành (JSON SEO, nội dung bài viết)."""
+    data, _i, j = _find_json_block(text or "")
+    if data is None:
+        return None, (text or "").strip()
+    content = (text or "")[j + 1:].strip()
+    # bỏ dấu ``` thừa ở hai đầu nội dung
+    content = re.sub(r"^```[a-zA-Z]*\s*", "", content)
+    content = re.sub(r"\s*```$", "", content).strip()
+    return data, content
+
+
+def _wait_reply_full(page, prompt: str, timeout: int = 420) -> str:
+    """Chờ tới khi câu trả lời có đủ JSON SEO + nội dung và đã ổn định."""
+    deadline = time.time() + timeout
+    last = ""
+    stable = 0
+    while time.time() < deadline:
+        page.wait_for_timeout(1500)
+        text = _reply_text(page, prompt)
+        data, i, j = _find_json_block(text)
+        has_both = data is not None and (len(text) - (j - i)) > 150
+        if has_both and text == last:
+            stable += 1
+            if stable >= 2:
+                return text
+        else:
+            stable = 0
+        last = text
+        if _limit_reached(page, last):
+            raise AIError(LIMIT_MSG)
+    data, _i, _j = _find_json_block(last)
+    if data is not None:
+        return last
+    raise AIError(
+        "ChatGPT không trả về đủ JSON SEO + nội dung. Thử lại hoặc đổi provider khác."
+    )
 
 
 def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = False) -> str:
@@ -291,6 +423,25 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
             log("Đang gửi yêu cầu cho ChatGPT…")
         _send(page, prompt)
         return _wait_reply(page, prompt, timeout, require_json)
+    finally:
+        try:
+            br.close()
+        except Exception:
+            pass
+
+
+def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420) -> str:
+    """1 tin nhắn: trả về JSON SEO ở đầu + nội dung bài viết phía sau."""
+    from ..wp import WPBrowser
+
+    project_url = (pcfg or {}).get("project_url", "") or ""
+    br = WPBrowser(headless=False, site_id="chatgpt")
+    try:
+        page = _open_page(br, project_url, log)
+        if log:
+            log("Đang gửi yêu cầu cho ChatGPT (nội dung + SEO)…")
+        _send(page, prompt)
+        return _wait_reply_full(page, prompt, timeout)
     finally:
         try:
             br.close()

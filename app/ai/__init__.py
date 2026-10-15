@@ -1,7 +1,6 @@
-"""Module AI: viết nội dung (2 bước Content → SEO)."""
+"""Module AI: viết nội dung (1 lần gọi: JSON SEO + nội dung)."""
 from .manager import (
-    build_content_prompt,
-    build_seo_prompt,
+    build_combined_prompt,
     generate_content,
     generate_field,
     read_rule,
@@ -12,8 +11,7 @@ from .providers import AIError
 __all__ = [
     "generate_content",
     "generate_field",
-    "build_content_prompt",
-    "build_seo_prompt",
+    "build_combined_prompt",
     "read_rule",
     "text_to_html",
     "AIError",
