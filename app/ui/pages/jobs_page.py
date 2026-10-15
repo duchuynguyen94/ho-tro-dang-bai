@@ -203,6 +203,7 @@ class JobsPage(QWidget):
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
     refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
+    recompose_image = Signal(object, int)    # (task, image index) ghép lại 1 ảnh
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
@@ -648,16 +649,27 @@ class JobsPage(QWidget):
         self.regenerate_images.emit(self.current, mode)
 
     def _upload_image(self, index: int) -> None:
+        """Ảnh tải lên trở thành MỘT THÀNH PHẦN ở giữa (như logo), không đè ảnh."""
         path, _ = QFileDialog.getOpenFileName(self, "Chọn ảnh", "", "Ảnh (*.png *.jpg *.jpeg *.webp)")
         if not path or not self.current:
             return
-        images = self.current.result.setdefault("images", [])
-        while len(images) <= index:
-            images.append({"path": "", "footer": ""})
-        images[index] = {"path": path, "footer": images[index].get("footer", "")}
+        self._save()
+        r = self.current.result
+        prods = list(r.get("product_images") or [])
+        if len(prods) >= 3:
+            prods[-1] = path          # đã đủ 3 -> thay cái cuối
+        else:
+            prods.append(path)
+        r["product_images"] = prods
+        # bỏ vị trí cũ để thành phần tự sắp xếp lại ở giữa
+        lst = r.get("image_opts_list") or []
+        if index < len(lst):
+            lst[index].pop("product_pos", None)
+        r["image_opts_list"] = lst
         self.store.upsert_task(self.current)
         self.store.save()
         self._load(self.current)
+        self.recompose_image.emit(self.current, index)
 
     def _start_create_script(self) -> None:
         """Xác nhận mật khẩu trước khi bắt đầu ghi kịch bản (tránh bấm nhầm)."""

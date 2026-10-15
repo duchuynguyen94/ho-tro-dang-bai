@@ -118,6 +118,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.stop_record.connect(self._on_stop_record)
         self.jobs_page.ai_edit.connect(self._on_ai_edit)
         self.jobs_page.refetch_image.connect(self._on_refetch_image)
+        self.jobs_page.recompose_image.connect(self._on_recompose_image)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.config_page.changed.connect(self._on_config_changed)
@@ -459,6 +460,24 @@ class MainWindow(QMainWindow):
         self._workers.append(worker)
         worker.start()
         self.status("Đang ghép lại ảnh theo thiết lập…")
+
+    def _on_recompose_image(self, task, index: int) -> None:
+        site = self.store.get_site(task.site_id)
+        if not site:
+            return
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        lst = _opts_list_of(fresh.result)
+        opts = dict(lst[index]) if index < len(lst) else {}
+        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts,
+                              only_index=index)
+        worker.log.connect(lambda m: self.status(m))
+        worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
+        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err),
+                                           self.status("Sẵn sàng")))
+        worker.finished.connect(lambda: self._cleanup(worker))
+        self._workers.append(worker)
+        worker.start()
+        self.status(f"Đang ghép lại Ảnh {index + 1}…")
 
     def _on_refetch_image(self, task, index: int) -> None:
         site = self.store.get_site(task.site_id)
