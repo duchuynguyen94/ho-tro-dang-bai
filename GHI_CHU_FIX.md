@@ -57,7 +57,8 @@
   - Bấm vào **Ảnh 4** → **chỉnh sửa riêng của Ảnh 4** (kéo/thả, resize, watermark, chọn thanh thông tin 1/2, tải ảnh, AI sửa, lấy lại ảnh…) — độc lập với 3 ảnh kia.
 - Chi tiết kỹ thuật:
   - Thêm 1 entry vào `task.result["images"]` **và** 1 entry tương ứng vào `task.result["image_opts_list"]` (mỗi ảnh có bộ tuỳ chọn riêng).
-  - Ảnh mới lấy nguồn: (đề xuất) **sao chép từ ảnh cuối** hoặc **để trống chờ tải lên** — *chờ người dùng chốt*.
+  - **Ảnh mới = ĐỂ TRỐNG (người dùng đã chốt):** chỉ có sẵn khung mẫu — **logo site, logo brand, watermark, thanh thông tin** — **không có ảnh sản phẩm**; người dùng tự **tải ảnh lên** cho ảnh đó rồi chỉnh riêng.
+    - Vì vậy phần **sản phẩm** của ảnh mới để rỗng (chờ tải lên), các thành phần mẫu vẫn hiển thị như các ảnh khác.
   - Các chỗ đang **cứng `[:3]`** phải đổi thành **theo số ảnh thực tế** để ảnh thêm vào vẫn được xuất & có sản phẩm:
     - `app/ui/workers.py` → `export_post_images()` (`images[:3]`)
     - `app/ui/workers.py` → `product_urls = page.get("images", [])[:3]` và `products=prods[:3]`
