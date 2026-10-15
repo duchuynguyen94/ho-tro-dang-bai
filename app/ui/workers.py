@@ -174,7 +174,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             o = {**opts_list[i], **o}
         logo_pos = tuple(o.get("logo_pos") or (0.035, 0.035))
         brand_pos = tuple(o.get("brand_pos") or (0.965, 0.035))
-        logo_scale = float(o.get("logo_scale", 1.0) or 1.0)
+        logo_scale = float(o.get("logo_scale", 1.8) or 1.8)
         brand_scale = float(o.get("brand_scale", 1.0) or 1.0)
         brand_nobg = bool(o.get("brand_nobg", False))
         brand_hidden = bool(o.get("brand_hidden", False))

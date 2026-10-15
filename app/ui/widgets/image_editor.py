@@ -257,7 +257,7 @@ class ImageEditorPanel(QFrame):
 
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
-        self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 180, 100)
+        self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 300, 180)
         self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 7)
         self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
         right.addLayout(grid)
@@ -291,7 +291,7 @@ class ImageEditorPanel(QFrame):
 
     # ------------------------------------------------------------------ #
     def _schedule_save(self, *_a) -> None:
-        if getattr(self, "_emitting", False):
+        if getattr(self, "_emitting", False) or getattr(self, "_loading", False):
             return
         self._autosave.start()
 
@@ -327,11 +327,16 @@ class ImageEditorPanel(QFrame):
             self.canvas.clear()
             self.canvas.setText("(chưa có ảnh)")
 
-        self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.0) or 1.0) * 100))
-        self.s_wm.setValue(int(self._opts.get("watermark_opacity", 7) or 0))
-        self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
-        mode = self._opts.get("footer_mode") or footer_mode or "bar1"
-        self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
+        # Chỉ NẠP giá trị — không tự động lưu/ghép lại ảnh khi mới chọn ảnh
+        self._loading = True
+        try:
+            self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.8) or 1.8) * 100))
+            self.s_wm.setValue(int(self._opts.get("watermark_opacity", 7) or 0))
+            self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
+            mode = self._opts.get("footer_mode") or footer_mode or "bar1"
+            self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
+        finally:
+            self._loading = False
         self._layout_items()
         self._layout_products()
         self._layout_uploads()
@@ -655,7 +660,8 @@ class ImageEditorPanel(QFrame):
         path = self._preview.get("logo" if which == "logo" else "brand", "")
         w1, _h1 = self._composed_size(path, bw, bh, 1.0)
         disp1 = max(1, int(w1 * CANVAS / SRC))
-        scale = max(0.3, min(2.5, width / max(1.0, disp1)))
+        hi = 3.0 if which == "logo" else 2.5
+        scale = max(0.3, min(hi, width / max(1.0, disp1)))
         if which == "logo":
             self.s_logo.blockSignals(True)
             self.s_logo.setValue(int(scale * 100))
@@ -675,7 +681,7 @@ class ImageEditorPanel(QFrame):
 
     def _reset(self) -> None:
         self._opts = {}
-        self.s_logo.setValue(100)
+        self.s_logo.setValue(180)
         self.s_wm.setValue(7)
         self.s_wm_size.setValue(100)
         self._layout_items()

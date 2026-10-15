@@ -149,7 +149,7 @@ def compose(
     remove_bg_thresh: int = 42,
     logo_pos: tuple[float, float] = (0.035, 0.035),
     brand_pos: tuple[float, float] = (0.965, 0.035),
-    logo_scale: float = 1.0,
+    logo_scale: float = 1.8,
     brand_scale: float = 1.0,
     brand_nobg: bool = False,
     brand_hidden: bool = False,
