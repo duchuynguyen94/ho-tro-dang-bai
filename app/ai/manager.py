@@ -135,12 +135,12 @@ def _active_chain(cfg: dict) -> list[str]:
 
 
 def _fmt_errors(errors: list[str]) -> str:
+    """Ưu tiên lỗi của provider ĐANG CHỌN (phần tử đầu), phần còn lại chỉ đếm."""
     if not errors:
         return "Không rõ nguyên nhân."
-    head = " | ".join(errors[:3])
-    if len(errors) > 3:
-        head += f" (+{len(errors) - 3} lỗi khác)"
-    return head
+    first = errors[0]
+    rest = len(errors) - 1
+    return first if rest <= 0 else f"{first} (và {rest} provider khác không dùng được)"
 
 
 def _is_placeholder(value) -> bool:
@@ -510,6 +510,7 @@ def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
             inner = str(seo.get("content_html", "") or "").strip()
             if inner and not _is_placeholder(inner) and _looks_like_html(inner):
                 content = inner        # AI để nội dung trong JSON -> dùng luôn
+            seo["provider_used"] = provider
             seo["content_html"] = clean_content_html(
                 content if _looks_like_html(content) else text_to_html(content)
             )

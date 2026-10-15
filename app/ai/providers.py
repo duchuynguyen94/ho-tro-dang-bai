@@ -30,6 +30,8 @@ def _openai_compatible(base_url: str, model: str, prompt: str, api_key: str) -> 
         "temperature": 0.8,
     }
     r = httpx.post(base_url, json=body, headers=headers, timeout=TIMEOUT)
+    if r.status_code == 429:
+        raise AIError("hết quota / quá nhiều yêu cầu (429)")
     if r.status_code >= 400:
         raise AIError(f"{base_url} trả về {r.status_code}: {r.text[:200]}")
     data = r.json()
@@ -99,6 +101,8 @@ def _gemini(model: str, prompt: str, api_key: str) -> str:
             f"Vào Cấu hình → AI nội dung để đổi model.{hint}"
         )
 
+    if r.status_code == 429:
+        raise AIError("Gemini hết quota (429). Chờ hạn mức làm mới hoặc đổi provider khác.")
     if r.status_code >= 400:
         raise AIError(f"Gemini trả về {r.status_code}: {r.text[:200]}")
     return _gemini_text(r)
