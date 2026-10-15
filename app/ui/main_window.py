@@ -34,6 +34,7 @@ from .pages.post_page import PostPage
 from .style import app_font
 from .workers import (
     ContentWorker,
+    _opts_list_of,
     FieldWorker,
     ImageEditWorker,
     ImagesWorker,
@@ -253,7 +254,17 @@ class MainWindow(QMainWindow):
 
     def _on_images_ok(self, task, images: list) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        fresh.result["images"] = images
+        cur = list(fresh.result.get("images") or [])
+        if images and all("index" in im for im in images) and len(images) == 1:
+            idx = images[0]["index"]
+            while len(cur) <= idx:
+                cur.append({"path": "", "footer": ""})
+            cur[idx] = {"path": images[0]["path"], "footer": images[0].get("footer", "")}
+            fresh.result["images"] = cur
+        else:
+            fresh.result["images"] = [
+                {"path": im.get("path", ""), "footer": im.get("footer", "")} for im in images
+            ]
         self.store.upsert_task(fresh)
         self.store.save()
         self.jobs_page.current = fresh
@@ -423,19 +434,22 @@ class MainWindow(QMainWindow):
         self._log_err("Ghi kịch bản", err)
         self.status("Sẵn sàng")
 
-    def _on_apply_image_opts(self, task, opts: dict) -> None:
+    def _on_apply_image_opts(self, task, index: int, opts: dict) -> None:
         site = self.store.get_site(task.site_id)
         if not site:
             return
         self.jobs_page._save()
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        fresh.result.setdefault("image_opts", {}).update(opts)
-        if opts.get("footer_mode"):
-            fresh.footer_mode = opts["footer_mode"]
+        lst = _opts_list_of(fresh.result)
+        while len(lst) <= index:
+            lst.append({})
+        lst[index] = {**lst[index], **opts}
+        fresh.result["image_opts_list"] = lst
         self.store.upsert_task(fresh)
         self.store.save()
 
-        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts)
+        worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts,
+                              only_index=index)
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda images: self._on_images_ok(fresh, images))
         worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", err), self.status("Sẵn sàng")))

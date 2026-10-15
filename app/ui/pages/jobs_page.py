@@ -55,6 +55,35 @@ STATUS_OBJECTS = {
 }
 
 
+class ThumbImage(QLabel):
+    """Ảnh thumbnail: tự phóng đầy khung (cắt cạnh thừa)."""
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setObjectName("imgThumb")
+        self.setFixedHeight(200)
+        self.setMinimumWidth(60)
+        self.setAlignment(Qt.AlignCenter)
+        self._src = None
+
+    def set_source(self, pm) -> None:
+        self._src = pm
+        self._rescale()
+
+    def resizeEvent(self, event) -> None:  # noqa: N802
+        self._rescale()
+        super().resizeEvent(event)
+
+    def _rescale(self) -> None:
+        if self._src is None or self._src.isNull() or self.width() < 2 or self.height() < 2:
+            return
+        scaled = self._src.scaled(self.size(), Qt.KeepAspectRatioByExpanding,
+                                  Qt.SmoothTransformation)
+        x = max(0, (scaled.width() - self.width()) // 2)
+        y = max(0, (scaled.height() - self.height()) // 2)
+        self.setPixmap(scaled.copy(x, y, self.width(), self.height()))
+
+
 class ThumbBox(QFrame):
     """Thumbnail ảnh, bấm vào để chọn sửa."""
 
@@ -162,7 +191,7 @@ class JobsPage(QWidget):
     stop_record = Signal()                   # dừng ghi & lưu
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
-    apply_image_opts = Signal(object, dict)  # (task, tuỳ chọn ảnh)
+    apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
     def __init__(self, store, parent=None) -> None:
@@ -505,26 +534,28 @@ class JobsPage(QWidget):
         box = ThumbBox(index - 1)
         box.clicked.connect(self._select_image)
         bl = QVBoxLayout(box)
-        bl.setContentsMargins(6, 6, 6, 6)
-        bl.setSpacing(6)
+        bl.setContentsMargins(0, 0, 0, 0)
+        bl.setSpacing(0)
 
-        pic = QLabel()
-        pic.setObjectName("imgThumb")
-        pic.setFixedSize(160, 160)
-        pic.setAlignment(Qt.AlignCenter)
+        pic = ThumbImage()
         p = Path(im.get("path", ""))
         if p.exists():
-            pic.setPixmap(QPixmap(str(p)).scaled(160, 160, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            pic.set_source(QPixmap(str(p)))
         else:
             pic.setText("(chưa có ảnh)")
         bl.addWidget(pic)
+
+        pad = QVBoxLayout()
+        pad.setContentsMargins(8, 6, 8, 8)
+        pad.setSpacing(6)
+        bl.addLayout(pad)
 
         footer = im.get("footer") or ""
         tag = "#1" if "bar_1" in footer else ("#2" if "bar_2" in footer else "")
         cap = QLabel(f"Ảnh {index}" + (f" · thanh TT {tag}" if tag else ""))
         cap.setObjectName("taskMeta")
         cap.setAlignment(Qt.AlignCenter)
-        bl.addWidget(cap)
+        pad.addWidget(cap)
 
         bts = QHBoxLayout()
         up = QPushButton("Tải lên")
@@ -539,7 +570,7 @@ class JobsPage(QWidget):
         bts.addWidget(up)
         bts.addWidget(ai)
         bts.addWidget(rnd)
-        bl.addLayout(bts)
+        pad.addLayout(bts)
         return box
 
     def _ai_edit(self, index: int) -> None:
@@ -564,7 +595,8 @@ class JobsPage(QWidget):
         r = task.result or {}
         images = r.get("images") or []
         footer = images[index].get("footer", "") if index < len(images) else ""
-        opts = r.get("image_opts") or {}
+        lst = r.get("image_opts_list") or []
+        opts = dict(lst[index]) if index < len(lst) else (r.get("image_opts") or {})
         remove_bg, th = _remove_bg_opts(self.store)
         base = compose(
             size=1080,
@@ -593,12 +625,14 @@ class JobsPage(QWidget):
         for box in getattr(self, "_thumbs", []):
             box.set_selected(box.index == idx)
         title = f"Ảnh {idx + 1}" if images else ""
+        lst = r.get("image_opts_list") or []
+        opts_i = dict(lst[idx]) if idx < len(lst) else (r.get("image_opts") or {})
         preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
-        self.img_editor.load(preview, r.get("image_opts") or {}, task.footer_mode, title)
+        self.img_editor.load(preview, opts_i, task.footer_mode, title)
 
     def _apply_image_opts(self, opts: dict) -> None:
         if self.current:
-            self.apply_image_opts.emit(self.current, opts)
+            self.apply_image_opts.emit(self.current, getattr(self, "_sel_index", 0), opts)
 
     def _regen_images(self) -> None:
         if not self.current:

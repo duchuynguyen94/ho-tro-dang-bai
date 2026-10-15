@@ -146,6 +146,20 @@ class ImageEditorPanel(QFrame):
         # ---------- điều khiển ----------
         right = QVBoxLayout()
         right.setSpacing(8)
+
+        # hàng nút: Đặt lại + Lưu (đặt TRÊN các điều khiển)
+        actions = QHBoxLayout()
+        reset = QPushButton("Đặt lại")
+        reset.setProperty("class", "ghost")
+        reset.clicked.connect(self._reset)
+        apply_btn = QPushButton("Lưu && áp dụng")
+        apply_btn.setProperty("class", "primary")
+        apply_btn.clicked.connect(self._apply)
+        actions.addWidget(reset)
+        actions.addStretch(1)
+        actions.addWidget(apply_btn)
+        right.addLayout(actions)
+
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
 
@@ -166,17 +180,6 @@ class ImageEditorPanel(QFrame):
         right.addLayout(foot_row)
 
         right.addStretch(1)
-        actions = QHBoxLayout()
-        reset = QPushButton("Đặt lại")
-        reset.setProperty("class", "ghost")
-        reset.clicked.connect(self._reset)
-        apply_btn = QPushButton("Lưu && áp dụng")
-        apply_btn.setProperty("class", "primary")
-        apply_btn.clicked.connect(self._apply)
-        actions.addWidget(reset)
-        actions.addStretch(1)
-        actions.addWidget(apply_btn)
-        right.addLayout(actions)
         body.addLayout(right, 1)
 
         # cập nhật preview khi kéo size
