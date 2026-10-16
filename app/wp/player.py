@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import time
+from pathlib import Path
 
 from playwright.sync_api import Page
 
@@ -167,10 +168,16 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
             elif action == "upload":
                 raw = (step.value or "").strip()
                 if raw:
-                    vals = [v.strip() for v in re.split(r"[|,]", render(raw, ctx)) if v.strip()]
+                    # CHỈ tách bằng dấu | (tên file có thể chứa dấu phẩy)
+                    vals = [v.strip() for v in render(raw, ctx).split("|") if v.strip()]
                 else:
                     vals = [render(p, ctx) for p in ctx.get("__upload_files", [])]
-                vals = [v for v in vals if v]
+                # bỏ token chưa thay được ({{image_4}}…) và file không tồn tại
+                vals = [v for v in vals if v and not v.startswith("{{")]
+                keep = [v for v in vals if Path(v).exists()]
+                if len(keep) < len(vals) and log:
+                    log(f"  (bỏ qua {len(vals) - len(keep)} ảnh không có sẵn)")
+                vals = keep
                 if not vals:
                     if log:
                         log("  (bỏ qua: không có ảnh cho bước này)")
