@@ -24,8 +24,6 @@ from ..storage.models import (
     STATUS_GENERATING,
     STATUS_POSTING,
     STATUS_REVIEW,
-    Script,
-    ScriptStep,
 )
 from ..storage.store import Store
 from .pages.config_page import ConfigPage
@@ -43,7 +41,6 @@ from .workers import (
     FieldWorker,
     ImageEditWorker,
     ImagesWorker,
-    PostRecordWorker,
     PostWorker,
     shutdown_all_threads,
 )
@@ -62,7 +59,6 @@ class MainWindow(QMainWindow):
         self._workers: list = []
         self._content_workers: dict = {}
         self._img_workers: dict = {}
-        self.record_worker = None
         self._build()
 
     # ------------------------------------------------------------------ #
@@ -120,8 +116,6 @@ class MainWindow(QMainWindow):
         self.jobs_page.regenerate_images.connect(self._on_regenerate_images)
         self.jobs_page.delete_task.connect(self._on_delete_task)
         self.jobs_page.post.connect(self._on_post_task)
-        self.jobs_page.create_script.connect(self._on_create_script)
-        self.jobs_page.stop_record.connect(self._on_stop_record)
         self.jobs_page.ai_edit.connect(self._on_ai_edit)
         self.jobs_page.refetch_image.connect(self._on_refetch_image)
         self.jobs_page.recompose_image.connect(self._on_recompose_image)
@@ -353,16 +347,13 @@ class MainWindow(QMainWindow):
         self.jobs_page._save()
 
         if not (site.script and site.script.steps):
-            ans = QMessageBox.question(
+            QMessageBox.warning(
                 self,
                 "Chưa có kịch bản",
-                "Website này chưa có kịch bản đăng bài.\nBạn muốn tạo kịch bản ngay bây giờ?",
-                QMessageBox.Yes | QMessageBox.No,
-                QMessageBox.Yes,
+                f"Website “{site.name}” chưa có kịch bản đăng bài.\n\n"
+                "Vào Cấu hình → website → Kịch bản đăng bài để dán/import kịch bản.",
             )
-            if ans == QMessageBox.Yes:
-                self._on_create_script(task)
-                return
+            return
 
         # lưu 3 ảnh vào thư mục tên = ID công việc (để upload lên website)
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
@@ -441,54 +432,6 @@ class MainWindow(QMainWindow):
     def _log_err(self, source: str, message: str) -> None:
         self.store.log_error(source, message)
         self.error_log_page.refresh()
-
-    def _on_create_script(self, task) -> None:
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
-        self.jobs_page._save()
-        if self.record_worker and self.record_worker.isRunning():
-            self.status("Đang ghi kịch bản rồi…")
-            return
-
-        worker = PostRecordWorker(site, task)
-        self.record_worker = worker
-        worker.log.connect(lambda m: (self.status(m), self.jobs_page.set_recording(True, m)))
-        worker.step.connect(
-            lambda _s: self.jobs_page.set_recording(True, f"Đã ghi {len(worker.steps)} bước…")
-        )
-        worker.ok.connect(lambda steps: self._on_record_done(site, steps))
-        worker.failed.connect(self._on_record_failed)
-        worker.finished.connect(lambda: self._cleanup(worker))
-        self._workers.append(worker)
-        self.jobs_page.set_recording(True, "Đang mở trình duyệt…")
-        worker.start()
-
-    def _on_stop_record(self) -> None:
-        if self.record_worker:
-            self.status("Đang dừng ghi…")
-            self.record_worker.stop()
-
-    def _on_record_done(self, site, steps) -> None:
-        self.jobs_page.set_recording(False)
-        self.record_worker = None
-        if not steps:
-            self.status("Không ghi được bước nào — kịch bản giữ nguyên.")
-            return
-        site.script = Script(steps=[ScriptStep.from_dict(s) for s in steps])
-        self.store.upsert_site(site)
-        self.store.save()
-        self.status(f"Đã lưu kịch bản ({len(steps)} bước) cho {site.name}.")
-        QMessageBox.information(
-            self, "Đã lưu kịch bản",
-            f"Đã ghi và lưu {len(steps)} bước vào cấu hình của {site.name}.",
-        )
-
-    def _on_record_failed(self, err: str) -> None:
-        self.jobs_page.set_recording(False)
-        self.record_worker = None
-        self._log_err("Ghi kịch bản", err)
-        self.status("Sẵn sàng")
 
     def _start_images_worker(self, task, opts: dict | None, only_index: int | None,
                              status_msg: str) -> None:

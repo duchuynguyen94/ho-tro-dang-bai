@@ -302,8 +302,6 @@ class JobsPage(QWidget):
     regenerate = Signal(object, str)         # (task, field)
     regenerate_images = Signal(object, str)  # (task, footer_mode)
     post = Signal(object)                    # (task)
-    create_script = Signal(object)           # (task) - tạo kịch bản (có xác nhận mật khẩu)
-    stop_record = Signal()                   # dừng ghi & lưu
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
     refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
@@ -481,24 +479,6 @@ class JobsPage(QWidget):
         self.editor_scroll.setWidget(self.editor)
         self.stack.addWidget(self.editor_scroll)
 
-        # thanh ghi kịch bản (hiện khi đang ghi)
-        self.recording_bar = QWidget()
-        rb = QHBoxLayout(self.recording_bar)
-        rb.setContentsMargins(0, 6, 0, 0)
-        self.rec_dot = QLabel("● Đang ghi kịch bản…")
-        self.rec_dot.setStyleSheet("color:#dc2626;font-weight:700;")
-        rb.addWidget(self.rec_dot)
-        self.rec_note = QLabel("")
-        self.rec_note.setObjectName("taskMeta")
-        self.rec_note.setWordWrap(True)
-        rb.addWidget(self.rec_note, 1)
-        stop_rec = QPushButton("■ Dừng & Lưu kịch bản")
-        stop_rec.setProperty("class", "primary")
-        stop_rec.clicked.connect(self.stop_record.emit)
-        rb.addWidget(stop_rec)
-        right.body.addWidget(self.recording_bar)
-        self.recording_bar.hide()
-
         # footer luôn hiện khi có kết quả
         self.footer = QWidget()
         f = QHBoxLayout(self.footer)
@@ -507,14 +487,9 @@ class JobsPage(QWidget):
         self.check_label.setObjectName("taskMeta")
         f.addWidget(self.check_label)
         f.addStretch(1)
-        self.record_btn = QPushButton("● Tạo kịch bản")
-        self.record_btn.setObjectName("recordBtn")
-        self.record_btn.setToolTip("Mở trình duyệt và ghi lại thao tác đăng bài thành kịch bản (cần mật khẩu)")
-        self.record_btn.clicked.connect(self._start_create_script)
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
         self.post_btn.clicked.connect(lambda: self.current and self.post.emit(self.current))
-        f.addWidget(self.record_btn)
         f.addWidget(self.post_btn)
         right.body.addWidget(self.footer)
         self.footer.hide()
@@ -594,10 +569,6 @@ class JobsPage(QWidget):
         if self.current and self.current.status in (STATUS_QUEUED, STATUS_GENERATING):
             self.loading_note.setText(text)
 
-    def set_recording(self, on: bool, note: str = "") -> None:
-        self.recording_bar.setVisible(on)
-        if note:
-            self.rec_note.setText(note)
 
     # ------------------------------------------------------------------ #
     def _show_state(self) -> None:
@@ -995,21 +966,6 @@ class JobsPage(QWidget):
         self._load(self.current)
         self.recompose_image.emit(self.current, index)
 
-    def _start_create_script(self) -> None:
-        """Xác nhận mật khẩu trước khi bắt đầu ghi kịch bản (tránh bấm nhầm)."""
-        if not self.current:
-            return
-        pw, ok = QInputDialog.getText(
-            self, "Tạo kịch bản",
-            "Nhập mật khẩu để bắt đầu tạo kịch bản:",
-            QLineEdit.Password,
-        )
-        if not ok:
-            return
-        if (pw or "").strip() != "admin":
-            QMessageBox.warning(self, "Sai mật khẩu", "Mật khẩu không đúng. Không tạo kịch bản.")
-            return
-        self.create_script.emit(self.current)
 
     def _confirm_delete(self, task_id: str) -> None:
         ans = QMessageBox.question(

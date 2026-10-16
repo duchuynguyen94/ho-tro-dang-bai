@@ -473,7 +473,7 @@ class PostWorker(TrackedThread):
 
     def run(self) -> None:
         from ..wp import WPBrowser, play_script
-        from ..wp.player import wait_editor_ready
+        from ..wp.player import make_slug, wait_editor_ready
 
         site = self.site
         try:
@@ -509,6 +509,8 @@ class PostWorker(TrackedThread):
                 for _n, _p in enumerate(uploads, 1):
                     ctx[f"image_{_n}"] = _p
                 ctx["image"] = uploads[0] if uploads else ""
+                # đường dẫn (slug) tạo từ tiêu đề, tối đa 70 ký tự
+                ctx["slug"] = make_slug(ctx["title"], 70)
                 play_script(page, site.script, ctx, log=self.log.emit)
             else:
                 self.log.emit("Website chưa có kịch bản — mở trang tạo bài để bạn tự thao tác.")
@@ -697,136 +699,3 @@ class ImageEditWorker(TrackedThread):
             traceback.print_exc()
             self.failed.emit(str(exc))
 
-
-class PostRecordWorker(TrackedThread):
-    """Mở trình duyệt để đăng bài bằng tay, đồng thời GHI lại kịch bản."""
-
-    log = Signal(str)
-    step = Signal(dict)
-    ok = Signal(list)          # danh sách bước ghi được
-    failed = Signal(str)
-
-    def __init__(self, site, task=None) -> None:
-        super().__init__()
-        self.site = site
-        self.task = task
-        self._running = True
-        self.steps: list[dict] = []
-
-    def stop(self) -> None:
-        self._running = False
-
-    def _on_step(self, _source, payload: dict) -> None:
-        if self.steps and self.steps[-1].get("selector") == payload.get("selector") \
-                and self.steps[-1].get("value") == payload.get("value"):
-            return
-        self.steps.append(payload)
-        self.step.emit(payload)
-
-    def run(self) -> None:
-        from ..wp import WPBrowser
-        from ..wp import recorder
-
-        br = None
-        try:
-            br = WPBrowser(headless=False, site_id=self.site.id)
-            page = br.open()
-            page.expose_binding("__wpRecordStep", self._on_step)
-            page.add_init_script(recorder.RECORDER_JS)
-
-            self.log.emit("Đang đăng nhập WordPress…")
-            try:
-                br.login(self.site)
-            except Exception:
-                pass
-
-            target = self.site.new_post_url or self.site.url
-            if target:
-                try:
-                    page.goto(target, wait_until="domcontentloaded", timeout=25000)
-                except Exception as exc:
-                    self.log.emit(f"Không mở được địa chỉ đã cấu hình ({str(exc)[:80]}).")
-            self.log.emit("● Đang ghi: thao tác trên trình duyệt rồi bấm “Dừng & Lưu kịch bản”.")
-
-            while self._running:
-                try:
-                    if page.is_closed():
-                        break
-                    page.wait_for_timeout(300)
-                except Exception:
-                    break
-            self.ok.emit(list(self.steps))
-        except Exception as exc:
-            traceback.print_exc()
-            self.failed.emit(str(exc))
-        finally:
-            try:
-                if br:
-                    br.close()
-            except Exception:
-                pass
-
-
-class RecordWorker(TrackedThread):
-    """Ghi lại thao tác người dùng thành các bước kịch bản."""
-
-    step = Signal(dict)
-    log = Signal(str)
-    failed = Signal(str)
-
-    def __init__(self, site, start_url: str = "") -> None:
-        super().__init__()
-        self.site = site
-        self.start_url = start_url or site.new_post_url or site.url
-        self._running = True
-        self.steps: list[dict] = []
-
-    def stop(self) -> None:
-        self._running = False
-
-    def _on_step(self, _source, payload: dict) -> None:
-        # lọc trùng liên tiếp
-        if self.steps and self.steps[-1].get("selector") == payload.get("selector") \
-                and self.steps[-1].get("value") == payload.get("value"):
-            return
-        self.steps.append(payload)
-        self.step.emit(payload)
-
-    def run(self) -> None:
-        from ..wp import WPBrowser
-        from ..wp import recorder
-
-        br = None
-        try:
-            br = WPBrowser(headless=False, site_id=self.site.id)
-            page = br.open()
-            page.expose_binding("__wpRecordStep", self._on_step)
-            page.add_init_script(recorder.RECORDER_JS)
-            self.log.emit("Đã mở trình duyệt. Thao tác trên trình duyệt rồi bấm Dừng ghi.")
-
-            if self.start_url:
-                try:
-                    page.goto(self.start_url, wait_until="domcontentloaded", timeout=25000)
-                except Exception as exc:
-                    self.log.emit(
-                        "Không mở được địa chỉ đã cấu hình — bạn có thể tự nhập địa chỉ trên trình duyệt. "
-                        f"({str(exc)[:100]})"
-                    )
-
-            while self._running:
-                try:
-                    if page.is_closed():
-                        break
-                    page.wait_for_timeout(300)
-                except Exception:
-                    break
-        except Exception as exc:
-            traceback.print_exc()
-            self.failed.emit(str(exc))
-        finally:
-            try:
-                if br:
-                    br.close()
-            except Exception:
-                pass
-            self.log.emit("Đã đóng trình duyệt ghi.")

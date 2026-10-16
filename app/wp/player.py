@@ -46,6 +46,26 @@ def render(value: str, ctx: dict) -> str:
     return _TOKEN_RE.sub(repl, value or "")
 
 
+def make_slug(text: str, max_len: int = 70) -> str:
+    """Tạo đường dẫn (slug) từ tiêu đề: bỏ dấu tiếng Việt, thường hoá, nối bằng '-'.
+
+    Tối đa `max_len` ký tự (cắt ở ranh giới từ, không để dấu '-' ở cuối).
+    """
+    import unicodedata
+
+    s = (text or "").strip().lower().replace("đ", "d")
+    s = unicodedata.normalize("NFD", s)
+    s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-")
+    if len(s) > max_len:
+        cut = s[:max_len]
+        if "-" in cut:
+            cut = cut[:cut.rfind("-")]
+        s = cut.rstrip("-") or s[:max_len].rstrip("-")
+    return s
+
+
 def _selectors(step: ScriptStep) -> list[str]:
     out = []
     for s in [step.selector, *step.selectors]:
