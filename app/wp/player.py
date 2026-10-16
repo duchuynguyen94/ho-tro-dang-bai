@@ -46,7 +46,39 @@ def render(value: str, ctx: dict) -> str:
     return _TOKEN_RE.sub(repl, value or "")
 
 
-def make_slug(text: str, max_len: int = 70) -> str:
+def show_page_notice(page: Page, text: str, ok: bool = True, hold_ms: int = 30000) -> None:
+    """Hiện thông báo NGAY TRÊN TRANG web (banner góc phải) để người dùng biết."""
+    try:
+        page.evaluate(
+            """({text, ok, hold}) => {
+                const id = 'htdb-notice';
+                const old = document.getElementById(id);
+                if (old) old.remove();
+                const el = document.createElement('div');
+                el.id = id;
+                el.style.cssText = [
+                    'position:fixed', 'z-index:2147483647', 'top:16px', 'right:16px',
+                    'max-width:440px', 'padding:14px 18px', 'border-radius:10px',
+                    'font:600 14px/1.5 -apple-system,"Segoe UI",Roboto,sans-serif',
+                    'color:#fff', 'box-shadow:0 10px 30px rgba(0,0,0,.25)',
+                    'white-space:pre-line',
+                    'background:' + (ok ? '#16a34a' : '#dc2626'),
+                ].join(';');
+                el.textContent = text;
+                document.body.appendChild(el);
+                setTimeout(() => {
+                    el.style.transition = 'opacity .6s';
+                    el.style.opacity = '0';
+                    setTimeout(() => el.remove(), 700);
+                }, hold);
+            }""",
+            {"text": text, "ok": bool(ok), "hold": int(hold_ms)},
+        )
+    except Exception:
+        pass
+
+
+def make_slug(text: str, max_len: int = 60) -> str:
     """Tạo đường dẫn (slug) từ tiêu đề: bỏ dấu tiếng Việt, thường hoá, nối bằng '-'.
 
     Tối đa `max_len` ký tự (cắt ở ranh giới từ, không để dấu '-' ở cuối).

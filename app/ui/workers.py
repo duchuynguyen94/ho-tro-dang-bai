@@ -473,7 +473,7 @@ class PostWorker(TrackedThread):
 
     def run(self) -> None:
         from ..wp import WPBrowser, play_script
-        from ..wp.player import make_slug, wait_editor_ready
+        from ..wp.player import make_slug, show_page_notice, wait_editor_ready
 
         site = self.site
         try:
@@ -509,15 +509,31 @@ class PostWorker(TrackedThread):
                 for _n, _p in enumerate(uploads, 1):
                     ctx[f"image_{_n}"] = _p
                 ctx["image"] = uploads[0] if uploads else ""
-                # đường dẫn (slug) tạo từ tiêu đề, tối đa 70 ký tự
-                ctx["slug"] = make_slug(ctx["title"], 70)
-                play_script(page, site.script, ctx, log=self.log.emit)
+                # đường dẫn (slug) tạo từ tiêu đề, tối đa 60 ký tự
+                ctx["slug"] = make_slug(ctx["title"], 60)
+                try:
+                    play_script(page, site.script, ctx, log=self.log.emit)
+                except Exception as exc:
+                    show_page_notice(
+                        page,
+                        "⚠️ Kịch bản DỪNG giữa đường\n"
+                        f"{str(exc).splitlines()[0][:180]}\n"
+                        "Bạn tự điền nốt phần còn lại rồi bấm Đăng.",
+                        ok=False,
+                    )
+                    raise
             else:
                 self.log.emit("Website chưa có kịch bản — mở trang tạo bài để bạn tự thao tác.")
                 if site.new_post_url:
                     page.goto(site.new_post_url, wait_until="domcontentloaded")
 
             self.log.emit("Đã điền xong. Bạn kiểm tra rồi bấm Đăng trên WordPress.")
+            show_page_notice(
+                page,
+                "✅ ĐÃ ĐIỀN XONG TỰ ĐỘNG\n"
+                "Kiểm tra lại nội dung rồi bấm Đăng trên WordPress.",
+                ok=True,
+            )
             self.ok.emit(page.url)
         except Exception as exc:
             traceback.print_exc()
