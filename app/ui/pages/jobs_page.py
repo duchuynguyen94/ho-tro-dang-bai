@@ -307,6 +307,7 @@ class JobsPage(QWidget):
     refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
     recompose_image = Signal(object, int)    # (task, image index) ghép lại 1 ảnh
     recompose_all = Signal(object)           # (task) ghép lại TOÀN BỘ ảnh (sau thêm/xoá/sắp xếp)
+    export_images = Signal(object)           # (task) xuất ảnh vào thư mục bài + mở thư mục
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
@@ -464,6 +465,8 @@ class JobsPage(QWidget):
         self.img_editor.request_refetch.connect(
             lambda: self.current and self.refetch_image.emit(self.current,
                                                              getattr(self, "_sel_index", 0)))
+        self.img_editor.request_export.connect(
+            lambda: self.current and self.export_images.emit(self.current))
         ev2.addWidget(self.img_editor)
 
         # Ctrl/Cmd + V: dán ảnh (copy từ web hoặc máy tính) vào canvas

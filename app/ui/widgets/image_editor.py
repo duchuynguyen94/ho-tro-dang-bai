@@ -182,6 +182,7 @@ class ImageEditorPanel(QFrame):
     request_upload = Signal()
     request_ai_edit = Signal()
     request_refetch = Signal()
+    request_export = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -246,9 +247,14 @@ class ImageEditorPanel(QFrame):
         fetch.setProperty("class", "ghost")
         fetch.setToolTip("Lấy lại ảnh sản phẩm từ link nguồn (hoặc tìm trên mạng)")
         fetch.clicked.connect(self.request_refetch.emit)
+        exp = QPushButton("⬇ Xuất hình")
+        exp.setProperty("class", "ghost")
+        exp.setToolTip("Xuất ảnh vào thư mục bài (theo Rule ảnh) và MỞ THƯ MỤC đó")
+        exp.clicked.connect(self.request_export.emit)
         tools.addWidget(up)
         tools.addWidget(ai)
         tools.addWidget(fetch)
+        tools.addWidget(exp)
         tools.addStretch(1)
         reset = QPushButton("Đặt lại")
         reset.setProperty("class", "ghost")

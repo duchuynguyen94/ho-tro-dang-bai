@@ -518,7 +518,7 @@ class PostWorker(TrackedThread):
                     ctx[f"image_{_n}"] = _p
                 ctx["image"] = uploads[0] if uploads else ""
                 # đường dẫn (slug) tạo từ tiêu đề, tối đa 60 ký tự
-                ctx["slug"] = make_slug(ctx["title"], 65)
+                ctx["slug"] = make_slug(ctx["title"], 59)
                 try:
                     play_script(page, site.script, ctx, log=self.log.emit)
                 except Exception as exc:

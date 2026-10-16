@@ -2,8 +2,10 @@
 from __future__ import annotations
 
 import traceback
+from pathlib import Path
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, QUrl
+from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -120,6 +122,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.refetch_image.connect(self._on_refetch_image)
         self.jobs_page.recompose_image.connect(self._on_recompose_image)
         self.jobs_page.recompose_all.connect(self._on_recompose_all)
+        self.jobs_page.export_images.connect(self._on_export_images)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.config_page.changed.connect(self._on_config_changed)
@@ -487,6 +490,31 @@ class MainWindow(QMainWindow):
         """Ghép lại TOÀN BỘ ảnh (sau khi thêm / xoá / sắp xếp ảnh)."""
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         self._start_images_worker(fresh, None, None, "Đang ghép lại toàn bộ ảnh…")
+
+    def _on_export_images(self, task) -> None:
+        """Xuất ảnh vào thư mục bài (posts/<ID>) rồi MỞ THƯ MỤC cho người dùng."""
+        self.jobs_page._save()
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        try:
+            paths = export_post_images(self.store, fresh)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Xuất ảnh", str(exc))
+            show_toast(self, f"Xuất ảnh lỗi: {exc}", 3600, ok=False)
+            return
+        if not paths:
+            show_toast(self, "Không có ảnh để xuất", 3000, ok=False)
+            return
+        fresh.result = dict(fresh.result or {})
+        fresh.result["post_images"] = paths
+        self.store.upsert_task(fresh)
+        self.store.save()
+        folder = Path(paths[0]).parent
+        try:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
+        except Exception:
+            pass
+        show_toast(self, f"Đã xuất {len(paths)} ảnh — đã mở thư mục bài", 3000)
 
     def _on_refetch_image(self, task, index: int) -> None:
         site = self.store.get_site(task.site_id)

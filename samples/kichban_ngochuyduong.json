@@ -177,7 +177,7 @@
     },
     {
       "action": "type",
-      "note": "Điền đường dẫn (slug) từ tiêu đề — tối đa 65 ký tự",
+      "note": "Điền đường dẫn (slug) từ tiêu đề — dưới 60 ký tự",
       "selector": "#new-post-slug",
       "selectors": [
         "#new-post-slug",
@@ -188,7 +188,7 @@
     },
     {
       "action": "click",
-      "note": "Bấm “Đồng ý” để chốt đường dẫn",
+      "note": "Bấm “Đồng ý” để chốt đường dẫn (BẮT BUỘC)",
       "selector": "#edit-slug-buttons .save",
       "selectors": [
         "#edit-slug-buttons .save",
@@ -197,8 +197,7 @@
         "button:has-text('Đồng ý')"
       ],
       "value": "",
-      "source": "auto",
-      "optional": true
+      "source": "auto"
     },
     {
       "action": "click",
@@ -241,6 +240,30 @@
       "selectors": [],
       "value": "4",
       "source": "auto"
+    },
+    {
+      "action": "type",
+      "note": "Tiêu đề ảnh 1 ← tiêu đề bài viết",
+      "selector": "#attachment-details-title",
+      "selectors": [
+        "#attachment-details-title",
+        ".media-sidebar input[type='text']"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "type",
+      "note": "Văn bản thay thế (SEO) ảnh 1 ← tiêu đề bài viết",
+      "selector": "#attachment-details-alt-text",
+      "selectors": [
+        "#attachment-details-alt-text",
+        ".media-sidebar textarea"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
     },
     {
       "action": "click",
@@ -305,6 +328,30 @@
       "selectors": [],
       "value": "5",
       "source": "auto"
+    },
+    {
+      "action": "type",
+      "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
+      "selector": "#attachment-details-title",
+      "selectors": [
+        "#attachment-details-title",
+        ".media-sidebar input[type='text']"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "type",
+      "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
+      "selector": "#attachment-details-alt-text",
+      "selectors": [
+        "#attachment-details-alt-text",
+        ".media-sidebar textarea"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
     },
     {
       "action": "click",
