@@ -65,11 +65,51 @@ CONTENT_OUTPUT_SPEC = (
     "📩 trước “Bạn cần bảng model … đầy đủ?”."
 )
 
+# Dòng liên hệ CHUẨN trong "description" (mục 3 của rule_seo)
+DESC_CONTACT = "🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com"
+
+
+def normalize_description(desc: str) -> str:
+    """Chuẩn hoá "description" theo mục 3 của rule_seo.pdf:
+    1) câu mô tả; 2) dòng liên hệ (luôn đúng mẫu 🌐 | ☎️ | email);
+    3) "Tên sản phẩm <Hãng> models tiêu biểu"; 4) tối đa 5 model tiêu biểu, mỗi dòng 1 model.
+    """
+    text = (desc or "").strip()
+    if not text:
+        return text
+    text = re.sub(r"^\s*```[a-zA-Z]*\s*", "", text)
+    text = re.sub(r"\s*```\s*$", "", text).strip().strip('"').strip()
+    lines = [re.sub(r"[ \t]+", " ", ln).strip() for ln in text.splitlines()]
+    lines = [ln for ln in lines if ln]
+
+    head = header = ""
+    models: list[str] = []
+    for ln in lines:
+        low = ln.lower()
+        if "ngochuyduong.com" in low:
+            continue                      # dòng liên hệ -> dùng bản CHUẨN bên dưới
+        if "models tiêu biểu" in low or "models tieu bieu" in low:
+            header = ln
+        elif not head:
+            head = ln
+        else:
+            models.append(ln)
+
+    out: list[str] = []
+    if head:
+        out.append(head)
+    out.append(DESC_CONTACT)
+    if header:
+        out.append(header)
+    out.extend(models[:5])                # không nhiều hơn 5 dòng
+    return "\n".join(out)
+
+
 # Kết quả bước 2 (theo Rule SEO)
 SEO_JSON_SPEC = """{
   "title": "tiêu đề SEO 55-60 ký tự, dạng: [Keyword] [Brand] [Model] + [USP] (chọn ngẫu nhiên 1 USP)",
   "focus_keyword": "từ khoá chính (thường là Model của sản phẩm)",
-  "description": "mô tả siêu ngắn theo mẫu rule_seo, GỒM CẢ: dòng liên hệ (website | hotline | email) và danh sách tối đa 5 MODEL TIÊU BIỂU của hãng, mỗi model 1 dòng",
+  "description": "mô tả siêu ngắn ĐÚNG mục 3 của rule_seo, gồm 4 phần trên các dòng riêng: (1) câu mô tả: “<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc.”; (2) dòng liên hệ: “🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com”; (3) “Tên sản phẩm <Brand> models tiêu biểu”; (4) tối đa 5 model tiêu biểu, MỖI DÒNG 1 model theo mẫu “<Tên sản phẩm> <Hãng> <Model>” (vd: Cảm biến siêu âm Carlo Gavazzi UA18CAD04PM1)",
   "tags": "danh sách thẻ tìm kiếm đầy đủ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy"
 }"""
 
@@ -147,7 +187,7 @@ def build_combined_short_prompt(source: dict) -> str:
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng "HTML" theo template trong rule_content.pdf
-2) SAU CÙNG: 1 khối JSON thông tin SEO theo file rule_seo.pdf bao gồm: title, focus_keyword, description, tags
+2) SAU CÙNG: 1 khối JSON thông tin SEO theo file rule_seo.pdf bao gồm: title, focus_keyword, description, tags\n   (riêng "description" viết ĐÚNG mục 3 của rule_seo.pdf, 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc."; dòng liên hệ 🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com; "Tên sản phẩm <Brand> models tiêu biểu"; rồi tối đa 5 model tiêu biểu, MỖI DÒNG 1 model dạng "<Tên sản phẩm> <Hãng> <Model>")
 
 Không giải thích gì thêm."""
 
@@ -902,6 +942,7 @@ def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
             inner = str(seo.get("content_html", "") or "").strip()
             if inner and not _is_placeholder(inner) and _looks_like_html(inner):
                 content = inner        # AI để nội dung trong JSON -> dùng luôn
+            seo["description"] = normalize_description(str(seo.get("description", "")))
             seo["provider_used"] = provider
             seo["content_html"] = clean_content_html(
                 content if _looks_like_html(content) else text_to_html(content)
@@ -972,7 +1013,10 @@ def generate_field(store, source: dict, field: str, current: str = "", log=None)
             f"Link bài viết nguồn: {source.get('url', '')}\n"
             f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
         )
-    return _call_ai(store, full, short, log).strip()
+    value = _call_ai(store, full, short, log).strip()
+    if field == "description":
+        value = normalize_description(value)
+    return value
 
 
 def parse_json_response(text: str) -> dict:  # tương thích ngược
