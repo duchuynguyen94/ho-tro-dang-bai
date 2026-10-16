@@ -461,15 +461,26 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
 
 DEFAULT_SECTIONS = (
     "Giới thiệu tổng quan",
+    "Giới thiệu chung",
     "Tính năng kỹ thuật nổi bật",
+    "Tính năng nổi bật",
     "Thông số kỹ thuật tiêu chuẩn",
+    "Thông số kỹ thuật",
     "Vật liệu & xử lý – Độ bền vượt trội",
+    "Vật liệu và xử lý",
     "Tương thích – Thay thế – Mở rộng",
+    "Tương thích",
     "Ứng dụng thực tế",
     "Tại sao nên mua tại Ngọc Huy Dương?",
     "Liên hệ – Đặt hàng / Tư vấn kỹ thuật",
     "Phiên bản & Mã sản phẩm",
+    "Phiên bản và Mã sản phẩm",
     "FAQ (5 câu)",
+    "FAQ",
+    "Hỏi đáp",
+    "Hỏi & Đáp",
+    "Câu hỏi thường gặp",
+    "Câu hỏi đáp",
 )
 
 
@@ -477,15 +488,25 @@ DEFAULT_SECTIONS = (
 TITLE_ICON = "🔖"
 SECTION_ICONS = (
     ("Giới thiệu tổng quan", "📌"),
+    ("Giới thiệu chung", "📌"),
     ("Tính năng kỹ thuật nổi bật", "⚙️"),
+    ("Tính năng nổi bật", "⚙️"),
     ("Thông số kỹ thuật tiêu chuẩn", "📋"),
+    ("Thông số kỹ thuật", "📋"),
     ("Vật liệu & xử lý", "🧱"),
+    ("Vật liệu và xử lý", "🧱"),
     ("Tương thích – Thay thế", "🔄"),
+    ("Tương thích", "🔄"),
     ("Ứng dụng thực tế", "🎯"),
     ("Tại sao nên mua", "💡"),
     ("Liên hệ – Đặt hàng", "📞"),
     ("Phiên bản & Mã sản phẩm", "✳️"),
+    ("Phiên bản và Mã sản phẩm", "✳️"),
     ("FAQ", "✳️"),
+    ("Hỏi đáp", "✳️"),
+    ("Hỏi & Đáp", "✳️"),
+    ("Câu hỏi thường gặp", "✳️"),
+    ("Câu hỏi đáp", "✳️"),
 )
 _PHONE_RE = re.compile(r"0\d{2,4}[\s.\-]?\d{3}[\s.\-]?\d{3,4}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
@@ -565,12 +586,12 @@ def apply_template_icons(html_text: str) -> str:
     head_seen = 0
     for part in parts:
         if part.startswith("<"):
-            if re.match(r"^<h([12])\b", part, re.I):
+            if re.match(r"^<h([1-4])\b", part, re.I):
                 head_seen += 1
                 open_head.append({"pos": len(out), "n": head_seen, "text": []})
                 out.append(part)
                 continue
-            if re.match(r"^</h[12]", part, re.I) and open_head:
+            if re.match(r"^</h[1-4]", part, re.I) and open_head:
                 info = open_head.pop()
                 inner = "".join(info["text"]).strip()
                 icon = TITLE_ICON if info["n"] == 1 else _section_icon(inner)
@@ -664,8 +685,10 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
             elif hit:
                 href = next((l for l in pending if l not in used), "")
             if href:
-                # bọc TOÀN BỘ chữ còn lại SAU tên mục
-                if hit is not None and text[hit.end():].strip():
+                # bọc TOÀN BỘ chữ còn lại SAU tên mục (chỉ khi phần đuôi có nghĩa;
+                # nếu đuôi chỉ là dấu câu như ")" thì bọc CẢ tiêu đề)
+                tail_probe = text[hit.end():].strip() if hit is not None else ""
+                if tail_probe and len(tail_probe) >= 3 and re.search(r"\w", tail_probe):
                     tail_raw = text[hit.end():]
                     tail = tail_raw.strip()
                     sep = " " if tail_raw[:1].isspace() else ""
