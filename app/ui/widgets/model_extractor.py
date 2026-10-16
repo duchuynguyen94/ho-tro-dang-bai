@@ -130,11 +130,15 @@ class ModelExtractorDialog(QDialog):
         self.stop_btn.setEnabled(False)
 
     def _done(self, text: str) -> None:
+        self.create_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)      # chạy xong -> khoá nút Dừng
         self.result_edit.setPlainText(text)
         n = len([l for l in text.splitlines() if l.strip()])
         self.status.setText(f"✓ Xong — {n} dòng kết quả.")
 
     def _failed(self, err: str) -> None:
+        self.create_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)      # lỗi -> khoá nút Dừng
         self.status.setText("✗ Lỗi: " + str(err)[:300])
 
     def _copy(self) -> None:
