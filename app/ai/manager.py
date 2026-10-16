@@ -54,7 +54,7 @@ CONTENT_OUTPUT_SPEC = (
     "bảng model [Keyword] [Brand] [Model] đầy đủ? Gửi yêu cầu: thach.phan@ngochuyduong.com”\n"
     "13. <h2>FAQ (5 câu)</h2>: 5 câu hỏi kèm câu trả lời ngắn, sát sản phẩm.\n"
     "Giữ NGUYÊN các dòng liên hệ lặp lại giữa các mục (không bỏ, không đổi website/điện thoại/email).\n"
-    "ICON ĐẦU MỤC (đặt NGAY TRƯỚC tiêu đề mục, RIÊNG tiêu đề bài viết thì KHÔNG có icon): "
+    "ICON ĐẦU MỤC: CHỈ đặt ở thẻ <h2> của các mục (KHÔNG đặt ở h1/h3/h4…): "
     "📌 Giới thiệu tổng quan; "
     "⚙️ Tính năng kỹ thuật nổi bật; 📋 Thông số kỹ thuật tiêu chuẩn; 🧱 Vật liệu & xử lý – Độ bền vượt trội; "
     "🔄 Tương thích – Thay thế – Mở rộng; 🎯 Ứng dụng thực tế; 💡 Tại sao nên mua tại Ngọc Huy Dương?; "
@@ -602,21 +602,20 @@ def apply_template_icons(html_text: str) -> str:
         return html_text
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
-    open_head: list[dict] = []      # heading h1-h4 đang mở
-    head_seen = 0
+    open_head: list[dict] = []      # heading đang mở
     for part in parts:
         if part.startswith("<"):
-            if re.match(r"^<h([1-4])\b", part, re.I):
-                head_seen += 1
-                open_head.append({"pos": len(out), "n": head_seen, "text": [],
-                                  "first": None})
+            m = re.match(r"^<h([1-6])\b", part, re.I)
+            if m:
+                open_head.append({"pos": len(out), "level": int(m.group(1)),
+                                  "text": [], "first": None})
                 out.append(part)
                 continue
-            if re.match(r"^</h[1-4]", part, re.I) and open_head:
+            if re.match(r"^</h[1-6]", part, re.I) and open_head:
                 info = open_head.pop()
                 inner = "".join(info["text"]).strip()
-                # TIÊU ĐỀ BÀI VIẾT (h1/h2 đầu tiên): KHÔNG đặt icon
-                icon = "" if info["n"] == 1 else _section_icon(inner)
+                # CHỈ thẻ <h2> của các mục mới có icon (h1/h3/h4/h5/h6: không icon)
+                icon = _section_icon(inner) if info["level"] == 2 else ""
                 idx = info["first"]
                 if idx is not None:
                     old, rest = split_leading_icon(out[idx])
@@ -624,7 +623,7 @@ def apply_template_icons(html_text: str) -> str:
                         # thay icon cũ (nếu AI viết sai) bằng icon ĐÚNG của template
                         out[idx] = f"{icon} {rest}" if rest.strip() else f"{icon} "
                     elif old:
-                        out[idx] = rest          # xoá icon ở tiêu đề bài viết
+                        out[idx] = rest          # xoá icon ở h1/h3/h4/h5/h6
                 elif icon:
                     out.insert(info["pos"] + 1, f"{icon} ")
                 out.append(part)
