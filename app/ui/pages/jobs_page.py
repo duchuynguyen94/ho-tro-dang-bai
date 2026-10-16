@@ -361,14 +361,6 @@ class JobsPage(QWidget):
         self.provider_badge = QLabel("")
         self.provider_badge.setObjectName("chipGreen")
         right.add_header_widget(self.provider_badge)
-        self.regen_all_btn = QPushButton("↻ Random lại")
-        self.regen_all_btn.setProperty("class", "ghost")
-        self.regen_all_btn.setToolTip("Tạo lại toàn bộ nội dung (tiêu đề, từ khóa, mô tả, tags, nội dung)")
-        self.regen_all_btn.clicked.connect(
-            lambda: self.current and self.regenerate.emit(self.current, "")
-        )
-        right.add_header_widget(self.regen_all_btn)
-
         self.stack = QStackedWidget()
         right.body.addWidget(self.stack, 1)
 
@@ -502,10 +494,17 @@ class JobsPage(QWidget):
         self.footer = QWidget()
         f = QHBoxLayout(self.footer)
         f.setContentsMargins(0, 8, 0, 0)
+        self.regen_all_btn = QPushButton("↻ Random lại")
+        self.regen_all_btn.setProperty("class", "ghost")
+        self.regen_all_btn.setToolTip("Tạo lại toàn bộ nội dung (tiêu đề, từ khóa, mô tả, tags, nội dung)")
+        self.regen_all_btn.clicked.connect(
+            lambda: self.current and self.regenerate.emit(self.current, "")
+        )
+        f.addWidget(self.regen_all_btn)          # sát TRÁI (left = 0)
         self.check_label = QLabel("")
         self.check_label.setObjectName("taskMeta")
         f.addWidget(self.check_label)
-        f.addStretch(1)
+        f.addStretch(1)                          # đẩy 2 nút kia sang PHẢI (right = 0)
         self.model_btn = QPushButton("Model Extractor")
         self.model_btn.setProperty("class", "ghost")
         self.model_btn.setToolTip("Nhập danh sách link nguồn → trích xuất Product Models theo Rule Model Extractor")
