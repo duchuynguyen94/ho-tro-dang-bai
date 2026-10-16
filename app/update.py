@@ -23,8 +23,9 @@ from pathlib import Path
 
 from . import __version__
 
-# Để trống: người dùng dán link version.json của mình trong Cài đặt
-DEFAULT_UPDATE_URL = ""
+# Link kiểm tra cập nhật GẮN SẴN trong app (máy Windows không phải dán gì).
+# Đổi ở đây nếu bạn để version.json ở chỗ khác.
+DEFAULT_UPDATE_URL = "https://ngochuyduong.com/htdb/version.json"
 
 DETACHED_PROCESS = 0x00000008
 CREATE_NEW_PROCESS_GROUP = 0x00000200
@@ -32,6 +33,15 @@ CREATE_NEW_PROCESS_GROUP = 0x00000200
 
 def is_windows() -> bool:
     return os.name == "nt"
+
+
+def update_url(store=None) -> str:
+    """Link version.json: ưu tiên giá trị người dùng lưu, không có thì dùng mặc định."""
+    try:
+        saved = (store.update_url if store is not None else "") or ""
+    except Exception:
+        saved = ""
+    return saved.strip() or DEFAULT_UPDATE_URL
 
 
 def can_self_update() -> bool:

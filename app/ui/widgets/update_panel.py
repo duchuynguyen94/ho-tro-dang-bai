@@ -29,6 +29,7 @@ class UpdatePanel(QWidget):
         self.store = store
         self.worker: UpdateWorker | None = None
         self._info: dict | None = None
+        self._auto_checked = False
         self._build()
 
     # ------------------------------------------------------------------ #
@@ -72,15 +73,15 @@ class UpdatePanel(QWidget):
         # ---- nguồn cập nhật ----
         card2 = Card("Nguồn cập nhật")
         sub = QLabel(
-            "Dán link file <b>version.json</b> (đặt trên website/hosting của bạn). Nội dung file:<br>"
+            "App đã <b>gắn sẵn link mặc định</b> — chỉ đổi nếu bạn để file ở chỗ khác.<br>"
+            "File <b>version.json</b> đặt trên website/hosting của bạn, nội dung:<br>"
             '<code>{ "version": "0.2.0", "url": "https://.../HoTroDangBai-windows.zip", '
             '"notes": "mô tả thay đổi (không bắt buộc)" }</code>'
         )
         sub.setProperty("class", "sub")
         sub.setWordWrap(True)
         card2.body.addWidget(sub)
-        self.url_edit = QLineEdit(self.store.update_url)
-        self.url_edit.setPlaceholderText("https://ngochuyduong.com/htdb/version.json")
+        self.url_edit = QLineEdit(upd.update_url(self.store))   # điền sẵn link mặc định
         card2.body.addWidget(self.url_edit)
         v.addWidget(card2)
 
@@ -128,6 +129,14 @@ class UpdatePanel(QWidget):
 
         dim_when_disabled(self.apply_btn)
         dim_when_disabled(self.check_btn)
+
+    def showEvent(self, event) -> None:      # noqa: N802
+        super().showEvent(event)
+        if not self._auto_checked:           # mở panel là tự kiểm tra 1 lần
+            self._auto_checked = True
+            from PySide6.QtCore import QTimer
+
+            QTimer.singleShot(300, self._check)
 
     # ------------------------------------------------------------------ #
     def _save_url(self) -> str:
@@ -177,7 +186,15 @@ class UpdatePanel(QWidget):
             self.apply_btn.setEnabled(False)
 
     def _on_failed(self, err: str) -> None:
-        self.status.setText("✗ Lỗi: " + str(err)[:300])
+        low = str(err).lower()
+        if any(k in low for k in ("404", "not found", "connect", "timed out", "timeout",
+                                  "getaddrinfo", "name or service", "ssl")):
+            self.status.setText(
+                "ℹ️ Chưa kiểm tra được máy chủ cập nhật (link có thể chưa được đặt). "
+                "Chi tiết: " + str(err)[:160]
+            )
+        else:
+            self.status.setText("✗ Lỗi: " + str(err)[:300])
 
     def _apply(self) -> None:
         if not self._info:

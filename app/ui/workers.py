@@ -759,8 +759,7 @@ class UpdateWorker(TrackedThread):
                 self.applied.emit(str(tmp))
                 return
             self.checked.emit(update.check_update(self.url))
-        except Exception as exc:      # noqa: BLE001
-            traceback.print_exc()
+        except Exception as exc:      # noqa: BLE001 (lỗi mạng là bình thường)
             self.failed.emit(str(exc))
 
 
