@@ -165,8 +165,18 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
             elif action == "select":
                 _locate(page, step).select_option(render(step.value, ctx))
             elif action == "upload":
-                paths = [render(p, ctx) for p in ctx.get("__upload_files", [])]
-                _locate(page, step).set_input_files([p for p in paths if p])
+                raw = (step.value or "").strip()
+                if raw:
+                    vals = [v.strip() for v in re.split(r"[|,]", render(raw, ctx)) if v.strip()]
+                else:
+                    vals = [render(p, ctx) for p in ctx.get("__upload_files", [])]
+                vals = [v for v in vals if v]
+                if not vals:
+                    if log:
+                        log("  (bỏ qua: không có ảnh cho bước này)")
+                    time.sleep(delay)
+                    continue
+                _locate(page, step).set_input_files(vals)
             elif action == "press":
                 _locate(page, step).press(render(step.value or "Enter", ctx))
             elif action == "wait":
@@ -175,5 +185,10 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 if log:
                     log(f"  (bỏ qua hành động lạ: {action})")
         except Exception as exc:
+            if step.optional:
+                if log:
+                    log(f"  (bỏ qua bước {i} — {str(exc).splitlines()[0][:90]})")
+                time.sleep(delay)
+                continue
             raise RuntimeError(f"Bước {i} ({step.note or action}) lỗi: {exc}") from exc
         time.sleep(delay)

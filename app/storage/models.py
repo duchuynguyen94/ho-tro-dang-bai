@@ -66,6 +66,7 @@ class ScriptStep:
     value: str = ""                # giá trị cố định hoặc biến {{title}}...
     note: str = ""                 # mô tả tiếng Việt
     source: str = "recorded"       # auto|recorded|fallback
+    optional: bool = False         # True = không thấy phần tử thì BỎ QUA, không dừng
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -79,6 +80,7 @@ class ScriptStep:
             value=d.get("value", ""),
             note=d.get("note", ""),
             source=d.get("source", "recorded"),
+            optional=bool(d.get("optional", False)),
         )
 
 

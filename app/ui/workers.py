@@ -494,6 +494,8 @@ class PostWorker(TrackedThread):
                     page.goto(site.new_post_url, wait_until="domcontentloaded")
                     wait_editor_ready(page, log=self.log.emit)
                 self.log.emit("Phát lại kịch bản…")
+                uploads = (self.result.get("post_images")
+                           or [im["path"] for im in self.result.get("images", [])])
                 ctx = {
                     "title": self.result.get("title", ""),
                     "content_html": self.result.get("content_html", ""),
@@ -501,9 +503,12 @@ class PostWorker(TrackedThread):
                     "focus_keyword": self.result.get("focus_keyword", ""),
                     "description": self.result.get("description", ""),
                     "tags": self.result.get("tags", ""),
-                    "__upload_files": (self.result.get("post_images")
-                                       or [im["path"] for im in self.result.get("images", [])]),
+                    "__upload_files": uploads,
                 }
+                # cho phép kịch bản dùng {{image_1}}, {{image_2}}… để tải từng ảnh
+                for _n, _p in enumerate(uploads, 1):
+                    ctx[f"image_{_n}"] = _p
+                ctx["image"] = uploads[0] if uploads else ""
                 play_script(page, site.script, ctx, log=self.log.emit)
             else:
                 self.log.emit("Website chưa có kịch bản — mở trang tạo bài để bạn tự thao tác.")
