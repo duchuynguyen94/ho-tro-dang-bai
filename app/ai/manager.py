@@ -147,8 +147,7 @@ def build_combined_short_prompt(source: dict) -> str:
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng "HTML" theo template trong rule_content.pdf
-2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TRÍCH XUẤT TỪ CHÍNH NỘI DUNG TRÊN:
-{SEO_JSON_SPEC}
+2) SAU CÙNG: 1 khối JSON thông tin SEO theo file rule_seo.pdf bao gồm: title, focus_keyword, description, tags
 
 Không giải thích gì thêm."""
 
