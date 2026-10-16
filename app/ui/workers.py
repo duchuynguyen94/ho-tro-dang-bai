@@ -336,7 +336,7 @@ class ContentWorker(TrackedThread):
                  page.get("title", "")],
             )
             self.log.emit(
-                f"Chèn link tiêu đề: h2 đầu → {self.store.title_link_first or '(trống)'}, "
+                f"Chèn link tiêu đề: h1/h2 đầu → {self.store.title_link_first or '(trống)'}, "
                 f"{len(title_links)} link cấu hình cho các mục sau."
             )
             data["content_html"] = html_out

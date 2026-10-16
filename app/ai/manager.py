@@ -440,8 +440,9 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
                        sections: tuple[str, ...] | None = None) -> str:
     """Chèn link vào TIÊU ĐỀ MỤC của bài viết.
 
-    - <h2> ĐẦU TIÊN -> chèn link của CHÍNH website (site_url).
-    - Các tiêu đề có chứa tên mục chuẩn ("Giới thiệu tổng quan",
+    - TIÊU ĐỀ ĐẦU TIÊN (<h1> hoặc <h2>, cái nào xuất hiện trước) -> chèn link của
+      CHÍNH website (site_url, thường là https://ngochuyduong.com).
+    - Các tiêu đề TIẾP THEO có chứa tên mục chuẩn ("Giới thiệu tổng quan",
       "Tính năng kỹ thuật nổi bật", "Thông số kỹ thuật tiêu chuẩn") -> chèn lần lượt
       các link trong danh sách cấu hình (mỗi link 1 lần, đúng số lượng link).
     - Link được chèn vào phần TỪ KHOÁ trong tiêu đề (sau tên mục);
@@ -452,22 +453,25 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
     cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
     secs = [x.strip().lower() for x in (sections or DEFAULT_SECTIONS) if str(x).strip()]
 
+    head_re = re.compile(r"^<h([1-6])\b", re.I)      # tính cả h1 (tiêu đề bài viết)
+    close_re = re.compile(r"^</h[1-6]", re.I)
+
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
     pending = [l for l in (links or []) if str(l).strip()]
     used: set[str] = set()
-    h2_seen = 0
+    heading_seen = 0        # đếm h1 + h2 (tiêu đề đầu tiên = h1 hoặc h2)
     depth = 0
     i = 0
     while i < len(parts):
         part = parts[i]
         if part.startswith("<"):
-            m = HEADING_RE.match(part)
+            m = head_re.match(part)
             if m:
                 depth += 1
-                if m.group(1) == "2":
-                    h2_seen += 1
-            elif re.match(r"^</h[2-6]", part, re.I):
+                if m.group(1) in ("1", "2"):
+                    heading_seen += 1
+            elif close_re.match(part):
                 depth = max(0, depth - 1)
             out.append(part)
             i += 1
@@ -477,7 +481,7 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
         if depth and text.strip():
             low = text.lower()
             href = ""
-            if h2_seen == 1:
+            if heading_seen == 1:
                 href = _norm_url(site_url) if site_url else ""
             elif any(sec in low for sec in secs):
                 href = next((l for l in pending if l not in used), "")

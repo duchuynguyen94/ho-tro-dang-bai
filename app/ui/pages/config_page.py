@@ -1077,7 +1077,7 @@ class TitleLinksPanel(QWidget):
         v.setSpacing(10)
 
         sub = QLabel(
-            "Link ở ô đầu tiên luôn chèn vào <b>tiêu đề đầu tiên (h2 đầu)</b>. "
+            "Link ở ô đầu tiên luôn chèn vào <b>tiêu đề đầu tiên (h1 hoặc h2 đầu)</b>. "
             "Các link trong danh sách bên dưới chèn vào <b>tiêu đề thứ 2 trở đi</b> — "
             "mỗi link chèn <b>1 lần</b> (có 2 link thì chèn 2 lần)."
         )
@@ -1085,7 +1085,7 @@ class TitleLinksPanel(QWidget):
         sub.setWordWrap(True)
         v.addWidget(sub)
 
-        first_card = Card("Link chèn vào TIÊU ĐỀ ĐẦU TIÊN (h2 đầu)")
+        first_card = Card("Link chèn vào TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)")
         self.first_edit = QLineEdit(self.store.title_link_first)
         self.first_edit.setPlaceholderText("https://ngochuyduong.com")
         first_card.body.addWidget(self.first_edit)

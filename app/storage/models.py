@@ -285,7 +285,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "mode": "append",
     },
     "title_links": [],      # link chèn vào các tiêu đề mục (từ tiêu đề thứ 2 trở đi)
-    "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h2 đầu)
+    "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)
     "sites": [],
     "tasks": [],
     "formats": {          # format & rule dùng chung cho MỌI website
