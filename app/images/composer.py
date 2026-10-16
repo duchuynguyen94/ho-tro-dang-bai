@@ -15,6 +15,21 @@ PRODUCT_BOX = 0.30      # tỉ lệ cạnh hộp sản phẩm so với khổ ả
 # Tiện ích
 # --------------------------------------------------------------------------- #
 def _find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    # ưu tiên "Canva Sans" nếu người dùng đã cài trên máy
+    for d in (Path("/Library/Fonts"), Path.home() / "Library/Fonts",
+              Path("/System/Library/Fonts"), Path("/System/Library/Fonts/Supplemental")):
+        try:
+            if not d.exists():
+                continue
+            for p in sorted(d.glob("*")):
+                n = p.name.lower().replace(" ", "").replace("-", "").replace("_", "")
+                if "canvasans" in n and p.suffix.lower() in (".ttf", ".otf", ".ttc"):
+                    try:
+                        return ImageFont.truetype(str(p), size)
+                    except OSError:
+                        pass
+        except OSError:
+            continue
     candidates = [
         "/System/Library/Fonts/Supplemental/Arial.ttf",
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
@@ -94,7 +109,7 @@ def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Ima
 
 
 def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 15,
-                             scale: float = 1.0) -> None:
+                             scale: float = 1.0, rotate: float = 34) -> None:
     if not text:
         return
     alpha = max(0, min(255, int(opacity * 255 / 100)))     # 0..100 -> 0..255
@@ -108,7 +123,7 @@ def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 15,
     text_img = Image.new("RGBA", (int(tw) + 20, int(font.size * 1.6)), (0, 0, 0, 0))
     td = ImageDraw.Draw(text_img)
     td.text((10, 10), text, font=font, fill=(15, 23, 42, alpha))
-    text_img = text_img.rotate(34, expand=True, resample=Image.BICUBIC)
+    text_img = text_img.rotate(float(rotate or 0), expand=True, resample=Image.BICUBIC)
     x = (base.size[0] - text_img.size[0]) // 2
     y = (base.size[1] - text_img.size[1]) // 2
     layer.alpha_composite(text_img, (x, y))
@@ -144,6 +159,7 @@ def compose(
     watermark: str = "",
     watermark_opacity: int = 15,
     watermark_size: float = 1.0,
+    watermark_rotate: float = 34,
     transparent_bg: bool = False,
     remove_bg: bool = False,
     remove_bg_thresh: int = 42,
@@ -249,7 +265,7 @@ def compose(
         base.alpha_composite(fr2)
 
     # --- watermark chéo ---
-    _draw_diagonal_watermark(base, watermark, watermark_opacity, watermark_size)
+    _draw_diagonal_watermark(base, watermark, watermark_opacity, watermark_size, watermark_rotate)
     return base
 
 

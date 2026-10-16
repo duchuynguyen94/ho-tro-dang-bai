@@ -273,6 +273,7 @@ class ImageEditorPanel(QFrame):
         self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 300, 180)
         self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 15)
         self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
+        self.s_wm_rot = self._slider(grid, 3, "Watermark — góc xoay (°)", 0, 90, 34)
         right.addLayout(grid)
 
         foot_row = QHBoxLayout()
@@ -292,7 +293,7 @@ class ImageEditorPanel(QFrame):
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(700)
         self._autosave.timeout.connect(self._emit_opts)
-        for w in (self.s_logo, self.s_wm, self.s_wm_size):
+        for w in (self.s_logo, self.s_wm, self.s_wm_size, self.s_wm_rot):
             w.valueChanged.connect(self._schedule_save)
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
         polish_combos(self)
@@ -346,6 +347,7 @@ class ImageEditorPanel(QFrame):
             self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.8) or 1.8) * 100))
             self.s_wm.setValue(int(self._opts.get("watermark_opacity", 15) or 0))
             self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
+            self.s_wm_rot.setValue(int(float(self._opts.get("watermark_rotate", 34) or 34)))
             mode = self._opts.get("footer_mode") or footer_mode or "bar1"
             self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
         finally:
@@ -587,6 +589,10 @@ class ImageEditorPanel(QFrame):
         painter = QPainter(pm)
         painter.setRenderHint(QPainter.Antialiasing)
         font = QFont()
+        try:
+            font.setFamilies(["Canva Sans", "Arial", "Helvetica Neue", "Helvetica"])
+        except Exception:
+            font.setFamily("Arial")
         font.setBold(True)
         font.setPixelSize(max(6, int(60 * (self.s_wm_size.value() / 100) * CANVAS / SRC)))
         painter.setFont(font)
@@ -595,7 +601,7 @@ class ImageEditorPanel(QFrame):
         font.setPixelSize(max(6, int(60 * (self.s_wm_size.value() / 100) * CANVAS / SRC)))
         painter.setFont(font)
         painter.translate(CANVAS / 2, CANVAS / 2)
-        painter.rotate(-34)                       # chéo như ảnh thật
+        painter.rotate(-self.s_wm_rot.value())    # góc xoay theo thanh điều khiển
         w = painter.fontMetrics().horizontalAdvance(text)
         painter.drawText(int(-w / 2), 0, text)
         painter.end()
@@ -724,6 +730,7 @@ class ImageEditorPanel(QFrame):
         self.s_logo.setValue(180)
         self.s_wm.setValue(15)
         self.s_wm_size.setValue(100)
+        self.s_wm_rot.setValue(34)
         self._layout_items()
         self._layout_products()
         self._layout_uploads()
@@ -739,6 +746,7 @@ class ImageEditorPanel(QFrame):
             "logo_scale": self.s_logo.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "watermark_size": self.s_wm_size.value() / 100.0,
+            "watermark_rotate": self.s_wm_rot.value(),
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
         self._opts = opts
@@ -753,6 +761,7 @@ class ImageEditorPanel(QFrame):
             "logo_scale": self.s_logo.value() / 100.0,
             "watermark_opacity": self.s_wm.value(),
             "watermark_size": self.s_wm_size.value() / 100.0,
+            "watermark_rotate": self.s_wm_rot.value(),
             "footer_mode": ["bar1", "bar2"][self.footer_combo.currentIndex()],
         })
         self._opts = opts

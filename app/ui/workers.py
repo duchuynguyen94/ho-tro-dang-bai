@@ -217,6 +217,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             product_positions = [tuple(p) for p in product_positions]
         wm_opacity = int(o.get("watermark_opacity", 15) or 0)
         wm_size = float(o.get("watermark_size", 1.0) or 1.0)
+        wm_rot = float(o.get("watermark_rotate", 34) or 34)
         product_scales = o.get("product_scales") or None
         product_nobg = o.get("product_nobg") or None
         hidden = set(o.get("product_hidden") or [])
@@ -245,6 +246,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             watermark=site.watermark_text,
             watermark_opacity=wm_opacity,
             watermark_size=wm_size,
+            watermark_rotate=wm_rot,
             remove_bg=rb,
             remove_bg_thresh=remove_bg_thresh,
             logo_pos=logo_pos,
