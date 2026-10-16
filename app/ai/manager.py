@@ -482,17 +482,21 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
             elif any(sec in low for sec in secs):
                 href = next((l for l in pending if l not in used), "")
             if href:
-                done = False
-                for cand in cands:
-                    mm = re.search(re.escape(cand), text, re.I)
+                # tìm TÊN MỤC CHUẨN trong tiêu đề -> bọc TOÀN BỘ chữ còn lại sau nó
+                hit = None
+                for sec in secs:
+                    mm = re.search(re.escape(sec), low)
                     if mm:
-                        text = (text[:mm.start()]
-                                + f'<a href="{_norm_url(href)}">{mm.group(0)}</a>'
-                                + text[mm.end():])
-                        done = True
+                        hit = mm
                         break
-                if not done:
-                    # không có từ khoá trong tiêu đề -> bọc cả tiêu đề
+                if hit is not None and text[hit.end():].strip():
+                    tail_raw = text[hit.end():]
+                    tail = tail_raw.strip()
+                    sep = " " if tail_raw[:1].isspace() else ""
+                    text = f'{text[:hit.end()]}{sep}<a href="{_norm_url(href)}">{tail}</a>'
+                else:
+                    # không có chữ sau tên mục (hoặc không phải tiêu đề mục chuẩn)
+                    # -> bọc cả tiêu đề
                     text = f'<a href="{_norm_url(href)}">{text.strip()}</a>'
                 used.add(href)
         out.append(text)
