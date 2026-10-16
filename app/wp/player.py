@@ -72,10 +72,54 @@ def _make(page: Page, sel: str):
     return page.locator(sel)
 
 
+def _auto_open_panel(page: Page, el) -> bool:
+    """Nếu phần tử nằm trong 1 bảng (metabox) đang THU GỌN -> tự bấm mở bảng đó."""
+    try:
+        return bool(el.evaluate(
+            """el => {
+                let node = el;
+                while (node && node !== document.body) {
+                    const cls = (node.className || '').toString();
+                    if (cls.indexOf('postbox') >= 0) {
+                        const inside = node.querySelector('.inside');
+                        const hiddenInside = inside && getComputedStyle(inside).display === 'none';
+                        const closed = cls.indexOf('closed') >= 0 || hiddenInside;
+                        const btn = node.querySelector('.handlediv') || node.querySelector('button.handlediv');
+                        if (closed && btn) { btn.click(); return true; }
+                        return false;
+                    }
+                    node = node.parentElement;
+                }
+                return false;
+            }"""
+        ))
+    except Exception:
+        return False
+
+
+def _auto_editor_text_mode(page: Page, el) -> bool:
+    """Ô soạn thảo TinyMCE đang bị ẩn (đang ở chế độ Trực quan) -> bấm tab "Mã" của ô đó."""
+    try:
+        eid = el.get_attribute("id") or ""
+        cls = (el.get_attribute("class") or "")
+        if not eid or "wp-editor-area" not in cls:
+            return False
+        tab = page.locator(f"#{eid}-html").first
+        if tab.count() and tab.is_visible():
+            tab.click(timeout=3000)
+            page.wait_for_timeout(500)
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def _locate(page: Page, step: ScriptStep):
     """Tìm phần tử theo selector chính rồi tới các selector dự phòng.
 
-    Ưu tiên phần tử ĐANG HIỆN (tránh các input ẩn của WordPress/Gutenberg).
+    - Ưu tiên phần tử ĐANG HIỆN (tránh input ẩn của WordPress/Gutenberg).
+    - Nếu phần tử bị ẩn do BẢNG THU GỌN -> tự mở bảng rồi dùng lại.
+    - Nếu là ô soạn thảo TinyMCE đang ẩn -> tự bấm tab "Mã" rồi dùng lại.
     """
     sels = _selectors(step)
     for extra in _fallbacks_for(step):
@@ -97,7 +141,24 @@ def _locate(page: Page, step: ScriptStep):
                     continue
         except Exception as exc:
             last = exc
-    # 2) không có cái nào hiện -> lấy cái đầu tiên tồn tại (để báo lỗi rõ ràng)
+    # 2) có tồn tại nhưng đang ẩn -> mở bảng / chuyển ô soạn thảo sang chế độ Mã
+    for sel in sels:
+        try:
+            loc = _make(page, sel)
+            n = min(loc.count(), 10)
+            for i in range(n):
+                cand = loc.nth(i)
+                try:
+                    changed = _auto_open_panel(page, cand) or _auto_editor_text_mode(page, cand)
+                    if changed:
+                        page.wait_for_timeout(700)
+                        if cand.is_visible():
+                            return cand
+                except Exception:
+                    continue
+        except Exception as exc:
+            last = exc
+    # 3) không có cái nào hiện -> lấy cái đầu tiên tồn tại (để báo lỗi rõ ràng)
     for sel in sels:
         try:
             loc = _make(page, sel)
@@ -158,6 +219,20 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
             elif action == "type":
                 value = render(step.value, ctx)
                 _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
+            elif action in ("tagify", "tag_input"):
+                # Ô nhập kiểu Tagify (Rank Math focus keyword): gõ rồi Enter để chốt
+                value = render(step.value, ctx)
+                loc = _locate(page, step)
+                try:
+                    loc.click(force=True, timeout=8000)
+                except Exception:
+                    pass
+                try:
+                    loc.fill(value, timeout=8000)
+                except Exception:
+                    page.keyboard.insert_text(value)
+                page.keyboard.press("Enter")
+                time.sleep(0.5)
             elif action in ("panel", "open_panel"):
                 # Mở bảng (metabox) nếu phần tử bên trong đang bị ẩn
                 check = render(step.value or "", ctx)

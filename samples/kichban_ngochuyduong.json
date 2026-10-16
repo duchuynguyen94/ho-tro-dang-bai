@@ -103,13 +103,14 @@
       "optional": true
     },
     {
-      "action": "type",
+      "action": "tagify",
       "note": "AI focus keyword → Từ khoá chính (Rank Math)",
-      "selector": "input[placeholder='Ví dụ: Rank Math SEO']",
+      "selector": ".rank-math-focus-keyword .tagify__input",
       "selectors": [
-        "input[placeholder='Ví dụ: Rank Math SEO']",
-        "#rank_math_metabox input[placeholder*='Rank Math SEO']",
-        "#rank_math_metabox input[type='text']"
+        "#rank_math_metabox .rank-math-focus-keyword .tagify__input",
+        ".rank-math-focus-keyword .tagify__input",
+        "#rank_math_metabox .tagify__input",
+        ".tagify__input"
       ],
       "value": "{{focus_keyword}}",
       "source": "auto"
@@ -117,12 +118,12 @@
     {
       "action": "type",
       "note": "AI search tags → Thẻ sản phẩm",
-      "selector": "#newproduct_tag",
+      "selector": "#new-tag-product_tag",
       "selectors": [
-        "#newproduct_tag",
-        "textarea[name='newproduct_tag']",
-        "#tagsdiv-product_tag textarea",
-        "#tagsdiv-product_tag input[type='text']"
+        "#new-tag-product_tag",
+        "#tagsdiv-product_tag input.newtag",
+        "#tagsdiv-product_tag input[type='text']",
+        "#tax-input-product_tag"
       ],
       "value": "{{tags}}",
       "source": "auto",
@@ -134,9 +135,8 @@
       "selector": "#tagsdiv-product_tag .tagadd",
       "selectors": [
         "#tagsdiv-product_tag .tagadd",
-        "#product_tag-add-submit",
-        "#tagsdiv-product_tag input[type='button']",
-        "#tagsdiv-product_tag button:has-text('Thêm')"
+        "#tagsdiv-product_tag input.tagadd",
+        "#tagsdiv-product_tag input[type='button']"
       ],
       "value": "",
       "source": "auto",
