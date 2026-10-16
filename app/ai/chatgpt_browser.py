@@ -50,22 +50,35 @@ LIMIT_MSG = (
 )
 
 _REPLY_JS = r"""() => {
-  const sels = ['[data-message-author-role="assistant"]','[class*="MarkdownRoot"]',
-                '[class*="DilResponseRoot"]','[class*="assistant-message"]',
-                '.prose','[class*="prose"]'];
+  const clean = (t) => (t || '').trim();
+  const notUser = (el) => {
+    if (el.matches('[data-message-author-role="user"]')) return false;
+    if (el.closest('[data-message-author-role="user"]')) return false;
+    if (el.matches('[class*="user-message"]')) return false;
+    if (el.closest('[class*="user-message"]')) return false;
+    return true;
+  };
+  // 1) phần tử mang role assistant (ổn định nhất)
+  const asst = [...document.querySelectorAll('[data-message-author-role="assistant"]')]
+      .filter(el => clean(el.innerText));
+  if (asst.length) return clean(asst[asst.length - 1].innerText);
+  // 2) lượt hội thoại (article / conversation-turn) không phải của người dùng
+  const turns = [...document.querySelectorAll('article, [data-testid^="conversation-turn"]')]
+      .filter(el => clean(el.innerText) && notUser(el));
+  if (turns.length) {
+    const outer = turns.filter(el => !turns.some(o => o !== el && el.contains(o)));
+    const pick = outer.length ? outer : turns;
+    return clean(pick[pick.length - 1].innerText);
+  }
+  // 3) các selector cũ (giao diện đổi tên)
+  const sels = ['[class*="MarkdownRoot"]','[class*="DilResponseRoot"]',
+                '[class*="assistant-message"]','.prose','[class*="prose"]'];
   for (const s of sels) {
-    const els = [...document.querySelectorAll(s)].filter(el => {
-      const t = (el.innerText || '').trim();
-      if (!t) return false;
-      if (el.closest('[class*="user-message"]')) return false;
-      if (el.matches('[class*="user-message"]')) return false;
-      return true;
-    });
+    const els = [...document.querySelectorAll(s)].filter(el => clean(el.innerText) && notUser(el));
     if (!els.length) continue;
-    // bỏ các phần tử nằm TRONG phần tử khác (chỉ giữ lớp ngoài cùng)
     const outer = els.filter(el => !els.some(o => o !== el && el.contains(o)));
     const pick = outer.length ? outer : els;
-    return pick[pick.length - 1].innerText || '';
+    return clean(pick[pick.length - 1].innerText);
   }
   return '';
 }"""
@@ -229,6 +242,25 @@ def _reply_text(page, prompt: str = "") -> str:
         txt = (page.evaluate(_REPLY_JS) or "").strip()
     except Exception:
         txt = ""
+    if not txt:
+        # dự phòng: đọc trực tiếp phần tử cuối bằng locator
+        for sel in ('[data-message-author-role="assistant"]', "article",
+                    '[data-testid^="conversation-turn"]'):
+            try:
+                loc = page.locator(sel)
+                n = loc.count()
+            except Exception:
+                continue
+            for i in range(n - 1, -1, -1):
+                try:
+                    t = (loc.nth(i).inner_text() or "").strip()
+                except Exception:
+                    continue
+                if t:
+                    txt = t
+                    break
+            if txt:
+                break
     if not txt:
         try:
             body = page.inner_text("body")
@@ -411,17 +443,24 @@ def _strip_fences(text: str) -> str:
     return t.strip()
 
 
-def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None) -> str:
+def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None,
+                     log=None) -> str:
     """Chờ tới khi câu trả lời có đủ JSON + nội dung và ChatGPT viết xong."""
     deadline = time.time() + timeout
     last = ""
     stable = 0
     best = ""
+    next_log = time.time() + 6.0
     while time.time() < deadline:
         if should_stop and should_stop():
             raise AIError("Đã dừng theo yêu cầu.")
         page.wait_for_timeout(1500)
         text = _reply_text(page, prompt)
+        if log and time.time() >= next_log:
+            next_log = time.time() + 6.0
+            left = max(0, int(deadline - time.time()))
+            log(f"ChatGPT đang viết… đã nhận {len(text)} ký tự (còn tối đa {left}s)."
+                if text else f"Đang chờ ChatGPT bắt đầu trả lời… (còn tối đa {left}s).")
         data, i, j = _find_json_block(text)
         has_both = data is not None and (len(text) - (j - i)) > 150
         if has_both and len(text) > len(best):
@@ -434,7 +473,7 @@ def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None) ->
         else:
             stable = 0
         last = text
-        if _limit_reached(page, last):
+        if _limit_reached(page):      # chỉ soi thông báo giao diện, KHÔNG quét nội dung trả lời
             raise AIError(LIMIT_MSG)
     # hết thời gian: nếu từng có JSON thì trả về bản dài nhất để bước sau tự xử lý
     if best:
@@ -450,16 +489,22 @@ def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None) ->
 
 
 def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = False,
-                should_stop=None) -> str:
+                should_stop=None, log=None) -> str:
     deadline = time.time() + timeout
     last = ""
     stable = 0
     result = ""
+    next_log = time.time() + 6.0
     while time.time() < deadline:
         if should_stop and should_stop():
             raise AIError("Đã dừng theo yêu cầu.")
         page.wait_for_timeout(1500)
         text = _reply_text(page, prompt)
+        if log and time.time() >= next_log:
+            next_log = time.time() + 6.0
+            left = max(0, int(deadline - time.time()))
+            log(f"ChatGPT đang trả lời… đã nhận {len(text)} ký tự (còn tối đa {left}s)."
+                if text else f"Đang chờ ChatGPT trả lời… (còn tối đa {left}s).")
         streaming = _is_streaming(page)
         if require_json:
             data = _try_extract_json(text)
@@ -472,7 +517,7 @@ def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = Fals
         if text != last:
             stable = 0
             last = text
-        if _limit_reached(page, last):
+        if _limit_reached(page):      # chỉ soi thông báo giao diện, KHÔNG quét nội dung trả lời
             raise AIError(LIMIT_MSG)
     if require_json:
         raise AIError(
@@ -500,7 +545,7 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
             if log:
                 log("Đang gửi yêu cầu cho ChatGPT…")
             _send(page, prompt)
-            return _wait_reply(page, prompt, timeout, require_json)
+            return _wait_reply(page, prompt, timeout, require_json, log=log)
         finally:
             try:
                 br.close()
@@ -527,7 +572,7 @@ def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,
         if log:
             log("Đang gửi yêu cầu cho ChatGPT (nội dung + SEO)…")
         _send(page, prompt)
-        return _wait_reply_full(page, prompt, timeout, should_stop)
+        return _wait_reply_full(page, prompt, timeout, should_stop, log=log)
     finally:
         try:
             br.close()
@@ -582,12 +627,12 @@ def generate_two_step(pcfg: dict, content_prompt: str, seo_prompt: str,
         if log:
             log("Bước 1/2 — gửi yêu cầu viết nội dung (rule_content)…")
         _send(page, content_prompt)
-        raw = _wait_reply(page, content_prompt, timeout, require_json=False)
+        raw = _wait_reply(page, content_prompt, timeout, require_json=False, log=log)
 
         if log:
             log("Bước 2/2 — gửi yêu cầu SEO (rule_seo) trong cùng đoạn chat…")
         _send(page, seo_prompt)
-        seo = _wait_reply(page, seo_prompt, timeout, require_json=True)
+        seo = _wait_reply(page, seo_prompt, timeout, require_json=True, log=log)
         return raw, seo
     finally:
         try:
