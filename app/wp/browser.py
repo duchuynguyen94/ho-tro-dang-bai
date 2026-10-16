@@ -9,7 +9,20 @@ from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 from ..config import sessions_dir
 
 # Ưu tiên dùng Chrome/Edge có sẵn; nếu không có thì dùng Chromium kèm theo.
-CHANNELS = ["chrome", "msedge", None]
+CHANNELS = ["chrome", "chrome-beta", "msedge", None]
+
+# Đường dẫn trình duyệt có sẵn trên máy (thử trực tiếp nếu "channel" không chạy được)
+BROWSER_PATHS = [
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    "/Applications/Chromium.app/Contents/MacOS/Chromium",
+    "/usr/bin/google-chrome",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+    "C:/Program Files/Google/Chrome/Application/chrome.exe",
+    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe",
+]
 
 
 def _user_data_dir(site_id: str) -> str:
@@ -34,8 +47,16 @@ class WPBrowser:
         if self.page:
             return self.page
         self._pw = sync_playwright().start()
-        last_err: Exception | None = None
-        for channel in CHANNELS:
+
+        attempts: list[tuple[str, dict]] = []
+        for ch in CHANNELS:
+            attempts.append((f"channel={ch}" if ch else "Chromium kèm theo", {"channel": ch} if ch else {}))
+        for p in BROWSER_PATHS:
+            if Path(p).exists():
+                attempts.append((f"exe={Path(p).name}", {"executable_path": p}))
+
+        errors: list[str] = []
+        for label, extra in attempts:
             try:
                 kwargs = dict(
                     user_data_dir=_user_data_dir(self.site_id),
@@ -43,20 +64,25 @@ class WPBrowser:
                     viewport={"width": 1400, "height": 900},
                     args=["--disable-blink-features=AutomationControlled"],
                 )
-                if channel:
-                    kwargs["channel"] = channel
+                kwargs.update(extra)
                 self.context = self._pw.chromium.launch_persistent_context(**kwargs)
-                self.channel_used = channel or "chromium"
+                self.channel_used = label
                 break
-            except Exception as exc:  # thử kênh khác
-                last_err = exc
+            except Exception as exc:  # thử cách khác
+                first_line = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+                errors.append(f"- {label}: {first_line}")
                 try:
                     self._pw.stop()
                 except Exception:
                     pass
                 self._pw = sync_playwright().start()
         else:
-            raise RuntimeError(f"Không mở được trình duyệt: {last_err}")
+            detail = "\n".join(errors) if errors else "không rõ"
+            raise RuntimeError(
+                "Không mở được trình duyệt. Đã thử:\n" + detail
+                + "\n\nCách xử lý: cài Google Chrome, hoặc mở Cấu hình → website → "
+                "kiểm tra lại."
+            )
 
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         self.page.set_default_timeout(20000)

@@ -38,11 +38,44 @@ def _install_error_log() -> None:
     threading.excepthook = thread_hook
 
 
+def _check_browser() -> int:
+    """Chẩn đoán: thử mở trình duyệt và ghi kết quả ra file (dùng khi đóng gói .app)."""
+    import traceback
+
+    from .config import app_data_dir
+    from .wp import WPBrowser
+
+    out = app_data_dir() / "browser_check.log"
+    lines: list[str] = []
+    try:
+        br = WPBrowser(headless=True, site_id="chatgpt")
+        page = br.open()
+        lines.append(f"OK | channel_used={br.channel_used} | url={page.url}")
+        try:
+            br.close()
+        except Exception:
+            pass
+    except Exception as exc:      # noqa: BLE001
+        lines.append("LOI: " + str(exc))
+        lines.append(traceback.format_exc())
+    text = "\n".join(lines)
+    try:
+        out.write_text(text, encoding="utf-8")
+    except OSError:
+        pass
+    print(text)
+    return 0
+
+
 def main() -> int:
     from PySide6.QtWidgets import QApplication
 
     from .ui.main_window import MainWindow
     from .ui.style import QSS
+
+    if "--check-browser" in sys.argv:
+        _install_error_log()
+        return _check_browser()
 
     _install_error_log()
 
