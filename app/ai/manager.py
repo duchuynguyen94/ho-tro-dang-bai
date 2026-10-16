@@ -173,7 +173,7 @@ def _call_ai(store, prompt: str, short_prompt: str, log=None) -> str:
     limit = next((e for e in errors if "GIỚI HẠN" in e.upper()), "")
     if limit:
         raise providers.AIError(limit.split(":", 1)[-1].strip())
-    raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))
+    raise providers.AIError(_fmt_errors(errors))
 
 
 # --------------------------------------------------------------------------- #
@@ -526,7 +526,7 @@ def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
     limit = next((e for e in errors if "GIỚI HẠN" in e.upper()), "")
     if limit:
         raise providers.AIError(limit.split(":", 1)[-1].strip())
-    raise providers.AIError("Không tạo được nội dung. " + _fmt_errors(errors))
+    raise providers.AIError(_fmt_errors(errors))
 
 
 # --------------------------------------------------------------------------- #

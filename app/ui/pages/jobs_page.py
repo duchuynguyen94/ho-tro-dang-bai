@@ -629,29 +629,25 @@ class JobsPage(QWidget):
             msg = task.message or "Lỗi không xác định."
             r = task.result or {}
             has_content = bool(r.get("content_html") or r.get("title"))
+            low = msg.lower()
+            missing_key = "thiếu api key" in low or ("api key" in low and "thiếu" in low)
+
             if has_content:
                 # Nội dung đã có -> lỗi ở bước ĐĂNG BÀI, không cần tạo lại nội dung
                 self.retry_btn.setText("↻ Thử ĐĂNG LẠI")
                 self.retry_btn.setToolTip("Nội dung đã có sẵn — chỉ đăng lại, không tạo lại nội dung")
                 title = "Không đăng được bài."
-                hint = ("Nội dung vẫn được giữ nguyên. Kiểm tra kịch bản đăng bài / đăng nhập "
-                        "WordPress trong Cấu hình → website → Kịch bản đăng bài.")
-                if "giới hạn" in msg.lower():
-                    title = "AI đang bị giới hạn."
             else:
                 self.retry_btn.setText("↻ Thử tạo lại")
                 self.retry_btn.setToolTip("Tạo lại nội dung bằng AI")
-                if "giới hạn" in msg.lower():
-                    hint = ("Chờ tới khi lượt được làm mới, hoặc đổi provider khác "
-                            "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung.")
-                    title = "AI đang bị giới hạn."
-                else:
-                    hint = "Kiểm tra API key / model trong Cấu hình → AI nội dung."
-                    title = "Không tạo được nội dung."
-            self.error_label.setText(
-                f"<b>{title}</b><br><br>{msg}"
-                f"<br><br><span style='color:#64748b'>{hint}</span>"
-            )
+                title = "Không tạo được nội dung."
+
+            body = f"<b>{title}</b><br><br>{msg}"
+            # CHỈ gợi ý khi provider thiếu API key; các lỗi khác chỉ báo lý do (đã lưu vào Log lỗi)
+            if missing_key:
+                body += ("<br><br><span style='color:#64748b'>Provider này chưa có API key — "
+                         "vào Cấu hình → AI nội dung để dán key.</span>")
+            self.error_label.setText(body)
             self.stack.setCurrentWidget(self.page_error)
             return
 
