@@ -517,7 +517,9 @@ class PostWorker(TrackedThread):
                 # cho phép kịch bản dùng {{image_1}}, {{image_2}}… để tải từng ảnh
                 for _n, _p in enumerate(uploads, 1):
                     ctx[f"image_{_n}"] = _p
+                    ctx[f"image_name_{_n}"] = Path(_p).stem      # tên ảnh (không đuôi)
                 ctx["image"] = uploads[0] if uploads else ""
+                ctx["image_name"] = Path(uploads[0]).stem if uploads else ""
                 # đường dẫn (slug) tạo từ tiêu đề, tối đa 60 ký tự
                 ctx["slug"] = make_slug(ctx["title"], 59)
                 try:

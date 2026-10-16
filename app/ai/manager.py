@@ -428,19 +428,29 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
     return "".join(out)
 
 
+DEFAULT_SECTIONS = (
+    "giới thiệu tổng quan",
+    "tính năng kỹ thuật nổi bật",
+    "thông số kỹ thuật tiêu chuẩn",
+)
+
+
 def insert_title_links(html_text: str, site_url: str, links: list[str],
-                       candidates: list[str] | None) -> str:
+                       candidates: list[str] | None,
+                       sections: tuple[str, ...] | None = None) -> str:
     """Chèn link vào TIÊU ĐỀ MỤC của bài viết.
 
-    - <h2> ĐẦU TIÊN  -> chèn link của CHÍNH website đang đăng (site_url)
-    - Từ tiêu đề thứ 2 trở đi -> lần lượt các link trong danh sách cấu hình
-      (mỗi link chèn 1 lần; 2 link thì chèn 2 lần)
+    - <h2> ĐẦU TIÊN -> chèn link của CHÍNH website (site_url).
+    - Các tiêu đề có chứa tên mục chuẩn ("Giới thiệu tổng quan",
+      "Tính năng kỹ thuật nổi bật", "Thông số kỹ thuật tiêu chuẩn") -> chèn lần lượt
+      các link trong danh sách cấu hình (mỗi link 1 lần, đúng số lượng link).
+    - Link được chèn vào phần TỪ KHOÁ trong tiêu đề (sau tên mục);
+      nếu tiêu đề không có từ khoá thì bọc cả tiêu đề.
     """
     if not html_text:
         return html_text
     cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
-    if not cands:
-        return html_text
+    secs = [x.strip().lower() for x in (sections or DEFAULT_SECTIONS) if str(x).strip()]
 
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
@@ -465,20 +475,26 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
 
         text = part
         if depth and text.strip():
+            low = text.lower()
             href = ""
             if h2_seen == 1:
                 href = _norm_url(site_url) if site_url else ""
-            else:
+            elif any(sec in low for sec in secs):
                 href = next((l for l in pending if l not in used), "")
             if href:
+                done = False
                 for cand in cands:
                     mm = re.search(re.escape(cand), text, re.I)
                     if mm:
                         text = (text[:mm.start()]
                                 + f'<a href="{_norm_url(href)}">{mm.group(0)}</a>'
                                 + text[mm.end():])
-                        used.add(href)
+                        done = True
                         break
+                if not done:
+                    # không có từ khoá trong tiêu đề -> bọc cả tiêu đề
+                    text = f'<a href="{_norm_url(href)}">{text.strip()}</a>'
+                used.add(href)
         out.append(text)
         i += 1
     return "".join(out)

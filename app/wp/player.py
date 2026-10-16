@@ -299,6 +299,22 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 if need:
                     _locate(page, step).click(force=True, timeout=8000)
                     time.sleep(0.6)
+            elif action in ("fill_attachment", "attachment_fields"):
+                # Điền cả 4 ô chi tiết ảnh (Tiêu đề, Văn bản thay thế, Caption, Miêu tả)
+                value = render(step.value, ctx)
+                if not value or value.startswith("{{"):      # token chưa thay được -> bỏ qua
+                    if log:
+                        log("  (bỏ qua: chưa có tên ảnh cho bước này)")
+                    time.sleep(delay)
+                    continue
+                for sel in ("#attachment-details-title", "#attachment-details-alt-text",
+                            "#attachment-details-caption", "#attachment-details-description"):
+                    try:
+                        loc = page.locator(sel).first
+                        if loc.count():
+                            loc.fill(value, timeout=6000)
+                    except Exception:
+                        continue
             elif action == "select":
                 _locate(page, step).select_option(render(step.value, ctx))
             elif action == "upload":

@@ -242,48 +242,11 @@
       "source": "auto"
     },
     {
-      "action": "type",
-      "note": "Tiêu đề ảnh 1 ← tiêu đề bài viết",
-      "selector": "#attachment-details-title",
-      "selectors": [
-        "#attachment-details-title",
-        ".media-sidebar input[type='text']"
-      ],
-      "value": "{{title}}",
-      "source": "auto",
-      "optional": true
-    },
-    {
-      "action": "type",
-      "note": "Văn bản thay thế (SEO) ảnh 1 ← tiêu đề bài viết",
-      "selector": "#attachment-details-alt-text",
-      "selectors": [
-        "#attachment-details-alt-text",
-        ".media-sidebar textarea"
-      ],
-      "value": "{{title}}",
-      "source": "auto",
-      "optional": true
-    },
-    {
-      "action": "type",
-      "note": "Image Caption ảnh 1 ← tiêu đề bài viết",
-      "selector": "#attachment-details-caption",
-      "selectors": [
-        "#attachment-details-caption"
-      ],
-      "value": "{{title}}",
-      "source": "auto",
-      "optional": true
-    },
-    {
-      "action": "type",
-      "note": "Miêu tả ảnh 1 ← tiêu đề bài viết",
-      "selector": "#attachment-details-description",
-      "selectors": [
-        "#attachment-details-description"
-      ],
-      "value": "{{title}}",
+      "action": "fill_attachment",
+      "note": "Điền 4 ô ảnh 1 (Tiêu đề/SEO/Caption/Miêu tả) ← TÊN ẢNH 1",
+      "selector": "",
+      "selectors": [],
+      "value": "{{image_name_1}}",
       "source": "auto",
       "optional": true
     },
@@ -352,48 +315,102 @@
       "source": "auto"
     },
     {
-      "action": "type",
-      "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
-      "selector": "#attachment-details-title",
+      "action": "click",
+      "note": "Chọn ảnh thứ 1 trong hộp",
+      "selector": ".media-frame .attachment:nth-of-type(1)",
       "selectors": [
-        "#attachment-details-title",
-        ".media-sidebar input[type='text']"
+        ".media-frame .attachment:nth-of-type(1)"
       ],
-      "value": "{{title}}",
+      "value": "",
       "source": "auto",
       "optional": true
     },
     {
-      "action": "type",
-      "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
-      "selector": "#attachment-details-alt-text",
-      "selectors": [
-        "#attachment-details-alt-text",
-        ".media-sidebar textarea"
-      ],
-      "value": "{{title}}",
+      "action": "fill_attachment",
+      "note": "Điền 4 ô ảnh thứ 2 ← TÊN ẢNH 2",
+      "selector": "",
+      "selectors": [],
+      "value": "{{image_name_2}}",
       "source": "auto",
       "optional": true
     },
     {
-      "action": "type",
-      "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
-      "selector": "#attachment-details-caption",
+      "action": "click",
+      "note": "Chọn ảnh thứ 2 trong hộp",
+      "selector": ".media-frame .attachment:nth-of-type(2)",
       "selectors": [
-        "#attachment-details-caption"
+        ".media-frame .attachment:nth-of-type(2)"
       ],
-      "value": "{{title}}",
+      "value": "",
       "source": "auto",
       "optional": true
     },
     {
-      "action": "type",
-      "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
-      "selector": "#attachment-details-description",
+      "action": "fill_attachment",
+      "note": "Điền 4 ô ảnh thứ 3 ← TÊN ẢNH 3",
+      "selector": "",
+      "selectors": [],
+      "value": "{{image_name_3}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "click",
+      "note": "Chọn ảnh thứ 3 trong hộp",
+      "selector": ".media-frame .attachment:nth-of-type(3)",
       "selectors": [
-        "#attachment-details-description"
+        ".media-frame .attachment:nth-of-type(3)"
       ],
-      "value": "{{title}}",
+      "value": "",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "fill_attachment",
+      "note": "Điền 4 ô ảnh thứ 4 ← TÊN ẢNH 4",
+      "selector": "",
+      "selectors": [],
+      "value": "{{image_name_4}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "click",
+      "note": "Chọn ảnh thứ 4 trong hộp",
+      "selector": ".media-frame .attachment:nth-of-type(4)",
+      "selectors": [
+        ".media-frame .attachment:nth-of-type(4)"
+      ],
+      "value": "",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "fill_attachment",
+      "note": "Điền 4 ô ảnh thứ 5 ← TÊN ẢNH 5",
+      "selector": "",
+      "selectors": [],
+      "value": "{{image_name_5}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "click",
+      "note": "Chọn ảnh thứ 5 trong hộp",
+      "selector": ".media-frame .attachment:nth-of-type(5)",
+      "selectors": [
+        ".media-frame .attachment:nth-of-type(5)"
+      ],
+      "value": "",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "fill_attachment",
+      "note": "Điền 4 ô ảnh thứ 6 ← TÊN ẢNH 6",
+      "selector": "",
+      "selectors": [],
+      "value": "{{image_name_6}}",
       "source": "auto",
       "optional": true
     },
