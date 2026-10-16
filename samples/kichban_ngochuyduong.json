@@ -143,6 +143,64 @@
       "optional": true
     },
     {
+      "action": "press",
+      "note": "Rời ô tiêu đề để WP tạo đường dẫn",
+      "selector": "#title",
+      "selectors": [
+        "#title"
+      ],
+      "value": "Tab",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "wait",
+      "note": "Chờ WP sinh đường dẫn",
+      "selector": "",
+      "selectors": [],
+      "value": "2",
+      "source": "auto"
+    },
+    {
+      "action": "click",
+      "note": "Bấm “Chỉnh sửa” cạnh đường dẫn",
+      "selector": "#edit-slug-buttons .edit-slug",
+      "selectors": [
+        "#edit-slug-buttons .edit-slug",
+        "#edit-slug-box .edit-slug",
+        "button.edit-slug",
+        "button:has-text('Chỉnh sửa')"
+      ],
+      "value": "",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "type",
+      "note": "Điền đường dẫn (slug) từ tiêu đề — tối đa 60 ký tự",
+      "selector": "#new-post-slug",
+      "selectors": [
+        "#new-post-slug",
+        "#edit-slug-box input[type='text']"
+      ],
+      "value": "{{slug}}",
+      "source": "auto"
+    },
+    {
+      "action": "click",
+      "note": "Bấm “Đồng ý” để chốt đường dẫn",
+      "selector": "#edit-slug-buttons .save",
+      "selectors": [
+        "#edit-slug-buttons .save",
+        "#edit-slug-box .save",
+        "button.save",
+        "button:has-text('Đồng ý')"
+      ],
+      "value": "",
+      "source": "auto",
+      "optional": true
+    },
+    {
       "action": "click",
       "note": "AI hình 1 → bấm “Đặt ảnh sản phẩm”",
       "selector": "#set-post-thumbnail",
@@ -258,64 +316,6 @@
       ],
       "value": "",
       "source": "auto"
-    },
-    {
-      "action": "press",
-      "note": "Rời ô tiêu đề để WP tạo đường dẫn",
-      "selector": "#title",
-      "selectors": [
-        "#title"
-      ],
-      "value": "Tab",
-      "source": "auto",
-      "optional": true
-    },
-    {
-      "action": "wait",
-      "note": "Chờ WP sinh đường dẫn",
-      "selector": "",
-      "selectors": [],
-      "value": "2",
-      "source": "auto"
-    },
-    {
-      "action": "click",
-      "note": "Bấm “Chỉnh sửa” cạnh đường dẫn",
-      "selector": "#edit-slug-buttons .edit-slug",
-      "selectors": [
-        "#edit-slug-buttons .edit-slug",
-        "#edit-slug-box .edit-slug",
-        "button.edit-slug",
-        "button:has-text('Chỉnh sửa')"
-      ],
-      "value": "",
-      "source": "auto",
-      "optional": true
-    },
-    {
-      "action": "type",
-      "note": "Điền đường dẫn (slug) từ tiêu đề — tối đa 60 ký tự",
-      "selector": "#new-post-slug",
-      "selectors": [
-        "#new-post-slug",
-        "#edit-slug-box input[type='text']"
-      ],
-      "value": "{{slug}}",
-      "source": "auto"
-    },
-    {
-      "action": "click",
-      "note": "Bấm “Đồng ý” để chốt đường dẫn",
-      "selector": "#edit-slug-buttons .save",
-      "selectors": [
-        "#edit-slug-buttons .save",
-        "#edit-slug-box .save",
-        "button.save",
-        "button:has-text('Đồng ý')"
-      ],
-      "value": "",
-      "source": "auto",
-      "optional": true
     }
   ]
 }

@@ -100,9 +100,13 @@ class WPBrowser:
                 kwargs = dict(
                     user_data_dir=_user_data_dir(self.site_id),
                     headless=self.headless,
-                    viewport={"width": 1400, "height": 900},
-                    args=["--disable-blink-features=AutomationControlled"],
+                    args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
                 )
+                if self.headless:
+                    kwargs["viewport"] = {"width": 1400, "height": 900}
+                else:
+                    # cửa sổ mở TO HẾT màn hình: tránh bị che mất thanh cuộn / phần dưới
+                    kwargs["no_viewport"] = True
                 kwargs.update(extra)
                 self.context = self._pw.chromium.launch_persistent_context(**kwargs)
                 self.channel_used = label
