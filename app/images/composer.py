@@ -203,7 +203,7 @@ def compose(
     frame: str = "",
     watermark: str = "",
     watermark_opacity: int = 15,
-    watermark_size: float = 1.0,
+    watermark_size: float = 0.85,
     watermark_rotate: float = 50,
     transparent_bg: bool = False,
     remove_bg: bool = False,

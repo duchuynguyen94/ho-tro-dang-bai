@@ -216,7 +216,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         if product_positions:
             product_positions = [tuple(p) for p in product_positions]
         wm_opacity = int(o.get("watermark_opacity", 15) or 0)
-        wm_size = float(o.get("watermark_size", 1.0) or 1.0)
+        wm_size = float(o.get("watermark_size", 0.85) or 0.85)
         wm_rot = float(o.get("watermark_rotate", 50) or 50)
         product_scales = o.get("product_scales") or None
         product_nobg = o.get("product_nobg") or None
