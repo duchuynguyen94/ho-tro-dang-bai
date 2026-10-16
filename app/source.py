@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import quote, urljoin, urlparse
 
 import httpx
 from bs4 import BeautifulSoup
@@ -171,31 +171,79 @@ def guess_brand_name(page_title: str) -> str:
     return ""
 
 
-def search_images(query: str, limit: int = 3) -> list[str]:
-    """Tìm ảnh trên mạng (Bing Images) — dùng khi link nguồn không có ảnh."""
+def search_images(query: str, limit: int = 10, log=None) -> list[str]:
+    """Tìm ảnh trên internet theo mã sản phẩm (dùng trình duyệt thật — chắc hơn scrape HTML).
+
+    Trả về tối đa `limit` URL ảnh (mặc định 10).
+    """
     q = (query or "").strip()
     if not q:
         return []
-    out: list[str] = []
+    if log:
+        log(f"Đang tìm ảnh trên internet theo mã: {q}…")
+    urls: list[str] = []
     try:
-        r = httpx.get(
-            "https://www.bing.com/images/search",
-            params={"q": q, "form": "HDRSC2"},
-            headers=UA, follow_redirects=True, timeout=40,
-        )
-        r.raise_for_status()
-        html = r.text
-        urls = re.findall(r'murl&quot;:&quot;(.*?)&quot;', html)
-        if not urls:
-            urls = re.findall(r'"murl":"(.*?)"', html)
-        for u in urls:
-            u = u.replace("\\/", "/").strip()
-            if u.startswith("http") and u not in out:
-                out.append(u)
-            if len(out) >= limit:
-                break
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as pw:
+            br = None
+            for kwargs in ({"channel": "chrome"}, {"channel": "msedge"}, {}):
+                try:
+                    br = pw.chromium.launch(headless=True, **kwargs)
+                    break
+                except Exception:
+                    br = None
+            if br is None:
+                return []
+            try:
+                page = br.new_page(viewport={"width": 1400, "height": 1000})
+                page.goto(f"https://www.bing.com/images/search?q={quote(q)}",
+                          wait_until="domcontentloaded", timeout=30000)
+                page.wait_for_timeout(2500)
+                for _ in range(2):
+                    page.mouse.wheel(0, 1600)
+                    page.wait_for_timeout(1200)
+                urls = page.evaluate(
+                    """() => {
+                        const out = [];
+                        document.querySelectorAll('a.iusc').forEach(a => {
+                            try {
+                                const m = JSON.parse(a.getAttribute('m') || '{}');
+                                if (m.murl) out.push(m.murl);
+                            } catch (e) {}
+                        });
+                        if (!out.length) {
+                            document.querySelectorAll('img.mimg').forEach(im => {
+                                const s = im.getAttribute('src') || '';
+                                if (s.startsWith('http')) out.push(s);
+                            });
+                        }
+                        return out;
+                    }"""
+                ) or []
+            finally:
+                try:
+                    br.close()
+                except Exception:
+                    pass
     except Exception:
-        return out
+        return []
+
+    seen, out = set(), []
+    for u in urls:
+        low = u.lower()
+        if not str(u).startswith("http"):
+            continue
+        if any(k in low for k in (".svg", "logo", "icon", "sprite", "avatar")):
+            continue
+        if u in seen:
+            continue
+        seen.add(u)
+        out.append(u)
+        if len(out) >= max(1, limit):
+            break
+    if log:
+        log(f"Tìm được {len(out)} ảnh từ internet.")
     return out
 
 

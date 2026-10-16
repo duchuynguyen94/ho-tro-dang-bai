@@ -928,11 +928,12 @@ class JobsPage(QWidget):
         self.regenerate_images.emit(self.current, mode)
 
     def _upload_image(self, index: int) -> None:
-        """Chọn ảnh từ máy -> thành MỘT THÀNH PHẦN ở giữa canvas (như logo)."""
-        path, _ = QFileDialog.getOpenFileName(self, "Chọn ảnh", "", "Ảnh (*.png *.jpg *.jpeg *.webp)")
-        if not path:
+        """Chọn NHIỀU ảnh từ máy -> thêm vào canvas thành các thành phần."""
+        paths, _ = QFileDialog.getOpenFileNames(
+            self, "Chọn ảnh (chọn được nhiều ảnh)", "", "Ảnh (*.png *.jpg *.jpeg *.webp)")
+        if not paths:
             return
-        self._add_upload_component(path, index)
+        self._add_upload_components(paths, index)
 
     def _paste_clipboard_image(self) -> None:
         """Ctrl/Cmd + V: dán ảnh copy từ web/máy tính vào canvas như thành phần tải lên."""
@@ -973,39 +974,86 @@ class JobsPage(QWidget):
         """Popup: chọn 1 ảnh từ link nguồn để chèn vào canvas (hình đang sửa)."""
         if not self.current:
             return
-        urls = [u for u in ((self.current.result or {}).get("source_images") or []) if u]
+        r0 = self.current.result or {}
+        urls = [u for u in (r0.get("source_images") or []) if u]
         if not urls:
-            # chưa có danh sách -> lấy lại từ link nguồn
+            # chưa có -> đọc lại link nguồn
             src_url = (self.current.source_url or "").strip()
-            if not src_url:
-                show_toast(self, "Không có link nguồn để lấy ảnh", 3000, ok=False)
+            if src_url:
+                from PySide6.QtCore import Qt as _Qt
+
+                from ...source import fetch_source
+
+                QApplication.setOverrideCursor(_Qt.WaitCursor)
+                try:
+                    page = fetch_source(src_url)
+                    urls = [u for u in (page.get("images") or []) if u]
+                except Exception:
+                    urls = []
+                finally:
+                    QApplication.restoreOverrideCursor()
+                if urls:
+                    r = self.current.result = dict(r0)
+                    r["source_images"] = urls
+                    self.store.upsert_task(self.current)
+                    self.store.save()
+        if not urls:
+            # vẫn không có -> TÌM TRÊN INTERNET theo mã sản phẩm (tối đa 10 ảnh)
+            query = (r0.get("focus_keyword") or "").strip() or (r0.get("title") or "").strip()
+            if not query:
+                show_toast(self, "Không có mã sản phẩm để tìm ảnh", 3200, ok=False)
                 return
             from PySide6.QtCore import Qt as _Qt
 
-            from ...source import fetch_source
+            from ...source import search_images
 
+            self.status("Đang tìm ảnh trên internet…")
+            show_toast(self, f"Đang tìm ảnh trên internet theo mã: {query}", 3000)
             QApplication.setOverrideCursor(_Qt.WaitCursor)
             try:
-                page = fetch_source(src_url)
-                urls = [u for u in (page.get("images") or []) if u]
-            except Exception as exc:      # noqa: BLE001
-                show_toast(self, f"Không đọc được link nguồn: {exc}", 3400, ok=False)
-                return
+                urls = search_images(query, limit=10, log=self.status)
+            except Exception:
+                urls = []
             finally:
                 QApplication.restoreOverrideCursor()
             if not urls:
-                show_toast(self, "Link nguồn không có ảnh nào", 3000, ok=False)
+                show_toast(self, "Không tìm được ảnh nào từ internet", 3200, ok=False)
                 return
-            r = self.current.result = dict(self.current.result or {})
+            r = self.current.result = dict(r0)
             r["source_images"] = urls
             self.store.upsert_task(self.current)
             self.store.save()
+
         from ..widgets.source_images import SourceImageDialog
 
         dlg = SourceImageDialog(urls, self)
         if dlg.exec() == QDialog.Accepted and dlg.chosen:
-            self._add_upload_component(dlg.chosen, getattr(self, "_sel_index", 0))
-            show_toast(self, "Đã chèn ảnh vào canvas", 2000)
+            self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0))
+
+    def _add_upload_components(self, paths: list[str], index: int) -> None:
+        """Thêm NHIỀU ảnh cùng lúc vào canvas (mỗi ảnh 1 thành phần)."""
+        if not self.current or not paths:
+            return
+        self._save()
+        r = self.current.result
+        lst = r.get("image_opts_list") or []
+        while len(lst) <= index:
+            lst.append({})
+        ups = list(lst[index].get("uploads") or [])
+        for p in paths:
+            if not p:
+                continue
+            if len(ups) >= 8:
+                ups[-1] = {"path": p, "pos": [0.5, 0.5]}
+            else:
+                ups.append({"path": p, "pos": [0.5, 0.5]})
+        lst[index]["uploads"] = ups
+        r["image_opts_list"] = lst
+        self.store.upsert_task(self.current)
+        self.store.save()
+        self._load(self.current)
+        self.recompose_image.emit(self.current, index)
+        show_toast(self, f"Đã thêm {len(paths)} ảnh vào canvas", 2200)
 
     def _add_upload_component(self, path: str, index: int) -> None:
         """Thêm 1 ảnh (tải lên / dán / chọn từ nguồn) thành thành phần ở giữa canvas."""

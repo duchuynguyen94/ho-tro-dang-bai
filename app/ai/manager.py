@@ -485,12 +485,28 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
 
 
 def clean_content_html(html_text: str) -> str:
-    """Bỏ chữ rác đầu (Writing…), bỏ ký hiệu đầu dòng trùng trong <li>."""
-    t = html_text or ""
-    # chữ rác ở đầu do giao diện ChatGPT hoặc AI thêm vào
-    for _ in range(3):
-        t = re.sub(r"^\s*(Writing|Đang viết|Đang soạn|ChatGPT said|ChatGPT)\s*[:.\-–]?\s*",
-                   "", t, flags=re.I)
+    """Bỏ rác ở đầu/cuối: rào ```html, thẻ html/head/body, chữ "html", "Writing"…"""
+    t = (html_text or "").strip()
+
+    # 1) rào ```html ... ```
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+    t = re.sub(r"\s*```\s*$", "", t)
+
+    # 2) thẻ bao ngoài do AI trả về cả trang
+    t = re.sub(r"^\s*<!DOCTYPE[^>]*>", "", t, flags=re.I)
+    t = re.sub(r"<head[^>]*>.*?</head>", "", t, flags=re.I | re.S)
+    t = re.sub(r"^\s*<html[^>]*>", "", t, flags=re.I)
+    t = re.sub(r"</html>\s*$", "", t, flags=re.I)
+    t = re.sub(r"^\s*<body[^>]*>", "", t, flags=re.I)
+    t = re.sub(r"</body>\s*$", "", t, flags=re.I)
+
+    # 3) chữ rác ở đầu (kể cả chữ "html"/"HTML" thừa)
+    for _ in range(4):
+        t = re.sub(
+            r"^\s*(Writing|Đang viết|Đang soạn|ChatGPT said|ChatGPT|html|HTML)\s*[:.\-–]?\s*",
+            "", t, flags=re.I,
+        )
+    t = t.strip()
     t = re.sub(r"^\s*<p>\s*(Writing|Đang viết)\s*</p>\s*", "", t, flags=re.I)
     # ký hiệu đầu dòng trùng trong <li> (rule dùng ● nhưng <ul> đã tự có bullet)
     t = re.sub(r"(<li[^>]*>)\s*[●•▪◦‣·►▶]\s*", r"\1", t, flags=re.I)

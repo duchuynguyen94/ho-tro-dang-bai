@@ -70,8 +70,8 @@ class SourceImageDialog(QDialog):
         super().__init__(parent)
         self.setWindowTitle("Hình từ nguồn")
         self.setMinimumSize(640, 520)
-        self.chosen = ""
-        self._chosen_url = ""
+        self.chosen: list[str] = []
+        self._picked: list[str] = []
         self._tiles: list[_Tile] = []
 
         v = QVBoxLayout(self)
@@ -82,7 +82,7 @@ class SourceImageDialog(QDialog):
         head.addStretch(1)
         v.addLayout(head)
 
-        sub = QLabel("Bấm 1 ảnh để chọn, rồi bấm “Chèn vào canvas”.")
+        sub = QLabel("Bấm ảnh để CHỌN (chọn được nhiều ảnh), rồi bấm “Chèn vào canvas”.")
         sub.setProperty("class", "sub")
         v.addWidget(sub)
 
@@ -104,6 +104,10 @@ class SourceImageDialog(QDialog):
         cancel = QPushButton("Đóng")
         cancel.setProperty("class", "ghost")
         cancel.clicked.connect(self.reject)
+        self.pick_all_btn = QPushButton("Chọn tất cả")
+        self.pick_all_btn.setProperty("class", "ghost")
+        self.pick_all_btn.clicked.connect(self._pick_all)
+        row.addWidget(self.pick_all_btn)
         self.insert_btn = QPushButton("Chèn vào canvas")
         self.insert_btn.setProperty("class", "primary")
         self.insert_btn.setEnabled(False)
@@ -143,27 +147,50 @@ class SourceImageDialog(QDialog):
                             if n else "Không tải được ảnh nào từ link nguồn.")
 
     def _select(self, url: str) -> None:
+        """Bấm 1 ảnh = bật/tắt chọn (chọn được nhiều ảnh)."""
         if not url:
             return
-        self._chosen_url = url
+        print("DEBUG select:", url[-30:], "| truoc:", len(self._picked))
+        if url in self._picked:
+            self._picked.remove(url)
+        else:
+            self._picked.append(url)
+        print("DEBUG sau:", self._picked)
         for t in self._tiles:
-            t.set_selected(t.url == url)
-        self.insert_btn.setEnabled(True)
+            t.set_selected(t.url in self._picked)
+        n = len(self._picked)
+        self.insert_btn.setText(f"Chèn vào canvas ({n})" if n else "Chèn vào canvas")
+        self.insert_btn.setEnabled(bool(n))
+
+    def _pick_all(self) -> None:
+        ready = [t.url for t in self._tiles if t.data]
+        if len(self._picked) == len(ready):
+            self._picked = []
+        else:
+            self._picked = list(ready)
+        for t in self._tiles:
+            t.set_selected(t.url in self._picked)
+        n = len(self._picked)
+        self.insert_btn.setText(f"Chèn vào canvas ({n})" if n else "Chèn vào canvas")
+        self.insert_btn.setEnabled(bool(n))
 
     def _accept(self) -> None:
-        """Lưu ảnh đã chọn ra máy rồi đóng (chỉ lưu 1 ảnh khi bấm Chèn)."""
+        """Lưu (các) ảnh đã chọn ra máy rồi đóng — chỉ lưu khi bấm Chèn."""
         from ...source import save_image_bytes
 
+        paths: list[str] = []
         for t in self._tiles:
-            if t.url == self._chosen_url and t.data:
+            if t.url in self._picked and t.data:
                 try:
-                    self.chosen = save_image_bytes(t.url, t.data)
+                    p = save_image_bytes(t.url, t.data)
                 except Exception:
-                    self.chosen = ""
-                break
-        if not self.chosen:
+                    p = ""
+                if p:
+                    paths.append(p)
+        if not paths:
             self.status.setText("Không lưu được ảnh đã chọn — thử ảnh khác.")
             return
+        self.chosen = paths
         self.accept()
 
     def closeEvent(self, event) -> None:  # noqa: N802
