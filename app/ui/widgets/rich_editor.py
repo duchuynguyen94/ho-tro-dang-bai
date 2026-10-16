@@ -20,6 +20,32 @@ from PySide6.QtWidgets import (
 )
 
 
+# Style Qt tự thêm khi serialize DOM -> bỏ đi, chỉ giữ định dạng NGƯỜI DÙNG đặt
+_KEEP_STYLE = ("color", "background", "text-decoration", "font-style", "text-align",
+               "vertical-align", "list-style")
+
+
+def _clean_qt_html(html: str) -> str:
+    """Bỏ rác do Qt tự thêm vào HTML (class/dir/lang + style mặc định của DOM)."""
+    if not html:
+        return html
+    html = re.sub(r'\s(?:class|dir|lang|xmlns)="[^"]*"', "", html, flags=re.I)
+
+    def _fix(m: re.Match) -> str:
+        props = [p.strip() for p in m.group(1).split(";") if p.strip()]
+        keep = [p for p in props if p.split(":")[0].strip() in _KEEP_STYLE]
+        for p in props:
+            name, _, val = p.partition(":")
+            name, val = name.strip(), val.strip().lower()
+            if name == "font-weight" and not re.match(r"(400|normal)", val):
+                keep.append(p)                      # giữ đậm
+            elif name == "font-size" and "medium" not in val:
+                keep.append(p)                      # giữ cỡ chữ người dùng chọn
+        return f' style="{"; ".join(dict.fromkeys(keep))}"' if keep else ""
+
+    return re.sub(r'\sstyle="([^"]*)"', _fix, html)
+
+
 class RichEditor(QWidget):
     """Soạn thảo HTML trực quan + chế độ xem/sửa HTML nguồn."""
 
@@ -106,6 +132,7 @@ class RichEditor(QWidget):
         self.status = QLabel("")
         self.status.setObjectName("rteStatus")
         v.addWidget(self.status)
+        self._raw_html = ""          # HTML gốc (không qua Qt serialize)
         self._update_status()
 
     # ------------------------------------------------------------------ #
@@ -231,11 +258,19 @@ class RichEditor(QWidget):
 
     def _toggle_html(self) -> None:
         if self.stack.currentWidget() is self.edit:
-            self.source.setPlainText(self.get_html())
+            # Nếu người dùng CHƯA sửa gì trong chế độ trực quan thì hiện ĐÚNG HTML gốc
+            # (tránh Qt tự thêm style/font vào DOM khi serialize)
+            if self.edit.document().isModified():
+                self.source.setPlainText(self.get_html())
+            else:
+                self.source.setPlainText(self._raw_html)
             self.stack.setCurrentWidget(self.source)
             self.html_btn.setText("WYSIWYG")
         else:
-            self.edit.setHtml(self.source.toPlainText())
+            text = self.source.toPlainText()
+            self._raw_html = text
+            self.edit.setHtml(text)
+            self.edit.document().setModified(False)
             self.stack.setCurrentWidget(self.edit)
             self.html_btn.setText("</> HTML")
 
@@ -249,7 +284,7 @@ class RichEditor(QWidget):
             return self.source.toPlainText().strip()
         raw = self.edit.toHtml()
         m = re.search(r"<body[^>]*>(.*?)</body>", raw, re.S | re.I)
-        return (m.group(1) if m else raw).strip()
+        return _clean_qt_html((m.group(1) if m else raw).strip())
 
     def get_text(self) -> str:
         if self.stack.currentWidget() is self.source:
@@ -257,8 +292,10 @@ class RichEditor(QWidget):
         return self.edit.toPlainText()
 
     def set_html(self, html_text: str) -> None:
-        self.edit.setHtml(html_text or "")
-        self.source.setPlainText(self.get_html())
+        self._raw_html = html_text or ""
+        self.edit.setHtml(self._raw_html)
+        self.edit.document().setModified(False)     # đánh dấu "chưa sửa" -> giữ HTML gốc
+        self.source.setPlainText(self._raw_html)
         self.stack.setCurrentWidget(self.edit)
         self.html_btn.setText("</> HTML")
         self._update_status()

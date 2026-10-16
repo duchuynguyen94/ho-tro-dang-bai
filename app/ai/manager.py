@@ -54,7 +54,8 @@ CONTENT_OUTPUT_SPEC = (
     "bảng model [Keyword] [Brand] [Model] đầy đủ? Gửi yêu cầu: thach.phan@ngochuyduong.com”\n"
     "13. <h2>FAQ (5 câu)</h2>: 5 câu hỏi kèm câu trả lời ngắn, sát sản phẩm.\n"
     "Giữ NGUYÊN các dòng liên hệ lặp lại giữa các mục (không bỏ, không đổi website/điện thoại/email).\n"
-    "ICON ĐẦU MỤC (BẮT BUỘC, đặt NGAY TRƯỚC tiêu đề mục): 🏷️ tiêu đề bài viết (h1); 📌 Giới thiệu tổng quan; "
+    "ICON ĐẦU MỤC (đặt NGAY TRƯỚC tiêu đề mục, RIÊNG tiêu đề bài viết thì KHÔNG có icon): "
+    "📌 Giới thiệu tổng quan; "
     "⚙️ Tính năng kỹ thuật nổi bật; 📋 Thông số kỹ thuật tiêu chuẩn; 🧱 Vật liệu & xử lý – Độ bền vượt trội; "
     "🔄 Tương thích – Thay thế – Mở rộng; 🎯 Ứng dụng thực tế; 💡 Tại sao nên mua tại Ngọc Huy Dương?; "
     "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; 🧩 Phiên bản & Mã sản phẩm; 🧩 FAQ (5 câu).\n"
@@ -614,15 +615,18 @@ def apply_template_icons(html_text: str) -> str:
             if re.match(r"^</h[1-4]", part, re.I) and open_head:
                 info = open_head.pop()
                 inner = "".join(info["text"]).strip()
-                icon = TITLE_ICON if info["n"] == 1 else _section_icon(inner)
-                if icon:
-                    idx = info["first"]
-                    if idx is not None:
+                # TIÊU ĐỀ BÀI VIẾT (h1/h2 đầu tiên): KHÔNG đặt icon
+                icon = "" if info["n"] == 1 else _section_icon(inner)
+                idx = info["first"]
+                if idx is not None:
+                    old, rest = split_leading_icon(out[idx])
+                    if icon:
                         # thay icon cũ (nếu AI viết sai) bằng icon ĐÚNG của template
-                        _old, rest = split_leading_icon(out[idx])
                         out[idx] = f"{icon} {rest}" if rest.strip() else f"{icon} "
-                    else:
-                        out.insert(info["pos"] + 1, f"{icon} ")
+                    elif old:
+                        out[idx] = rest          # xoá icon ở tiêu đề bài viết
+                elif icon:
+                    out.insert(info["pos"] + 1, f"{icon} ")
                 out.append(part)
                 continue
             out.append(part)
