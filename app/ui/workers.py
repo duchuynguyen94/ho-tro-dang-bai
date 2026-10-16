@@ -204,7 +204,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             o = dict(opts_list[i])
         elif only_index is not None and i < len(opts_list):
             o = {**opts_list[i], **o}
-        logo_pos = tuple(o.get("logo_pos") or (0.025, 0.032))
+        logo_pos = tuple(o.get("logo_pos") or (0.025, 0.018))
         brand_pos = tuple(o.get("brand_pos") or (0.955, 0.032))
         logo_scale = float(o.get("logo_scale", 1.8) or 1.8)
         brand_scale = float(o.get("brand_scale", 1.0) or 1.0)
@@ -217,7 +217,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
             product_positions = [tuple(p) for p in product_positions]
         wm_opacity = int(o.get("watermark_opacity", 15) or 0)
         wm_size = float(o.get("watermark_size", 1.0) or 1.0)
-        wm_rot = float(o.get("watermark_rotate", 34) or 34)
+        wm_rot = float(o.get("watermark_rotate", 50) or 50)
         product_scales = o.get("product_scales") or None
         product_nobg = o.get("product_nobg") or None
         hidden = set(o.get("product_hidden") or [])

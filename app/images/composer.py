@@ -154,7 +154,7 @@ def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Ima
 
 
 def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 15,
-                             scale: float = 1.0, rotate: float = 34) -> None:
+                             scale: float = 1.0, rotate: float = 50) -> None:
     if not text:
         return
     alpha = max(0, min(255, int(opacity * 255 / 100)))     # 0..100 -> 0..255
@@ -204,11 +204,11 @@ def compose(
     watermark: str = "",
     watermark_opacity: int = 15,
     watermark_size: float = 1.0,
-    watermark_rotate: float = 34,
+    watermark_rotate: float = 50,
     transparent_bg: bool = False,
     remove_bg: bool = False,
     remove_bg_thresh: int = 42,
-    logo_pos: tuple[float, float] = (0.025, 0.032),
+    logo_pos: tuple[float, float] = (0.025, 0.018),
     brand_pos: tuple[float, float] = (0.955, 0.032),
     logo_scale: float = 1.8,
     brand_scale: float = 1.0,

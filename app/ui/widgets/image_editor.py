@@ -273,7 +273,7 @@ class ImageEditorPanel(QFrame):
         self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 300, 180)
         self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 15)
         self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
-        self.s_wm_rot = self._slider(grid, 3, "Watermark — góc xoay (°)", 0, 90, 34)
+        self.s_wm_rot = self._slider(grid, 3, "Watermark — góc xoay", 0, 90, 50, suffix="°")
         right.addLayout(grid)
 
         foot_row = QHBoxLayout()
@@ -310,15 +310,15 @@ class ImageEditorPanel(QFrame):
         self._autosave.start()
 
     def _slider(self, grid: QGridLayout, row: int, label: str,
-                lo: int, hi: int, value: int) -> QSlider:
+                lo: int, hi: int, value: int, suffix: str = "%") -> QSlider:
         lab = QLabel(label)
-        val = QLabel(f"{value}%")
+        val = QLabel(f"{value}{suffix}")
         val.setObjectName("taskMeta")
         val.setFixedWidth(46)
         sl = QSlider(Qt.Horizontal)
         sl.setRange(lo, hi)
         sl.setValue(value)
-        sl.valueChanged.connect(lambda v, l=val: l.setText(f"{v}%"))
+        sl.valueChanged.connect(lambda v, l=val, su=suffix: l.setText(f"{v}{su}"))
         grid.addWidget(lab, row, 0)
         grid.addWidget(sl, row, 1)
         grid.addWidget(val, row, 2)
@@ -347,7 +347,7 @@ class ImageEditorPanel(QFrame):
             self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.8) or 1.8) * 100))
             self.s_wm.setValue(int(self._opts.get("watermark_opacity", 15) or 0))
             self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
-            self.s_wm_rot.setValue(int(float(self._opts.get("watermark_rotate", 34) or 34)))
+            self.s_wm_rot.setValue(int(float(self._opts.get("watermark_rotate", 50) or 50)))
             mode = self._opts.get("footer_mode") or footer_mode or "bar1"
             self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
         finally:
@@ -419,7 +419,7 @@ class ImageEditorPanel(QFrame):
             item.on_remove = self._ctx_remove_component
             item.on_trim = self._ctx_trim
 
-        lp = self._opts.get("logo_pos") or [0.025, 0.032]
+        lp = self._opts.get("logo_pos") or [0.025, 0.018]
         bp = self._opts.get("brand_pos") or [0.955, 0.032]
         self.logo_item.move(int(lp[0] * CANVAS), int(lp[1] * CANVAS))
         self.brand_item.move(
@@ -731,7 +731,7 @@ class ImageEditorPanel(QFrame):
         self.s_logo.setValue(180)
         self.s_wm.setValue(15)
         self.s_wm_size.setValue(100)
-        self.s_wm_rot.setValue(34)
+        self.s_wm_rot.setValue(50)
         self._layout_items()
         self._layout_products()
         self._layout_uploads()
