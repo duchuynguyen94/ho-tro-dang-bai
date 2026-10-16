@@ -1,4 +1,8 @@
-"""Panel "Cập nhật phần mềm" (Cài đặt → Thiết lập chung)."""
+"""Panel "Cập nhật phần mềm" (Cài đặt → Thiết lập chung).
+
+Nguồn cập nhật: GitHub Releases của repo (gắn sẵn trong app) — người dùng
+không phải nhập gì, chỉ bấm "Cập nhật ngay".
+"""
 from __future__ import annotations
 
 import sys
@@ -8,7 +12,6 @@ from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
@@ -22,7 +25,7 @@ from ..workers import UpdateWorker
 
 
 class UpdatePanel(QWidget):
-    """Kiểm tra & cập nhật phần mềm (bản .exe Windows)."""
+    """Kiểm tra & cập nhật phần mềm (bản .exe Windows, nguồn GitHub Releases)."""
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -68,31 +71,13 @@ class UpdatePanel(QWidget):
         )
         self.os_label.setProperty("class", "sub")
         card.body.addWidget(self.os_label)
+        self.src_label = QLabel(f"Nguồn cập nhật: <b>GitHub Releases</b> · <code>{upd.DEFAULT_UPDATE_REPO}</code>")
+        self.src_label.setProperty("class", "sub")
+        self.src_label.setWordWrap(True)
+        card.body.addWidget(self.src_label)
         v.addWidget(card)
 
-        # ---- nguồn cập nhật ----
-        card2 = Card("Nguồn cập nhật")
-        sub = QLabel(
-            "App đã <b>gắn sẵn nguồn mặc định</b> (GitHub Releases) — máy Windows không phải "
-            "dán gì, chỉ cần bấm <b>Cập nhật ngay</b>.<br>"
-            "Có thể đổi thành <b>owner/repo</b> GitHub khác, link GitHub, hoặc link "
-            "<code>version.json</code> trên website của bạn."
-        )
-        sub.setProperty("class", "sub")
-        sub.setWordWrap(True)
-        card2.body.addWidget(sub)
-        self.url_edit = QLineEdit(upd.update_url(self.store))   # điền sẵn link mặc định
-        card2.body.addWidget(self.url_edit)
-
-        self.token_edit = QLineEdit(self.store.update_token)
-        self.token_edit.setEchoMode(QLineEdit.Password)
-        self.token_edit.setPlaceholderText(
-            "Token GitHub — chỉ cần khi repo private (bỏ trống nếu repo public)"
-        )
-        card2.body.addWidget(self.token_edit)
-        v.addWidget(card2)
-
-        # ---- nút ----
+        # ---- thực hiện ----
         card3 = Card("Thực hiện")
         row2 = QHBoxLayout()
         self.check_btn = QPushButton("Kiểm tra cập nhật")
@@ -115,16 +100,16 @@ class UpdatePanel(QWidget):
         if not upd.is_windows():
             note = QLabel(
                 "ℹ️ Chức năng cập nhật chỉ dùng cho bản <b>Windows (.exe)</b>. "
-                "Trên macOS, hãy cập nhật bằng cách build lại từ mã nguồn."
+                "Trên macOS, hãy build lại từ mã nguồn."
             )
-            note.setProperty("class", "sub")
-            note.setWordWrap(True)
-            card3.body.addWidget(note)
         elif not upd.can_self_update():
             note = QLabel(
                 "ℹ️ Đang chạy từ mã nguồn nên không tự cập nhật được — "
                 "chỉ bản <b>.exe</b> đã đóng gói mới cập nhật được."
             )
+        else:
+            note = None
+        if note is not None:
             note.setProperty("class", "sub")
             note.setWordWrap(True)
             card3.body.addWidget(note)
@@ -137,6 +122,7 @@ class UpdatePanel(QWidget):
         dim_when_disabled(self.apply_btn)
         dim_when_disabled(self.check_btn)
 
+    # ------------------------------------------------------------------ #
     def showEvent(self, event) -> None:      # noqa: N802
         super().showEvent(event)
         if not self._auto_checked:           # mở panel là tự kiểm tra 1 lần
@@ -144,14 +130,6 @@ class UpdatePanel(QWidget):
             from PySide6.QtCore import QTimer
 
             QTimer.singleShot(300, self._check)
-
-    # ------------------------------------------------------------------ #
-    def _save_url(self) -> str:
-        url = self.url_edit.text().strip()
-        self.store.set_update_url(url)
-        self.store.set_update_token(self.token_edit.text().strip())
-        self.store.save()
-        return url
 
     def _set_busy(self, busy: bool) -> None:
         self.check_btn.setEnabled(not busy)
@@ -161,16 +139,12 @@ class UpdatePanel(QWidget):
         self.apply_btn.setEnabled(not busy and has_new)
 
     def _check(self) -> None:
-        url = self._save_url()
-        if not url:
-            self.status.setText("⚠️ Chưa có link version.json.")
-            return
         if self.worker and self.worker.isRunning():
             return
         self._info = None
-        self.status.setText("Đang kiểm tra bản mới…")
+        self.status.setText("Đang kiểm tra bản mới trên GitHub…")
         self._set_busy(True)
-        w = UpdateWorker(url, token=self.store.update_token)
+        w = UpdateWorker()
         self.worker = w
         w.log.connect(self.status.setText)
         w.checked.connect(self._on_checked)
@@ -187,9 +161,8 @@ class UpdatePanel(QWidget):
             if notes:
                 msg += f"<br>{notes}"
             self.status.setText(msg)
-            self.apply_btn.setEnabled(upd.can_self_update())
         else:
-            self._info = None          # không có gì để cập nhật
+            self._info = None
             self.status.setText(f"✅ Đang dùng bản mới nhất ({__version__}).")
             self.apply_btn.setEnabled(False)
 
@@ -198,8 +171,7 @@ class UpdatePanel(QWidget):
         if any(k in low for k in ("404", "not found", "connect", "timed out", "timeout",
                                   "getaddrinfo", "name or service", "ssl")):
             self.status.setText(
-                "ℹ️ Chưa kiểm tra được máy chủ cập nhật (link có thể chưa được đặt). "
-                "Chi tiết: " + str(err)[:160]
+                "ℹ️ Chưa kiểm tra được bản phát hành trên GitHub. Chi tiết: " + str(err)[:160]
             )
         else:
             self.status.setText("✗ Lỗi: " + str(err)[:300])

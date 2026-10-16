@@ -745,11 +745,9 @@ class UpdateWorker(TrackedThread):
     applied = Signal(str)      # thư mục tạm của bộ cài
     failed = Signal(str)
 
-    def __init__(self, url: str = "", apply_url: str = "", token: str = "") -> None:
+    def __init__(self, apply_url: str = "") -> None:
         super().__init__()
-        self.url = url
         self.apply_url = apply_url
-        self.token = token
 
     def run(self) -> None:
         from .. import update
@@ -759,7 +757,7 @@ class UpdateWorker(TrackedThread):
                 tmp = update.apply_update(self.apply_url, log=self.log.emit)
                 self.applied.emit(str(tmp))
                 return
-            self.checked.emit(update.check_update(self.url, token=self.token))
+            self.checked.emit(update.check_update())
         except Exception as exc:      # noqa: BLE001 (lỗi mạng là bình thường)
             self.failed.emit(str(exc))
 

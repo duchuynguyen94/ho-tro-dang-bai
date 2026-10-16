@@ -102,13 +102,6 @@ def check_github(repo: str, token: str = "", timeout: float = 20.0) -> dict:
     }
 
 
-def update_url(store=None) -> str:
-    """Link version.json: ưu tiên giá trị người dùng lưu, không có thì dùng mặc định."""
-    try:
-        saved = (store.update_url if store is not None else "") or ""
-    except Exception:
-        saved = ""
-    return saved.strip() or DEFAULT_UPDATE_URL
 
 
 def can_self_update() -> bool:
@@ -129,38 +122,10 @@ def is_newer(remote: str, current: str = __version__) -> bool:
     return parse_version(remote) > parse_version(current)
 
 
-def check_update(url: str, token: str = "", timeout: float = 20.0) -> dict:
-    """Nguồn cập nhật có thể là GitHub (owner/repo hoặc link) hoặc link version.json."""
-    import httpx
-
-    url = (url or "").strip()
-    if not url:
-        raise RuntimeError("Chưa có nguồn cập nhật.")
-    repo = parse_repo(url)
-    if repo:
-        return check_github(repo, token, timeout)
-    try:
-        r = httpx.get(url, timeout=timeout, follow_redirects=True)
-        r.raise_for_status()
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError(f"Không đọc được link cập nhật: {exc}") from exc
-    try:
-        data = r.json()
-    except Exception as exc:  # noqa: BLE001
-        raise RuntimeError("Link cập nhật không trả về JSON hợp lệ.") from exc
-    if not isinstance(data, dict):
-        raise RuntimeError("Nội dung version.json không hợp lệ.")
-    version = str(data.get("version") or "").strip()
-    link = str(data.get("url") or data.get("zip") or data.get("download") or "").strip()
-    if not version:
-        raise RuntimeError("version.json thiếu trường “version”.")
-    if not link:
-        raise RuntimeError("version.json thiếu trường “url” (link file .zip).")
-    return {
-        "version": version,
-        "url": link,
-        "notes": str(data.get("notes") or data.get("note") or "").strip(),
-    }
+def check_update(source: str = "", token: str = "", timeout: float = 20.0) -> dict:
+    """Kiểm tra bản mới nhất trên GitHub Releases (nguồn mặc định: DEFAULT_UPDATE_REPO)."""
+    repo = parse_repo(source) or DEFAULT_UPDATE_REPO
+    return check_github(repo, token, timeout)
 
 
 def _download(zip_url: str, dest: Path, log=None) -> None:
