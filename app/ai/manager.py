@@ -780,6 +780,60 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
     return "".join(out)
 
 
+# Những cụm từ cho thấy đoạn văn chỉ là NHÃN/ghi chú (không phải nội dung bài)
+_NOTE_WORDS = (
+    "nguồn tham chiếu", "tham chiếu", "tham khảo", "ghi chú", "lưu ý", "chú thích",
+    "dưới đây là", "sau đây là", "nội dung bài viết", "thông tin seo", "html",
+)
+
+
+def _is_label_text(text: str) -> bool:
+    """True nếu đoạn này chỉ là nhãn/ghi chú (ngắn hoặc chứa từ khoá ghi chú)."""
+    s = re.sub(r"<[^>]+>", " ", str(text or ""))
+    s = re.sub(r"[*_`#>\-•·▪◦‣]+", " ", s)
+    s = re.sub(r"\s+", " ", s).strip()
+    if not s:
+        return True
+    if len(s) <= 25 and len(s.split()) <= 3 and not re.search(r"[.!?]$", s):
+        return True          # nhãn ngắn: "HTML", "Nội dung:"
+    low = s.lower()
+    return any(w in low for w in _NOTE_WORDS)
+
+
+def _strip_leading_junk(t: str) -> str:
+    """Bỏ nhãn/ghi chú ở ĐẦU nội dung (vd "Nguồn tham chiếu: …", "HTML")."""
+    m = re.search(r"<[a-zA-Z][^>]*>", t)
+    if m and m.start() > 0 and _is_label_text(t[: m.start()]):
+        t = t[m.start():]
+    for _ in range(4):
+        m = re.match(r"\s*<(p|div|span|strong|em)\b[^>]*>([\s\S]*?)</\1>\s*", t, re.I)
+        if not m or not _is_label_text(m.group(2)):
+            break
+        t = t[m.end():]
+    return t.lstrip()
+
+
+def _strip_trailing_junk(t: str) -> str:
+    """Bỏ khối JSON / nhãn ở CUỐI nội dung (vd "Thông tin SEO", "2) JSON SEO:")."""
+    for _ in range(6):
+        new = re.sub(r"\s*```\s*json\s*[\s\S]*$", "", t, flags=re.I)
+        new = re.sub(r"\s*\{\s*[\"']?(?:title|focus_keyword|description|tags)[\s\S]*$",
+                     "", new, flags=re.I)
+        new = re.sub(r"\s*```[a-zA-Z]*\s*$", "", new)
+        m = re.search(r"(\n|^)([^<\n]{1,120})$", new)
+        if m:
+            chunk = m.group(2).strip()
+            low = chunk.lower()
+            if (not chunk or chunk.endswith((":", "："))
+                    or any(w in low for w in ("json", "seo", "html", "thông tin", "nội dung",
+                                              "ghi chú", "lưu ý", "trên đây", "dưới đây"))):
+                new = new[: m.start()].rstrip()
+        if new == t:
+            break
+        t = new
+    return t.rstrip()
+
+
 def clean_content_html(html_text: str) -> str:
     """Bỏ rác ở đầu/cuối: rào ```html, thẻ html/head/body, chữ "html", "Writing"…"""
     t = (html_text or "").strip()
@@ -805,21 +859,9 @@ def clean_content_html(html_text: str) -> str:
     t = t.strip()
     t = re.sub(r"^\s*<p>\s*(Writing|Đang viết)\s*</p>\s*", "", t, flags=re.I)
 
-    # 3b) rác ở CUỐI: nhãn + khối JSON SEO mà AI để lại sau nội dung
-    t = re.sub(r"\s*```\s*json\s*[\s\S]*$", "", t, flags=re.I)            # ```json … cuối
-    t = re.sub(r"\s*\{\s*[\"']?(?:title|focus_keyword|description|tags)[\s\S]*$",
-               "", t, flags=re.I)                                          # khối JSON còn sót
-    t = re.sub(r"\s*```[a-zA-Z]*\s*$", "", t)                              # ``` trơ ở cuối
-    for _ in range(4):
-        t = re.sub(r"\s*(?:\d\)|\d\.|\-|\*|•)\s*(?:JSON|SEO)\b[^<\n]{0,120}[:：]\s*$",
-                   "", t, flags=re.I)                                      # "2) JSON SEO:"
-        t = re.sub(r"\s*(?:\d\)|\d\.|\-|\*|•)\s*JSON\b[^<\n]{0,120}$",
-                   "", t, flags=re.I)                                      # "2) JSON …"
-        t = re.sub(r"\s*(?:JSON|SEO)\b[^<\n]{0,200}\b(?:focus_keyword|description|tags)\b[^<\n]{0,80}$",
-                   "", t, flags=re.I)                                      # "JSON … title, focus_keyword…"
-        t = re.sub(r"\s*JSON\b[^<\n]{0,200}$", "", t, flags=re.I)          # dòng nhãn bắt đầu bằng JSON
-        t = re.sub(r"\s*(?:\d\)|\d\.|\-|\*|•)\s*$", "", t)                 # dấu/số trơ ở cuối
-    t = t.strip()
+    # 3b) dọn rác ở ĐẦU và CUỐI (nhãn "HTML", "Nguồn tham chiếu…", "Thông tin SEO", khối JSON)
+    t = _strip_trailing_junk(t)
+    t = _strip_leading_junk(t)
 
     # ký hiệu đầu dòng trùng trong <li> (rule dùng ● nhưng <ul> đã tự có bullet)
     t = re.sub(r"(<li[^>]*>)\s*[●•▪◦‣·►▶]\s*", r"\1", t, flags=re.I)
