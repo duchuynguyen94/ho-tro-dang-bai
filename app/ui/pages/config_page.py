@@ -1077,13 +1077,19 @@ class TitleLinksPanel(QWidget):
         v.setSpacing(10)
 
         sub = QLabel(
-            "Các link dưới đây sẽ được chèn vào <b>tiêu đề mục</b> của bài viết "
-            "(từ <b>h2 thứ 2</b> trở đi). <b>h2 đầu tiên</b> luôn chèn link của chính website đang đăng. "
-            "Mỗi link chèn <b>1 lần</b> — có 2 link thì chèn 2 lần."
+            "Link ở ô đầu tiên luôn chèn vào <b>tiêu đề đầu tiên (h2 đầu)</b>. "
+            "Các link trong danh sách bên dưới chèn vào <b>tiêu đề thứ 2 trở đi</b> — "
+            "mỗi link chèn <b>1 lần</b> (có 2 link thì chèn 2 lần)."
         )
         sub.setProperty("class", "sub")
         sub.setWordWrap(True)
         v.addWidget(sub)
+
+        first_card = Card("Link chèn vào TIÊU ĐỀ ĐẦU TIÊN (h2 đầu)")
+        self.first_edit = QLineEdit(self.store.title_link_first)
+        self.first_edit.setPlaceholderText("https://ngochuyduong.com")
+        first_card.body.addWidget(self.first_edit)
+        v.addWidget(first_card)
 
         card = Card("Danh sách link")
         self.box = QVBoxLayout()
@@ -1134,6 +1140,7 @@ class TitleLinksPanel(QWidget):
         links = [e.text().strip() for e in self._rows if e.text().strip()]
         try:
             self.store.set_title_links(links)
+            self.store.set_title_link_first(self.first_edit.text())
             self.store.save()
         except Exception as exc:      # noqa: BLE001
             show_toast(self, f"Lưu link tiêu đề THẤT BẠI: {exc}", 3400, ok=False)

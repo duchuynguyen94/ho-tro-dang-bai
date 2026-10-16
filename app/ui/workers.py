@@ -329,12 +329,13 @@ class ContentWorker(TrackedThread):
                 raw_html, page.get("title", "") or data.get("title", "")
             )
             html_out = insert_title_links(
-                html_out, site.url or "", title_links,
+                html_out, self.store.title_link_first, title_links,
                 [pname, data.get("focus_keyword", ""), data.get("title", ""),
                  page.get("title", "")],
             )
             self.log.emit(
-                f"Chèn link tiêu đề: h2 đầu → website, {len(title_links)} link cấu hình cho các mục sau."
+                f"Chèn link tiêu đề: h2 đầu → {self.store.title_link_first or '(trống)'}, "
+                f"{len(title_links)} link cấu hình cho các mục sau."
             )
             data["content_html"] = html_out
             self.progress.emit(70)

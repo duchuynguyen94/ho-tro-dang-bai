@@ -218,6 +218,14 @@ class Store:
     def set_title_links(self, links: list[str]) -> None:
         self.data["title_links"] = [str(x).strip() for x in links if str(x).strip()]
 
+    @property
+    def title_link_first(self) -> str:
+        """Link chèn vào TIÊU ĐỀ ĐẦU TIÊN (h2 đầu)."""
+        return str(self.data.get("title_link_first") or "").strip()
+
+    def set_title_link_first(self, link: str) -> None:
+        self.data["title_link_first"] = str(link or "").strip()
+
     # ------------------------------------------------------------------ #
     # Phần cấu hình con
     # ------------------------------------------------------------------ #
