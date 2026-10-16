@@ -9,7 +9,8 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import extract_product_name, insert_title_links, linkify_domains
+from ..ai.manager import (apply_template_icons, extract_product_name,
+                             insert_title_links, linkify_domains)
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -320,10 +321,13 @@ class ContentWorker(TrackedThread):
                                      should_stop=self._stopped)
             if self._stopped():
                 raise _Cancelled()
-            # 1) mọi chỗ có "www.<tên-miền>" -> link về ĐÚNG tên miền đó (bỏ www)
+            # 0) icon đầu mục + icon dòng liên hệ cho ĐÚNG template (Rule_Content mục 5)
             raw_html = data.get("content_html", "")
+            html_out = apply_template_icons(raw_html)
+
+            # 1) mọi chỗ có "www.<tên-miền>" -> link về ĐÚNG tên miền đó (bỏ www)
             all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
-            html_out = linkify_domains(raw_html, all_sites)
+            html_out = linkify_domains(html_out, all_sites)
 
             # 2) link vào TIÊU ĐỀ MỤC: h2 đầu = website đang đăng; từ h2 thứ 2 = link trong cấu hình
             title_links = list(self.store.title_links)

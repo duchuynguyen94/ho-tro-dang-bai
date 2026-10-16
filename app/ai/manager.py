@@ -53,7 +53,13 @@ CONTENT_OUTPUT_SPEC = (
     "12. <h2>Phiên bản & Mã sản phẩm [Keyword] [Brand] [Model]</h2>: dòng liên hệ → dòng “Bạn cần "
     "bảng model [Keyword] [Brand] [Model] đầy đủ? Gửi yêu cầu: thach.phan@ngochuyduong.com”\n"
     "13. <h2>FAQ (5 câu)</h2>: 5 câu hỏi kèm câu trả lời ngắn, sát sản phẩm.\n"
-    "Giữ NGUYÊN các dòng liên hệ lặp lại giữa các mục (không bỏ, không đổi website/điện thoại/email)."
+    "Giữ NGUYÊN các dòng liên hệ lặp lại giữa các mục (không bỏ, không đổi website/điện thoại/email).\n"
+    "ICON ĐẦU MỤC (BẮT BUỘC, đặt NGAY TRƯỚC tiêu đề mục): 🔖 tiêu đề bài viết (h1); 📌 Giới thiệu tổng quan; "
+    "⚙️ Tính năng kỹ thuật nổi bật; 📋 Thông số kỹ thuật tiêu chuẩn; 🧱 Vật liệu & xử lý – Độ bền vượt trội; "
+    "🔄 Tương thích – Thay thế – Mở rộng; 🎯 Ứng dụng thực tế; 💡 Tại sao nên mua tại Ngọc Huy Dương?; "
+    "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; ✳️ Phiên bản & Mã sản phẩm; ✳️ FAQ (5 câu).\n"
+    "ICON Ở DÒNG LIÊN HỆ: 🌐 trước website, 📞 trước số điện thoại, 📧 trước “Gửi yêu cầu tư vấn kỹ thuật”, "
+    "✉️ trước email trong dòng “Liên hệ ngay”, 📩 trước “Bạn cần bảng model … đầy đủ?”."
 )
 
 # Kết quả bước 2 (theo Rule SEO)
@@ -467,6 +473,119 @@ DEFAULT_SECTIONS = (
 )
 
 
+# Icon đầu mục theo template (mục 5. TEMPLATE của Rule_Content)
+TITLE_ICON = "🔖"
+SECTION_ICONS = (
+    ("Giới thiệu tổng quan", "📌"),
+    ("Tính năng kỹ thuật nổi bật", "⚙️"),
+    ("Thông số kỹ thuật tiêu chuẩn", "📋"),
+    ("Vật liệu & xử lý", "🧱"),
+    ("Tương thích – Thay thế", "🔄"),
+    ("Ứng dụng thực tế", "🎯"),
+    ("Tại sao nên mua", "💡"),
+    ("Liên hệ – Đặt hàng", "📞"),
+    ("Phiên bản & Mã sản phẩm", "✳️"),
+    ("FAQ", "✳️"),
+)
+_PHONE_RE = re.compile(r"0\d{2,4}[\s.\-]?\d{3}[\s.\-]?\d{3,4}")
+_EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
+_HAS_ICON_RE = re.compile(r"^[\w\[\"'(\-]")
+
+
+_ICON_CHARS = (r"\U0001F000-\U0001FAFF\u2190-\u27BF\u2B00-\u2BFF"
+               r"\uFE0F\u200D\u2600-\u26FF")
+_LEAD_ICON_RE = re.compile(rf"^(\s*[{_ICON_CHARS}]+\s*)")
+
+
+def split_leading_icon(text: str) -> tuple[str, str]:
+    """Tách icon ở ĐẦU chuỗi (nếu có) để icon không bị bọc vào thẻ <a>."""
+    m = _LEAD_ICON_RE.match(text or "")
+    if not m:
+        return "", text
+    return m.group(1), text[m.end():]
+
+
+def _prepend_icon(s: str, icon: str) -> str:
+    """Thêm icon vào đầu dòng, giữ nguyên khoảng trắng đầu (không thêm nếu đã có)."""
+    if not s.strip() or s.lstrip().startswith(icon):
+        return s
+    lead = s[: len(s) - len(s.lstrip())]
+    return f"{lead}{icon} {s.lstrip()}"
+
+
+def _section_icon(text: str) -> str:
+    """Icon tương ứng với tên mục chuẩn trong template."""
+    for key, icon in SECTION_ICONS:
+        if _section_re(key).search(text):
+            return icon
+    return ""
+
+
+def _decorate_line(text: str) -> str:
+    """Chèn icon vào các DÒNG LIÊN HỆ theo đúng template (idempotent)."""
+    s = text
+    low = s.strip().lower()
+    if not low:
+        return s
+
+    # dòng liên hệ có cả website + số điện thoại: 🌐 website | 📞 phone | email
+    if ("www." in low or "http" in low) and _PHONE_RE.search(s):
+        s = re.sub(r"(?<!🌐\s)((?:https?://)?www\.[^\s|]+)", r"🌐 \1", s, count=1, flags=re.I)
+        s = re.sub(rf"(?<!📞\s)({_PHONE_RE.pattern})", r"📞 \1", s, count=1)
+        return s
+
+    if low.startswith("liên hệ ngay"):
+        s = re.sub(rf"(?<!✉️\s)({_EMAIL_RE.pattern})", r"✉️ \1", s, count=1)
+        return _prepend_icon(s, "📞")
+    if low.startswith("gửi yêu cầu tư vấn kỹ thuật"):
+        return _prepend_icon(s, "📧")
+    if low.startswith("hỗ trợ chọn cấu hình") or low.startswith("gọi tư vấn theo ngành"):
+        return _prepend_icon(s, "📞")
+    if low.startswith("website:"):
+        return _prepend_icon(s, "🌐")
+    if low.startswith("email:"):
+        return _prepend_icon(s, "📧")
+    if low.startswith("hotline:"):
+        return _prepend_icon(s, "📞")
+    if low.startswith("bạn cần bảng model"):
+        return _prepend_icon(s, "📩")
+    return s
+
+
+def apply_template_icons(html_text: str) -> str:
+    """Chèn icon đầu mục (h1/h2) và icon ở các dòng liên hệ cho ĐÚNG template.
+
+    Chạy TRƯỚC linkify_domains/insert_title_links. Nếu AI đã tự viết icon thì giữ nguyên.
+    """
+    if not html_text:
+        return html_text
+    parts = re.split(r"(<[^>]+>)", html_text)
+    out: list[str] = []
+    open_head: list[dict] = []      # heading h1/h2 đang mở
+    head_seen = 0
+    for part in parts:
+        if part.startswith("<"):
+            if re.match(r"^<h([12])\b", part, re.I):
+                head_seen += 1
+                open_head.append({"pos": len(out), "n": head_seen, "text": []})
+                out.append(part)
+                continue
+            if re.match(r"^</h[12]", part, re.I) and open_head:
+                info = open_head.pop()
+                inner = "".join(info["text"]).strip()
+                icon = TITLE_ICON if info["n"] == 1 else _section_icon(inner)
+                if icon and _HAS_ICON_RE.match(inner):
+                    out.insert(info["pos"] + 1, f"{icon} ")
+                out.append(part)
+                continue
+            out.append(part)
+            continue
+        if open_head:
+            open_head[-1]["text"].append(part)
+        out.append(_decorate_line(part))
+    return "".join(out)
+
+
 def _section_re(name: str) -> re.Pattern:
     """Regex linh hoạt cho tên mục: bỏ dấu câu cuối, cho phép “&”/“và”,
     gạch “-”/“–”/“—” và khoảng trắng (kể cả xuống dòng)."""
@@ -477,9 +596,9 @@ def _section_re(name: str) -> re.Pattern:
         if not t:
             continue
         if t in ("&", "và"):
-            parts.append(r"(?:&|và)")
+            parts.append(r"(?:&amp;|&|và)")
         elif t in ("-", "–", "—"):
-            parts.append(r"[-–—]")
+            parts.append(r"(?:&ndash;|&mdash;|[-–—])")
         else:
             parts.append(re.escape(t))
     if not parts:
@@ -553,8 +672,9 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
                     text = f'{text[:hit.end()]}{sep}<a href="{_norm_url(href)}">{tail}</a>'
                 else:
                     # không có chữ sau tên mục (hoặc không phải tiêu đề mục chuẩn)
-                    # -> bọc cả tiêu đề
-                    text = f'<a href="{_norm_url(href)}">{text.strip()}</a>'
+                    # -> bọc cả tiêu đề (giữ icon đầu mục NẰM NGOÀI thẻ <a>)
+                    lead, rest = split_leading_icon(text)
+                    text = f'{lead}<a href="{_norm_url(href)}">{rest.strip()}</a>'
                 used.add(href)
         out.append(text)
         i += 1
