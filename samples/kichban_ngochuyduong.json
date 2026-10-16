@@ -5,100 +5,58 @@
     {
       "action": "type",
       "note": "AI tiêu đề → Tên sản phẩm",
-      "selector": "h1.editor-post-title__input",
-      "selectors": [
-        "h1.editor-post-title__input",
-        ".editor-post-title__input",
-        "h1.wp-block-post-title",
-        "[aria-label='Add title']",
-        "[aria-label='Thêm tiêu đề']",
-        "#title",
-        "input[name='post_title']"
-      ],
+      "selector": "#title",
+      "selectors": ["#title", "input[name='post_title']"],
       "value": "{{title}}",
       "source": "auto"
     },
     {
+      "action": "click",
+      "note": "Ô Mô tả ngắn → chuyển sang chế độ Mã (để điền chắc hơn)",
+      "selector": "#excerpt-html",
+      "selectors": ["#excerpt-html"],
+      "value": "",
+      "source": "auto",
+      "optional": true
+    },
+    {
       "action": "type",
-      "note": "AI description → Mô tả ngắn sản phẩm",
-      "selector": "textarea#excerpt",
-      "selectors": [
-        "textarea#excerpt",
-        "#excerpt",
-        "textarea[name='excerpt']",
-        "[data-type='core/post-excerpt'] textarea",
-        "[data-type*='product-summary'] textarea",
-        "[data-type*='product-summary'] [contenteditable='true']",
-        ".wp-block-post-excerpt__excerpt",
-        "[aria-label*='mô tả ngắn' i]",
-        "[aria-label*='short description' i]"
-      ],
+      "note": "AI description → Mô tả ngắn của sản phẩm",
+      "selector": "#excerpt",
+      "selectors": ["#excerpt", "textarea[name='excerpt']"],
       "value": "{{description}}",
+      "source": "auto"
+    },
+    {
+      "action": "click",
+      "note": "Ô Mô tả ngắn → về Trực quan",
+      "selector": "#excerpt-tmce",
+      "selectors": ["#excerpt-tmce"],
+      "value": "",
       "source": "auto",
       "optional": true
     },
     {
       "action": "click",
-      "note": "Mở menu Tùy chọn (⋮)",
-      "selector": "button[aria-label='Options']",
-      "selectors": [
-        "button[aria-label='Options']",
-        "button[aria-label='Tùy chọn']",
-        "button[aria-label*='Options']",
-        "button[aria-label*='Tùy chọn']"
-      ],
-      "value": "",
-      "source": "auto"
-    },
-    {
-      "action": "click",
-      "note": "Chọn “Code editor” (trình soạn thảo mã)",
-      "selector": "button:has-text('Code editor')",
-      "selectors": [
-        "button:has-text('Code editor')",
-        "[role='menuitem']:has-text('Code editor')",
-        "button:has-text('Trình soạn thảo mã')",
-        "[role='menuitem']:has-text('Trình soạn thảo mã')"
-      ],
+      "note": "Ô Mô tả sản phẩm → chuyển sang chế độ Mã (để dán HTML)",
+      "selector": "#content-html",
+      "selectors": ["#content-html", ".wp-switch-editor:has-text('Mã')"],
       "value": "",
       "source": "auto"
     },
     {
       "action": "type",
       "note": "AI content (HTML) → Mô tả sản phẩm",
-      "selector": ".editor-post-text-editor",
-      "selectors": [
-        ".editor-post-text-editor",
-        "textarea.editor-post-text-editor",
-        ".block-editor-block-list__layout",
-        "#content"
-      ],
+      "selector": "#content",
+      "selectors": ["#content", "textarea[name='content']"],
       "value": "{{content_html}}",
       "source": "auto"
     },
     {
       "action": "click",
-      "note": "Mở menu Tùy chọn (đổi lại giao diện thường)",
-      "selector": "button[aria-label='Options']",
-      "selectors": [
-        "button[aria-label='Options']",
-        "button[aria-label='Tùy chọn']",
-        "button[aria-label*='Options']",
-        "button[aria-label*='Tùy chọn']"
-      ],
-      "value": "",
-      "source": "auto"
-    },
-    {
-      "action": "click",
-      "note": "Chọn “Visual editor”",
-      "selector": "button:has-text('Visual editor')",
-      "selectors": [
-        "button:has-text('Visual editor')",
-        "[role='menuitem']:has-text('Visual editor')",
-        "button:has-text('Trình soạn thảo trực quan')",
-        "[role='menuitem']:has-text('Trình soạn thảo trực quan')"
-      ],
+      "note": "Ô Mô tả sản phẩm → về Trực quan (xem lại dạng thật)",
+      "selector": "#content-tmce",
+      "selectors": ["#content-tmce", ".wp-switch-editor:has-text('Trực quan')"],
       "value": "",
       "source": "auto",
       "optional": true
@@ -108,69 +66,35 @@
       "note": "Chờ giao diện ổn định",
       "selector": "",
       "selectors": [],
-      "value": "1.5",
+      "value": "1",
       "source": "auto"
-    },
-    {
-      "action": "click",
-      "note": "Mở card Rank Math SEO (bên phải)",
-      "selector": "button:has-text('Rank Math SEO')",
-      "selectors": [
-        "button:has-text('Rank Math SEO')",
-        "[data-testid='rank-math-seo']",
-        "#rank-math-seo-tab",
-        ".components-panel__body button:has-text('Rank Math')",
-        "button:has-text('Rank Math')"
-      ],
-      "value": "",
-      "source": "auto",
-      "optional": true
     },
     {
       "action": "type",
       "note": "AI focus keyword → Từ khoá chính (Rank Math)",
-      "selector": "#rank-math-focus-keyword",
+      "selector": "input[placeholder='Ví dụ: Rank Math SEO']",
       "selectors": [
-        "#rank-math-focus-keyword",
-        "input[name='rank_math_focus_keyword']",
-        "input[id*='focus-keyword']",
-        "[data-testid='focus-keyword-input']",
-        "input[placeholder*='focus keyword' i]",
-        "input[placeholder*='từ khóa chính' i]",
-        "input[placeholder*='từ khoá chính' i]"
+        "input[placeholder='Ví dụ: Rank Math SEO']",
+        "#rank_math_metabox input[placeholder*='Rank Math SEO']",
+        "#rank_math_metabox input[type='text']"
       ],
       "value": "{{focus_keyword}}",
       "source": "auto",
-      "optional": true
+      "force": true
     },
     {
       "action": "click",
       "note": "AI hình 1 → bấm “Đặt ảnh sản phẩm”",
-      "selector": "button:has-text('Đặt ảnh sản phẩm')",
-      "selectors": [
-        "button:has-text('Đặt ảnh sản phẩm')",
-        "button:has-text('Set product image')",
-        "#set-post-thumbnail",
-        ".inside #set-post-thumbnail",
-        ".woocommerce-product-images__actions button",
-        "[aria-label*='Ảnh sản phẩm']",
-        "[aria-label*='Product image']"
-      ],
+      "selector": "#set-post-thumbnail",
+      "selectors": ["#set-post-thumbnail", "a:has-text('Đặt ảnh sản phẩm')"],
       "value": "",
-      "source": "auto",
-      "optional": true
+      "source": "auto"
     },
     {
       "action": "click",
-      "note": "Chuyển sang tab “Tải tệp lên”",
+      "note": "Chọn tab “Tải lên tệp mới”",
       "selector": "#menu-item-upload",
-      "selectors": [
-        "#menu-item-upload",
-        ".media-menu-item:has-text('Tải tệp lên')",
-        ".media-menu-item:has-text('Upload files')",
-        "button:has-text('Tải tệp lên')",
-        "button:has-text('Upload files')"
-      ],
+      "selectors": ["#menu-item-upload", ".media-menu-item:has-text('Tải lên tệp mới')"],
       "value": "",
       "source": "auto",
       "optional": true
@@ -179,11 +103,7 @@
       "action": "upload",
       "note": "Tải ảnh 1 lên",
       "selector": ".media-modal input[type='file']",
-      "selectors": [
-        ".media-modal input[type='file']",
-        ".media-frame input[type='file']",
-        "input[type='file']"
-      ],
+      "selectors": [".media-modal input[type='file']", "input[type='file']"],
       "value": "{{image_1}}",
       "source": "auto"
     },
@@ -197,68 +117,41 @@
     },
     {
       "action": "click",
-      "note": "Chọn ảnh vừa tải (đầu tiên)",
-      "selector": ".media-frame .attachment:first-child",
-      "selectors": [
-        ".media-frame .attachment:first-child",
-        ".media-modal .attachment:first-child",
-        ".attachments .attachment"
-      ],
-      "value": "",
-      "source": "auto",
-      "optional": true
-    },
-    {
-      "action": "click",
       "note": "Đặt làm ảnh sản phẩm",
-      "selector": ".media-button-select",
+      "selector": ".media-toolbar-primary button",
       "selectors": [
-        ".media-button-select",
-        "button.media-button-select",
         ".media-toolbar-primary button",
-        "button:has-text('Đặt ảnh sản phẩm')",
-        "button:has-text('Set product image')",
-        "button:has-text('Chọn')",
-        "button:has-text('Select')"
+        "button.media-button-select",
+        "button:has-text('Đặt ảnh sản phẩm')"
       ],
       "value": "",
-      "source": "auto",
-      "optional": true
+      "source": "auto"
     },
     {
       "action": "wait",
-      "note": "Chờ đóng hộp ảnh",
+      "note": "Chờ hộp ảnh đóng",
       "selector": "",
       "selectors": [],
-      "value": "1.5",
+      "value": "2",
       "source": "auto"
     },
     {
       "action": "click",
-      "note": "Ảnh 2+ → bấm “Thêm vào thư viện ảnh sản phẩm”",
-      "selector": "button:has-text('Thêm vào thư viện')",
+      "note": "AI hình 2+ → bấm “Thêm ảnh thư viện sản phẩm”",
+      "selector": ".add_product_images a",
       "selectors": [
-        "button:has-text('Thêm vào thư viện')",
-        "button:has-text('Add to gallery')",
-        "button:has-text('Thêm ảnh')",
-        "#add_image",
-        ".woocommerce-product-gallery__actions button"
+        ".add_product_images a",
+        "a:has-text('Thêm ảnh thư viện sản phẩm')",
+        "#product_images_container a.add_product_images"
       ],
       "value": "",
-      "source": "auto",
-      "optional": true
+      "source": "auto"
     },
     {
       "action": "click",
-      "note": "Chuyển sang tab “Tải tệp lên” (thư viện)",
+      "note": "Chọn tab “Tải lên tệp mới” (thư viện)",
       "selector": "#menu-item-upload",
-      "selectors": [
-        "#menu-item-upload",
-        ".media-menu-item:has-text('Tải tệp lên')",
-        ".media-menu-item:has-text('Upload files')",
-        "button:has-text('Tải tệp lên')",
-        "button:has-text('Upload files')"
-      ],
+      "selectors": ["#menu-item-upload", ".media-menu-item:has-text('Tải lên tệp mới')"],
       "value": "",
       "source": "auto",
       "optional": true
@@ -267,11 +160,7 @@
       "action": "upload",
       "note": "Tải các ảnh còn lại lên (ảnh 2,3,4,5,6…)",
       "selector": ".media-modal input[type='file']",
-      "selectors": [
-        ".media-modal input[type='file']",
-        ".media-frame input[type='file']",
-        "input[type='file']"
-      ],
+      "selectors": [".media-modal input[type='file']", "input[type='file']"],
       "value": "{{image_2}}|{{image_3}}|{{image_4}}|{{image_5}}|{{image_6}}",
       "source": "auto"
     },
@@ -286,18 +175,14 @@
     {
       "action": "click",
       "note": "Thêm vào thư viện ảnh sản phẩm",
-      "selector": ".media-button-select",
+      "selector": ".media-toolbar-primary button",
       "selectors": [
-        ".media-button-select",
-        "button.media-button-select",
         ".media-toolbar-primary button",
-        "button:has-text('Thêm vào thư viện')",
-        "button:has-text('Add to gallery')",
-        "button:has-text('Cập nhật thư viện')"
+        "button.media-button-select",
+        "button:has-text('Thêm vào thư viện')"
       ],
       "value": "",
-      "source": "auto",
-      "optional": true
+      "source": "auto"
     }
   ]
 }

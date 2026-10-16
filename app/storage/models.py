@@ -67,6 +67,7 @@ class ScriptStep:
     note: str = ""                 # mô tả tiếng Việt
     source: str = "recorded"       # auto|recorded|fallback
     optional: bool = False         # True = không thấy phần tử thì BỎ QUA, không dừng
+    force: bool = False            # True = điền/bấm kể cả khi phần tử đang bị ẩn
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -81,6 +82,7 @@ class ScriptStep:
             note=d.get("note", ""),
             source=d.get("source", "recorded"),
             optional=bool(d.get("optional", False)),
+            force=bool(d.get("force", False)),
         )
 
 

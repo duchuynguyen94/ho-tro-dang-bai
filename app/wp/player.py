@@ -153,14 +153,14 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 else:
                     _locate(page, step).click()
             elif action == "click":
-                _locate(page, step).click()
+                _locate(page, step).click(force=bool(step.force), timeout=15000)
             elif action == "type":
                 value = render(step.value, ctx)
                 loc = _locate(page, step)
                 try:
-                    loc.fill(value)
+                    loc.fill(value, force=bool(step.force), timeout=15000)
                 except Exception:
-                    loc.click()
+                    loc.click(force=True)
                     page.keyboard.insert_text(value)
             elif action == "select":
                 _locate(page, step).select_option(render(step.value, ctx))
