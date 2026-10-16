@@ -61,6 +61,10 @@ class MainWindow(QMainWindow):
         self._content_workers: dict = {}
         self._img_workers: dict = {}
         self._build()
+        try:                       # mở app là vào thẳng tab "Đăng bài"
+            self._go(1)
+        except Exception:
+            pass
         try:                       # nút bị khoá -> mờ đi (mọi nút trong cửa sổ)
             from .style import dim_all_buttons
 
@@ -95,7 +99,7 @@ class MainWindow(QMainWindow):
         for i, text in enumerate(NAV):
             b = QPushButton(text)
             b.setCheckable(True)
-            b.setChecked(i == 0)
+            b.setChecked(i == 1)          # mặc định mở tab "Đăng bài"
             b.clicked.connect(lambda _=False, idx=i: self._go(idx))
             nl.addWidget(b)
             self.nav_buttons.append(b)
@@ -153,8 +157,8 @@ class MainWindow(QMainWindow):
             self.jobs_page.refresh()
         elif index == 3:
             self.error_log_page.refresh()
-        elif index == 0:
-            self.post_page.reload_sites()
+        elif index == 1:
+            self.post_page.reload_sites()      # tab "Đăng bài"
 
     def _refresh_count(self) -> None:
         self.nav_buttons[2].setText(f"Công việc đang làm ({len(self.store.tasks)})")
