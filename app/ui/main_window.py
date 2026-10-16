@@ -30,7 +30,6 @@ from ..storage.models import (
 from ..storage.store import Store
 from .pages.config_page import ConfigPage
 from .pages.error_log_page import ErrorLogPage
-from .pages.history_page import HistoryPage
 from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
 from .style import app_font
@@ -47,7 +46,7 @@ from .workers import (
     shutdown_all_threads,
 )
 
-NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Lịch sử", "Log lỗi"]
+NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Log lỗi"]
 
 
 class MainWindow(QMainWindow):
@@ -102,10 +101,9 @@ class MainWindow(QMainWindow):
         self.post_page = PostPage(self.store)
         self.config_page = ConfigPage(self.store)
         self.jobs_page = JobsPage(self.store)
-        self.history_page = HistoryPage(self.store)
         self.error_log_page = ErrorLogPage(self.store)
         for page in (self.post_page, self.config_page, self.jobs_page,
-                     self.history_page, self.error_log_page):
+                     self.error_log_page):
             self.stack.addWidget(page)
         v.addWidget(self.stack, 1)
 
@@ -147,8 +145,6 @@ class MainWindow(QMainWindow):
         if index == 2:
             self.jobs_page.refresh()
         elif index == 3:
-            self.history_page.refresh()
-        elif index == 4:
             self.error_log_page.refresh()
         elif index == 0:
             self.post_page.reload_sites()

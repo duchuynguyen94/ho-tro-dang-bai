@@ -25,10 +25,10 @@ CONTENT_OUTPUT_SPEC = (
 
 # Kết quả bước 2 (theo Rule SEO)
 SEO_JSON_SPEC = """{
-  "title": "tiêu đề SEO",
-  "focus_keyword": "từ khóa chính",
-  "description": "mô tả ngắn",
-  "tags": "thẻ 1, thẻ 2, thẻ 3"
+  "title": "tiêu đề SEO 55-60 ký tự, dạng: [Keyword] [Brand] [Model] + [USP] (chọn ngẫu nhiên 1 USP)",
+  "focus_keyword": "từ khoá chính (thường là Model của sản phẩm)",
+  "description": "mô tả siêu ngắn theo mẫu rule_seo, GỒM CẢ: dòng liên hệ (website | hotline | email) và danh sách tối đa 5 MODEL TIÊU BIỂU của hãng, mỗi model 1 dòng",
+  "tags": "danh sách thẻ tìm kiếm đầy đủ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy"
 }"""
 
 
