@@ -27,15 +27,20 @@ NEED_LOGIN_MARKERS = ("log in", "sign up", "đăng nhập", "đăng ký")
 
 LIMIT_MARKERS = (
     "reached the limit",
+    "reached your limit",
     "usage limit",
+    "usage cap",
     "chat paused",
     "limit will reset",
     "you've reached",
     "limit for chats",
     "resets at",
+    "out of messages",
+    "đã đạt giới hạn",
     "hết lượt",
-    "giới hạn",
-    "tạm dừng",
+    "hạn mức sử dụng",
+    "tạm dừng cuộc trò chuyện",
+    "giới hạn tin nhắn",
 )
 
 LIMIT_MSG = (
@@ -237,17 +242,38 @@ def _reply_text(page, prompt: str = "") -> str:
     return txt
 
 
+_LIMIT_UI_JS = r"""() => {
+  const sels = ['[role="alert"]', '[data-testid*="limit"]', '[class*="limit"]',
+                '[class*="banner"]', '[class*="toast"]', '[class*="notice"]'];
+  const out = [];
+  for (const s of sels) {
+    for (const el of document.querySelectorAll(s)) {
+      const t = (el.innerText || '').trim();
+      if (t) out.push(t);
+    }
+  }
+  return out.join('\n');
+}"""
+
+
 def _limit_reached(page, extra_text: str = "") -> str:
-    body = ""
+    """Phát hiện ChatGPT hết lượt.
+
+    CHỈ soi THÔNG BÁO CỦA GIAO DIỆN (banner/alert/limit) — KHÔNG quét nội dung
+    bài viết, vì bài viết tiếng Việt có thể chứa các từ như "giới hạn".
+    """
+    texts: list[str] = []
     try:
-        body = page.inner_text("body").lower()
+        texts.append(page.evaluate(_LIMIT_UI_JS) or "")
     except Exception:
-        body = ""
-    body += " " + (extra_text or "").lower()
+        pass
+    if extra_text:
+        texts.append(extra_text)
+    low = "\n".join(texts).lower()
     for marker in LIMIT_MARKERS:
-        if marker in body:
-            i = body.find(marker)
-            return body[max(0, i - 80): i + 120].replace("\n", " ").strip()
+        if marker in low:
+            i = low.find(marker)
+            return low[max(0, i - 80): i + 120].replace("\n", " ").strip()
     return ""
 
 
