@@ -253,6 +253,47 @@ def compose(
     return base
 
 
+def trim_borders(path: str, tol: int = 16) -> str:
+    """CẮT VIỀN quanh đối tượng (viền trong suốt hoặc màu nền ở 4 góc).
+
+    Trả về đường dẫn file mới (thêm hậu tố _trim). Nếu không cắt được gì thì trả về path cũ.
+    """
+    from PIL import ImageChops
+
+    p = Path(path)
+    if not p.exists():
+        return path
+    try:
+        im = Image.open(p).convert("RGBA")
+    except Exception:
+        return path
+
+    box = None
+    # 1) ảnh có vùng TRONG SUỐT -> cắt theo vùng hiện hình
+    alpha = im.getchannel("A")
+    abox = alpha.getbbox()
+    if abox and (abox[2] - abox[0] < im.width or abox[3] - abox[1] < im.height):
+        box = abox
+    else:
+        # 2) ảnh nền đặc -> cắt theo màu nền ở 4 góc (so sánh trên kênh màu)
+        bg = Image.new("RGB", im.size, im.convert("RGB").getpixel((0, 0)))
+        diff = ImageChops.difference(im.convert("RGB"), bg).convert("L")
+        mask = diff.point(lambda v: 255 if v > tol else 0)
+        box = mask.getbbox()
+
+    if not box:
+        return path
+    w, h = box[2] - box[0], box[3] - box[1]
+    if w < 8 or h < 8 or (w >= im.width - 2 and h >= im.height - 2):
+        return path
+    out = p.with_name(f"{p.stem}_trim{p.suffix}")
+    try:
+        im.crop(box).save(out)
+    except Exception:
+        return path
+    return str(out)
+
+
 def save_composed(img: Image.Image, out_path: str, fmt: str = "PNG", quality: int = 90) -> str:
     p = Path(out_path)
     p.parent.mkdir(parents=True, exist_ok=True)

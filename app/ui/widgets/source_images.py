@@ -28,7 +28,7 @@ class _Tile(QFrame):
     def __init__(self, url: str, parent=None) -> None:
         super().__init__(parent)
         self.url = url
-        self.path = ""
+        self.data = b""          # giữ trong bộ nhớ, chưa lưu ra máy
         self.setObjectName("srcTile")
         self.setFixedSize(THUMB + 12, THUMB + 12)
         self.setCursor(Qt.PointingHandCursor)
@@ -41,10 +41,10 @@ class _Tile(QFrame):
         self.pic.setObjectName("imgThumb")
         lay.addWidget(self.pic)
 
-    def set_image(self, path: str) -> None:
-        self.path = path
-        pm = QPixmap(path)
-        if pm.isNull():
+    def set_image(self, data: bytes) -> None:
+        self.data = data or b""
+        pm = QPixmap()
+        if not pm.loadFromData(self.data):
             self.pic.setText("(lỗi)")
             return
         self.pic.setPixmap(pm.scaled(THUMB, THUMB, Qt.KeepAspectRatioByExpanding,
@@ -58,7 +58,8 @@ class _Tile(QFrame):
         self.update()
 
     def mousePressEvent(self, event) -> None:  # noqa: N802
-        self.clicked.emit(self.path or self.url)
+        if self.data:
+            self.clicked.emit(self.url)
         super().mousePressEvent(event)
 
 
@@ -70,6 +71,7 @@ class SourceImageDialog(QDialog):
         self.setWindowTitle("Hình từ nguồn")
         self.setMinimumSize(640, 520)
         self.chosen = ""
+        self._chosen_url = ""
         self._tiles: list[_Tile] = []
 
         v = QVBoxLayout(self)
@@ -105,7 +107,7 @@ class SourceImageDialog(QDialog):
         self.insert_btn = QPushButton("Chèn vào canvas")
         self.insert_btn.setProperty("class", "primary")
         self.insert_btn.setEnabled(False)
-        self.insert_btn.clicked.connect(self.accept)
+        self.insert_btn.clicked.connect(self._accept)
         row.addWidget(cancel)
         row.addWidget(self.insert_btn)
         v.addLayout(row)
@@ -125,28 +127,44 @@ class SourceImageDialog(QDialog):
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
 
-    def _on_one(self, url: str, path: str) -> None:
+    def _on_one(self, url: str, data) -> None:
         for t in self._tiles:
             if t.url == url:
-                if path:
-                    t.set_image(path)
+                if data:
+                    t.set_image(bytes(data))
                 else:
                     t.setEnabled(False)
                     t.pic.setText("(không tải được)")
                 break
 
     def _on_finished(self) -> None:
-        n = sum(1 for t in self._tiles if t.path)
+        n = sum(1 for t in self._tiles if t.data)
         self.status.setText(f"Đã tải {n}/{len(self._tiles)} ảnh — chọn 1 ảnh rồi bấm “Chèn vào canvas”."
                             if n else "Không tải được ảnh nào từ link nguồn.")
 
-    def _select(self, val: str) -> None:
-        if not val:
+    def _select(self, url: str) -> None:
+        if not url:
             return
-        self.chosen = val
+        self._chosen_url = url
         for t in self._tiles:
-            t.set_selected(t.path == val)
+            t.set_selected(t.url == url)
         self.insert_btn.setEnabled(True)
+
+    def _accept(self) -> None:
+        """Lưu ảnh đã chọn ra máy rồi đóng (chỉ lưu 1 ảnh khi bấm Chèn)."""
+        from ...source import save_image_bytes
+
+        for t in self._tiles:
+            if t.url == self._chosen_url and t.data:
+                try:
+                    self.chosen = save_image_bytes(t.url, t.data)
+                except Exception:
+                    self.chosen = ""
+                break
+        if not self.chosen:
+            self.status.setText("Không lưu được ảnh đã chọn — thử ảnh khác.")
+            return
+        self.accept()
 
     def closeEvent(self, event) -> None:  # noqa: N802
         try:

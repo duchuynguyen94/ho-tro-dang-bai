@@ -39,6 +39,7 @@ class DraggableImage(QLabel):
         self.index = 0
         self.on_remove_bg = None   # callback
         self.on_remove = None      # callback
+        self.on_trim = None        # callback
         self.setCursor(Qt.OpenHandCursor)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         if dashed:
@@ -157,11 +158,14 @@ class DraggableImage(QLabel):
             return
         menu = QMenu(self)
         act_bg = menu.addAction("Xoá nền → trong suốt")
+        act_trim = menu.addAction("✂ Trim hình (cắt viền thừa)")
         menu.addSeparator()
         act_del = menu.addAction("Xoá thành phần này")
         chosen = menu.exec(event.globalPos())
         if chosen == act_bg and self.on_remove_bg:
             self.on_remove_bg(self)
+        elif chosen == act_trim and self.on_trim:
+            self.on_trim(self)
         elif chosen == act_del and self.on_remove:
             self.on_remove(self)
 
@@ -184,6 +188,7 @@ class ImageEditorPanel(QFrame):
     request_refetch = Signal()
     request_export = Signal()
     request_source_picker = Signal()
+    request_trim = Signal(str, int)     # (loại thành phần, chỉ số)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -410,6 +415,7 @@ class ImageEditorPanel(QFrame):
             item.enable_grips(not pm.isNull())
             item.on_remove_bg = self._ctx_remove_bg
             item.on_remove = self._ctx_remove_component
+            item.on_trim = self._ctx_trim
 
         lp = self._opts.get("logo_pos") or [0.015, 0.0]
         bp = self._opts.get("brand_pos") or [0.965, 0.035]
@@ -493,6 +499,7 @@ class ImageEditorPanel(QFrame):
             it.index = orig
             it.on_remove_bg = self._ctx_remove_bg
             it.on_remove = self._ctx_remove_component
+            it.on_trim = self._ctx_trim
             it.show()
             it.enable_grips(True)
             it.moved.connect(self._on_product_moved)
@@ -533,6 +540,7 @@ class ImageEditorPanel(QFrame):
             it.kind = "upload"
             it.on_remove_bg = self._ctx_remove_bg
             it.on_remove = self._ctx_remove_component
+            it.on_trim = self._ctx_trim
             it.show()
             it.enable_grips(True)
             it.moved.connect(self._on_upload_moved)
@@ -639,6 +647,24 @@ class ImageEditorPanel(QFrame):
             self._opts["brand_hidden"] = True
             self._layout_items()
         self._schedule_save()
+
+    def _ctx_trim(self, item) -> None:
+        """Cắt viền thừa của ảnh thành phần (trim)."""
+        from ...images.composer import trim_borders
+
+        if item.kind == "upload":
+            ups = list(self._opts.get("uploads") or [])
+            if item.index < len(ups) and isinstance(ups[item.index], dict):
+                old = ups[item.index].get("path", "")
+                new = trim_borders(old)
+                if new and new != old:
+                    ups[item.index]["path"] = new
+                    self._opts["uploads"] = ups
+                    self._layout_uploads()
+                    self._schedule_save()
+            return
+        # sản phẩm / logo brand: báo lên trang để lưu vào kết quả công việc
+        self.request_trim.emit(item.kind, int(item.index))
 
     def _on_product_moved(self) -> None:  # noqa: D401
         self._opts["product_pos"] = [

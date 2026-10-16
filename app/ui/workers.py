@@ -696,7 +696,7 @@ class ImageRefetchWorker(TrackedThread):
 class SourceImageDownloadWorker(TrackedThread):
     """Tải danh sách ảnh từ link nguồn về máy (để hiện trong popup chọn ảnh)."""
 
-    done = Signal(str, str)        # (url, đường dẫn file) hoặc (url, "")
+    done = Signal(str, object)     # (url, bytes) — giữ trong bộ nhớ, KHÔNG lưu ra máy
     progress = Signal(str)
 
     def __init__(self, urls: list[str]) -> None:
@@ -708,19 +708,23 @@ class SourceImageDownloadWorker(TrackedThread):
         self._stop = True
 
     def run(self) -> None:
-        from .. import source as src
+        import httpx
+
+        from ..source import UA
 
         total = len(self.urls)
         for i, url in enumerate(self.urls, 1):
             if self._stop:
                 break
             self.progress.emit(f"Đang tải ảnh {i}/{total}…")
-            path = ""
+            data = b""
             try:
-                path = src.download_image(url)
+                r = httpx.get(url, headers=UA, follow_redirects=True, timeout=60)
+                r.raise_for_status()
+                data = r.content
             except Exception:
-                path = ""
-            self.done.emit(url, path)
+                data = b""
+            self.done.emit(url, data)
         self.progress.emit("")
 
 

@@ -144,6 +144,20 @@ def search_images(query: str, limit: int = 3) -> list[str]:
     return out
 
 
+def save_image_bytes(url: str, data: bytes, prefix: str = "sp") -> str:
+    """Lưu ảnh (đã tải trong bộ nhớ) ra máy khi người dùng bấm CHÈN."""
+    if not data:
+        return ""
+    ext = Path(urlparse(url).path).suffix.lower() or ".png"
+    if ext not in (".jpg", ".jpeg", ".png", ".webp", ".bmp"):
+        ext = ".png"
+    from .storage import new_id
+
+    dest = product_dir() / f"{prefix}_{new_id()}{ext}"
+    dest.write_bytes(data)
+    return str(dest)
+
+
 def download_image(url: str, prefix: str = "sp") -> str:
     """Tải 1 ảnh về máy, trả về đường dẫn."""
     r = httpx.get(url, headers=UA, follow_redirects=True, timeout=60)

@@ -123,6 +123,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.recompose_image.connect(self._on_recompose_image)
         self.jobs_page.recompose_all.connect(self._on_recompose_all)
         self.jobs_page.export_images.connect(self._on_export_images)
+        self.jobs_page.trim_component.connect(self._on_trim_component)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.config_page.changed.connect(self._on_config_changed)
@@ -515,6 +516,37 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         show_toast(self, f"Đã xuất {len(paths)} ảnh — đã mở thư mục bài", 3000)
+
+    def _on_trim_component(self, task, kind: str, index: int) -> None:
+        """Cắt viền thừa (trim) cho ảnh sản phẩm / logo brand rồi ghép lại ảnh."""
+        from ..images.composer import trim_borders
+
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        r = fresh.result = dict(fresh.result or {})
+        changed = False
+        if kind == "brand":
+            old = r.get("brand_logo", "")
+            new = trim_borders(old)
+            if new and new != old:
+                r["brand_logo"] = new
+                changed = True
+        elif kind == "product":
+            prods = list(r.get("product_images") or [])
+            if 0 <= index < len(prods):
+                old = prods[index]
+                new = trim_borders(old)
+                if new and new != old:
+                    prods[index] = new
+                    r["product_images"] = prods
+                    changed = True
+        if not changed:
+            show_toast(self, "Ảnh này không có viền thừa để cắt", 2600, ok=False)
+            return
+        self.store.upsert_task(fresh)
+        self.store.save()
+        idx = getattr(self.jobs_page, "_sel_index", 0)
+        self._start_images_worker(fresh, None, idx, "Đang ghép lại ảnh sau khi trim…")
+        show_toast(self, "Đã cắt viền ảnh", 2200)
 
     def _on_refetch_image(self, task, index: int) -> None:
         site = self.store.get_site(task.site_id)
