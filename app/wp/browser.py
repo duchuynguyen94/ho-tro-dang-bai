@@ -133,16 +133,16 @@ class WPBrowser:
 
     # ------------------------------------------------------------------ #
     def login(self, site) -> bool:
-        """Đăng nhập WordPress; trả True nếu đã đăng nhập."""
+        """Mở THẲNG trang tạo bài (theo cấu hình); nếu chưa đăng nhập thì tự đăng nhập."""
         page = self.open()
         base = (site.url or "").rstrip("/")
         if not base:
             return False
-        admin = f"{base}/wp-admin/"
-        page.goto(admin, wait_until="domcontentloaded")
-        time.sleep(1.0)
+        target = (site.new_post_url or "").strip() or f"{base}/wp-admin/"
+        page.goto(target, wait_until="domcontentloaded")
+        time.sleep(1.2)
         if "/wp-login.php" not in page.url:
-            return True  # session còn hiệu lực
+            return True  # session còn hiệu lực -> đang ở đúng trang tạo bài
 
         page.goto(f"{base}/wp-login.php", wait_until="domcontentloaded")
         try:
@@ -157,10 +157,19 @@ class WPBrowser:
                 pass
             page.click("#wp-submit")
             page.wait_for_load_state("domcontentloaded")
-            time.sleep(1.5)
+            time.sleep(1.8)
         except PWTimeout:
             pass
-        return "/wp-login.php" not in page.url
+        if "/wp-login.php" in page.url:
+            return False
+        # đăng nhập xong: quay lại trang tạo bài (WP thường tự chuyển về nhờ redirect_to)
+        if site.new_post_url and "post-new.php" not in page.url:
+            try:
+                page.goto(site.new_post_url, wait_until="domcontentloaded")
+                time.sleep(1.0)
+            except Exception:
+                pass
+        return True
 
     def goto(self, url: str) -> None:
         page = self.open()
