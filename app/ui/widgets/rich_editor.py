@@ -282,6 +282,9 @@ class RichEditor(QWidget):
     def get_html(self) -> str:
         if self.stack.currentWidget() is self.source:
             return self.source.toPlainText().strip()
+        # Chưa sửa gì trong chế độ trực quan -> trả ĐÚNG HTML NGUYÊN BẢN (không serialize lại)
+        if not self.edit.document().isModified():
+            return self._raw_html.strip()
         raw = self.edit.toHtml()
         m = re.search(r"<body[^>]*>(.*?)</body>", raw, re.S | re.I)
         return _clean_qt_html((m.group(1) if m else raw).strip())
