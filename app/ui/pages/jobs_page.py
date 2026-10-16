@@ -320,6 +320,7 @@ class JobsPage(QWidget):
         super().__init__(parent)
         self.store = store
         self.current = None
+        self._posting: dict[str, bool] = {}      # task_id -> đang mở Chrome để đăng
         self._rows: dict[str, TaskRow] = {}
         self._thumbs: list = []
         self._sel_index = 0
@@ -412,11 +413,6 @@ class JobsPage(QWidget):
         self.error_label.setWordWrap(True)
         self.error_label.setAlignment(Qt.AlignCenter)
         ev.addWidget(self.error_label)
-        retry = QPushButton("↻ Thử tạo lại")
-        retry.setProperty("class", "primary")
-        retry.clicked.connect(self._on_retry)
-        self.retry_btn = retry
-        ev.addWidget(retry, alignment=Qt.AlignHCenter)
         ev.addStretch(1)
         self.stack.addWidget(self.page_error)
 
@@ -508,10 +504,15 @@ class JobsPage(QWidget):
         self.model_btn.setProperty("class", "ghost")
         self.model_btn.setToolTip("Nhập danh sách link nguồn → trích xuất Product Models theo Rule Model Extractor")
         self.model_btn.clicked.connect(self.open_model_extractor.emit)
+        self.retry_btn = QPushButton("↻ Random lại")
+        self.retry_btn.setProperty("class", "ghost")
+        self.retry_btn.setToolTip("Tạo lại nội dung bằng AI (chỉ có ở panel kết quả)")
+        self.retry_btn.clicked.connect(self._on_retry)
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
-        self.post_btn.clicked.connect(lambda: self.current and self.post.emit(self.current))
+        self.post_btn.clicked.connect(self._emit_post)
         f.addWidget(self.model_btn)
+        f.addWidget(self.retry_btn)          # nằm BÊN TRÁI nút Đăng bài
         f.addWidget(self.post_btn)
         right.body.addWidget(self.footer)
         self.footer.hide()
@@ -575,6 +576,32 @@ class JobsPage(QWidget):
                 target_id = self._ordered[0].id
         self.select_task(target_id)
 
+    # ------------------------------------------------------------------ #
+    # Đăng bài: mỗi công việc chỉ mở 1 Chrome, khoá nút để tránh bấm nhiều lần
+    # ------------------------------------------------------------------ #
+    def _emit_post(self) -> None:
+        task = self.current
+        if not task or self._posting.get(task.id):
+            return                      # đang đăng rồi -> bỏ qua
+        self.post.emit(task)
+
+    def set_posting(self, task_id: str, busy: bool) -> None:
+        """Đánh dấu công việc đang mở Chrome để đăng -> khoá + mờ nút."""
+        if busy:
+            self._posting[task_id] = True
+        else:
+            self._posting.pop(task_id, None)
+        self._sync_post_btn()
+
+    def is_posting(self, task_id: str) -> bool:
+        return bool(self._posting.get(task_id))
+
+    def _sync_post_btn(self) -> None:
+        cur = getattr(self.current, "id", None)
+        busy = bool(cur and self._posting.get(cur))
+        self.post_btn.setEnabled(not busy)
+        self.post_btn.setText("Đang mở trình duyệt…" if busy else "OK — Đăng bài")
+
     def select_task(self, task_id: str) -> None:
         task = next((t for t in self.store.tasks if t.id == task_id), None)
         if not task:
@@ -586,6 +613,7 @@ class JobsPage(QWidget):
         active = self.store.ai_content.get("active", "")
         self.provider_badge.setText(f"Provider: {active}" if active else "")
         self._show_state()
+        self._sync_post_btn()
 
     def set_loading_message(self, text: str) -> None:
         if self.current and self.current.status in (STATUS_QUEUED, STATUS_GENERATING):
@@ -632,8 +660,6 @@ class JobsPage(QWidget):
                 self.footer.show()
                 self._load(task)
                 return
-            self.retry_btn.setText("↻ Thử tạo lại")
-            self.retry_btn.setToolTip("Tạo lại nội dung bằng AI")
             title = "Không tạo được nội dung."
 
             body = f"<b>{title}</b><br><br>{str(msg).replace(chr(10), '<br>')}"

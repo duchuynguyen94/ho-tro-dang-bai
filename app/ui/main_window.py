@@ -355,12 +355,17 @@ class MainWindow(QMainWindow):
         self.status("Đã tạo lại xong.")
 
     def _on_post_task(self, task) -> None:
+        # Mỗi công việc chỉ mở 1 Chrome: nếu đang đăng thì bỏ qua lần bấm sau
+        if self.jobs_page.is_posting(task.id):
+            return
         site = self.store.get_site(task.site_id)
         if not site:
             return
+        self.jobs_page.set_posting(task.id, True)      # khoá + mờ nút Đăng bài
         self.jobs_page._save()
 
         if not (site.script and site.script.steps):
+            self.jobs_page.set_posting(task.id, False)  # mở lại nút nếu không chạy được
             QMessageBox.warning(
                 self,
                 "Chưa có kịch bản",
@@ -397,6 +402,7 @@ class MainWindow(QMainWindow):
         worker.start()
 
     def _on_post_ok(self, task, url: str) -> None:
+        self.jobs_page.set_posting(task.id, False)     # mở lại nút Đăng bài
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.result["result_url"] = url
         fresh.status = STATUS_DONE
@@ -408,6 +414,7 @@ class MainWindow(QMainWindow):
         self._maybe_sheets(fresh)
 
     def _on_post_failed(self, task, err: str) -> None:
+        self.jobs_page.set_posting(task.id, False)     # mở lại nút Đăng bài
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         r = fresh.result or {}
         has_content = bool(r.get("content_html") or r.get("title"))
