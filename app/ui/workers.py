@@ -9,7 +9,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import extract_product_name, insert_external_links, linkify_site
+from ..ai.manager import extract_product_name, insert_external_links, linkify_domains
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -214,7 +214,7 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         product_positions = o.get("product_pos") or None
         if product_positions:
             product_positions = [tuple(p) for p in product_positions]
-        wm_opacity = int(o.get("watermark_opacity", 10) or 0)
+        wm_opacity = int(o.get("watermark_opacity", 15) or 0)
         wm_size = float(o.get("watermark_size", 1.0) or 1.0)
         product_scales = o.get("product_scales") or None
         product_nobg = o.get("product_nobg") or None
@@ -317,9 +317,10 @@ class ContentWorker(TrackedThread):
                                      should_stop=self._stopped)
             if self._stopped():
                 raise _Cancelled()
-            # 1) link nội bộ: mọi chỗ có tên miền của CHÍNH website này -> URL website
+            # 1) mọi chỗ có "www.<tên-miền>" -> link về ĐÚNG tên miền đó (bỏ www)
             raw_html = data.get("content_html", "")
-            html_out = linkify_site(raw_html, site.url or "", site.name or "")
+            all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
+            html_out = linkify_domains(raw_html, all_sites)
 
             # 2) link NGOÀI: mỗi site khác trong danh sách chèn 1 lần vào heading (h2..h5)
             others = [(x.url or "", x.name or "") for x in self.store.sites

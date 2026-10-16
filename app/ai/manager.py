@@ -4,6 +4,7 @@ from __future__ import annotations
 import html
 import json
 import re
+from urllib.parse import urlparse
 from pathlib import Path
 
 from ..storage import crypto
@@ -317,7 +318,58 @@ def linkify_site(html_text: str, site_url: str, site_name: str = "") -> str:
     return "".join(out)
 
 
-HEADING_RE = re.compile(r"^<h([2-5])\b", re.I)
+HEADING_RE = re.compile(r"^<h([2-6])\b", re.I)
+
+
+DOMAIN_RE = re.compile(
+    r"(?<![\w.@/])www\.([a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.[a-z]{2,})",
+    re.I,
+)
+
+
+def linkify_domains(html_text: str, sites: list[tuple[str, str]]) -> str:
+    """Bọc mọi 'www.<tên-miền>' trong bài thành thẻ <a> trỏ về ĐÚNG tên miền đó (bỏ www).
+
+    - sites: danh sách (url, tên) các website đã cấu hình -> nếu tên miền khớp thì dùng
+      đúng URL đã cấu hình; nếu không khớp thì dùng https://<tên-miền>.
+    - Không đụng vào chữ đã nằm trong thẻ <a>.
+    """
+    if not html_text:
+        return html_text
+    # map: tên miền (bỏ www, chữ thường) -> URL cấu hình
+    by_domain: dict[str, str] = {}
+    for url, _name in sites or []:
+        u = (url or "").strip().rstrip("/")
+        if not u:
+            continue
+        host = urlparse(u if "://" in u else "https://" + u).netloc.lower()
+        host = host[4:] if host.startswith("www.") else host
+        if host:
+            by_domain[host] = u if "://" in u else "https://" + u
+
+    parts = re.split(r"(<[^>]+>)", html_text)
+    out: list[str] = []
+    in_a = False
+    for part in parts:
+        if part.startswith("<"):
+            low = part.lower()
+            if low.startswith("<a "):
+                in_a = True
+            elif low.startswith("</a"):
+                in_a = False
+            out.append(part)
+            continue
+        if in_a or not part.strip():
+            out.append(part)
+            continue
+
+        def repl(m):
+            host = m.group(1).lower()
+            href = by_domain.get(host) or f"https://{host}"
+            return f'<a href="{href}">{m.group(0)}</a>'
+
+        out.append(DOMAIN_RE.sub(repl, part))
+    return "".join(out)
 
 
 def insert_external_links(html_text: str, links: list[tuple[str, str]],
@@ -345,7 +397,7 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
         if part.startswith("<"):
             if HEADING_RE.match(part):
                 depth_heading += 1
-            elif re.match(r"^</h[2-5]", part, re.I):
+            elif re.match(r"^</h[2-6]", part, re.I):
                 depth_heading = max(0, depth_heading - 1)
             out.append(part)
             i += 1
@@ -358,11 +410,12 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
                 if u in used_urls:
                     continue
                 for cand in cands:
-                    if cand in text:
+                    m = re.search(re.escape(cand), text, re.I)
+                    if m:
                         url, name = u, n
-                        pos = text.find(cand)
-                        text = (text[:pos] + f'<a href="{_norm_url(u)}">{cand}</a>'
-                                + text[pos + len(cand):])
+                        text = (text[:m.start()]
+                                + f'<a href="{_norm_url(u)}">{m.group(0)}</a>'
+                                + text[m.end():])
                         break
                 if url:
                     break

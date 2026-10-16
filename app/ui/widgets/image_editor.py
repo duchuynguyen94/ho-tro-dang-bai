@@ -271,7 +271,7 @@ class ImageEditorPanel(QFrame):
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
         self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 300, 180)
-        self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 10)
+        self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 15)
         self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
         right.addLayout(grid)
 
@@ -344,7 +344,7 @@ class ImageEditorPanel(QFrame):
         self._loading = True
         try:
             self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.8) or 1.8) * 100))
-            self.s_wm.setValue(int(self._opts.get("watermark_opacity", 10) or 0))
+            self.s_wm.setValue(int(self._opts.get("watermark_opacity", 15) or 0))
             self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
             mode = self._opts.get("footer_mode") or footer_mode or "bar1"
             self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
@@ -722,7 +722,7 @@ class ImageEditorPanel(QFrame):
     def _reset(self) -> None:
         self._opts = {}
         self.s_logo.setValue(180)
-        self.s_wm.setValue(10)
+        self.s_wm.setValue(15)
         self.s_wm_size.setValue(100)
         self._layout_items()
         self._layout_products()

@@ -195,6 +195,7 @@ class ConfigPage(QWidget):
         self.store.upsert_site(site)
         self.store.save()
         self.reload()
+        self._show(f"site:{site.id}")     # mở luôn panel của website vừa thêm
 
     def _on_site_saved(self) -> None:
         self.changed.emit()
@@ -446,7 +447,12 @@ class SitePanel(QWidget):
         if not path:
             return
         data = {"site": self.site.name, "steps": self._steps, "version": 1}
-        Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        try:
+            Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except OSError as exc:
+            show_toast(self, f"Export kịch bản THẤT BẠI: {exc}", 3600, ok=False)
+            return
+        show_toast(self, f"Đã export kịch bản ({len(self._steps)} bước) → {Path(path).name}", 3000)
 
     def _import(self) -> None:
         """Import kịch bản từ file — THAY LUÔN kịch bản cũ và tự lưu."""
