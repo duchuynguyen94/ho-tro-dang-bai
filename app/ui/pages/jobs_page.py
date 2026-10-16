@@ -57,6 +57,8 @@ STATUS_OBJECTS = {
 }
 
 MAX_IMAGES = 8      # số ảnh tối đa cho 1 bài (nút "+ Thêm hình")
+THUMB_W = 152       # bề rộng mỗi khung ảnh (cố định, không giãn ra)
+THUMB_H = 152
 
 IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tif", ".tiff")
 
@@ -447,7 +449,13 @@ class JobsPage(QWidget):
         self.images_row = QHBoxLayout(self.images_box)
         self.images_row.setContentsMargins(0, 0, 0, 0)
         self.images_row.setSpacing(8)
-        ev2.addWidget(self.images_box)
+        self.images_scroll = QScrollArea()
+        self.images_scroll.setWidgetResizable(False)   # giữ đúng bề rộng khung -> cuộn ngang khi nhiều ảnh
+        self.images_scroll.setFrameShape(QFrame.NoFrame)
+        self.images_scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.images_scroll.setFixedHeight(THUMB_H + 34)
+        self.images_scroll.setWidget(self.images_box)
+        ev2.addWidget(self.images_scroll)
         self.images_box.reordered.connect(self._reorder_images)
 
         self.add_img_btn = QPushButton("+ Thêm hình")
@@ -676,10 +684,16 @@ class JobsPage(QWidget):
         self._thumbs = []
         for i, im in enumerate(images, 1):
             box = self._image_box(i, im, len(images) > 1)
-            self.images_row.addWidget(box, 1)
+            box.setFixedWidth(THUMB_W)
+            self.images_row.addWidget(box, 0, Qt.AlignTop)
             self._thumbs.append(box)
+        self.images_row.addStretch(1)
         self.images_row.addWidget(self.add_img_btn, 0, Qt.AlignTop)
         self.add_img_btn.setEnabled(len(images) < MAX_IMAGES)
+        # giữ ĐÚNG bề rộng nội dung -> ít ảnh thì khung nhỏ gọn, nhiều ảnh thì cuộn ngang
+        need_w = len(images) * (THUMB_W + 8) + 150 + 16
+        self.images_box.setFixedWidth(max(260, need_w))
+        self.images_box.setFixedHeight(THUMB_H + 34)
 
         if getattr(self, "_sel_index", 0) >= len(images):
             self._sel_index = 0

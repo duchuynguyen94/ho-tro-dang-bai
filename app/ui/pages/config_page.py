@@ -189,7 +189,7 @@ class ConfigPage(QWidget):
         site = Site(
             name=name,
             url=base,
-            new_post_url=f"{base.rstrip('/')}/wp-admin/post-new.php",
+            new_post_url=f"{base.rstrip('/')}/wp-admin/post-new.php?post_type=product",
             watermark=base.rstrip("/"),
         )
         self.store.upsert_site(site)
