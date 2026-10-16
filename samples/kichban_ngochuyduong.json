@@ -177,7 +177,7 @@
     },
     {
       "action": "type",
-      "note": "Điền đường dẫn (slug) từ tiêu đề — tối đa 60 ký tự",
+      "note": "Điền đường dẫn (slug) từ tiêu đề — tối đa 65 ký tự",
       "selector": "#new-post-slug",
       "selectors": [
         "#new-post-slug",
@@ -245,11 +245,12 @@
     {
       "action": "click",
       "note": "Đặt làm ảnh sản phẩm",
-      "selector": ".media-toolbar-primary button",
+      "selector": "button.media-button-select",
       "selectors": [
-        ".media-toolbar-primary button",
         "button.media-button-select",
-        "button:has-text('Đặt ảnh sản phẩm')"
+        ".media-toolbar-primary .media-button-select",
+        "button:has-text('Đặt ảnh sản phẩm')",
+        "button:has-text('Thêm vào thư viện')"
       ],
       "value": "",
       "source": "auto"
@@ -308,10 +309,11 @@
     {
       "action": "click",
       "note": "Thêm vào thư viện ảnh sản phẩm",
-      "selector": ".media-toolbar-primary button",
+      "selector": "button.media-button-select",
       "selectors": [
-        ".media-toolbar-primary button",
         "button.media-button-select",
+        ".media-toolbar-primary .media-button-select",
+        "button:has-text('Đặt ảnh sản phẩm')",
         "button:has-text('Thêm vào thư viện')"
       ],
       "value": "",

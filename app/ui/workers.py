@@ -493,6 +493,14 @@ class PostWorker(TrackedThread):
                     self.log.emit("Mở trang tạo bài viết…")
                     page.goto(site.new_post_url, wait_until="domcontentloaded")
                 wait_editor_ready(page, log=self.log.emit)
+                # Hộp thoại (alert/confirm) của web: ghi log + chọn "Hủy bỏ" để KHÔNG xoá gì
+                try:
+                    page.on("dialog", lambda d: (
+                        self.log.emit(f"  (web hỏi: {str(d.message)[:80]}…)"),
+                        d.dismiss(),
+                    ))
+                except Exception:
+                    pass
                 self.log.emit("Phát lại kịch bản…")
                 uploads = (self.result.get("post_images")
                            or [im["path"] for im in self.result.get("images", [])])
@@ -510,7 +518,7 @@ class PostWorker(TrackedThread):
                     ctx[f"image_{_n}"] = _p
                 ctx["image"] = uploads[0] if uploads else ""
                 # đường dẫn (slug) tạo từ tiêu đề, tối đa 60 ký tự
-                ctx["slug"] = make_slug(ctx["title"], 60)
+                ctx["slug"] = make_slug(ctx["title"], 65)
                 try:
                     play_script(page, site.script, ctx, log=self.log.emit)
                 except Exception as exc:
