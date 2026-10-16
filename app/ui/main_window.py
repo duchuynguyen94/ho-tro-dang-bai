@@ -163,6 +163,7 @@ class MainWindow(QMainWindow):
         task.status = STATUS_GENERATING
         task.progress = 10
         task.message = ""
+        task.error_stage = ""
         self.store.upsert_task(task)
         self.store.save()
 
@@ -194,6 +195,7 @@ class MainWindow(QMainWindow):
             fresh.result = result
             fresh.status = STATUS_REVIEW
             fresh.progress = 100
+            fresh.error_stage = ""
             self.store.upsert_task(fresh)
             self.store.save()
         except Exception as exc:      # noqa: BLE001
@@ -238,6 +240,7 @@ class MainWindow(QMainWindow):
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.status = STATUS_ERROR
         fresh.message = err
+        fresh.error_stage = "content"
         self.store.upsert_task(fresh)
         self.store.save()
         self._log_err("Tạo nội dung", err)
@@ -400,6 +403,7 @@ class MainWindow(QMainWindow):
         # Nội dung đã có -> GIỮ NGUYÊN "Chờ đăng", KHÔNG chuyển sang trang tạo lại
         fresh.status = STATUS_REVIEW if has_content else STATUS_ERROR
         fresh.message = err
+        fresh.error_stage = "post" if has_content else "content"
         self.store.upsert_task(fresh)
         self.store.save()
         self._log_err("Đăng bài", err)

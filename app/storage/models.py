@@ -217,6 +217,7 @@ class Task:
     footer_mode: str = "random"      # random | bar1 | bar2 (chọn ở trình sửa ảnh)
     status: str = STATUS_QUEUED
     progress: int = 0
+    error_stage: str = ""   # "" | "content" | "post" (lỗi ở bước nào)
     message: str = ""
     created_at: str = field(default_factory=now_iso)
     result: dict[str, Any] = field(default_factory=dict)
@@ -238,6 +239,7 @@ class Task:
             footer_mode=d.get("footer_mode", "random"),
             status=d.get("status", STATUS_QUEUED),
             progress=int(d.get("progress", 0)),
+            error_stage=d.get("error_stage", ""),
             message=d.get("message", ""),
             created_at=d.get("created_at", now_iso()),
             result=dict(d.get("result") or {}),

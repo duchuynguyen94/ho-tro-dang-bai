@@ -57,10 +57,65 @@ def _is_usable_image(url: str) -> bool:
     return True
 
 
+def _pdf_source(url: str, data: bytes, max_chars: int) -> dict:
+    """Đọc nguồn là FILE PDF (link .pdf hoặc file trên máy)."""
+    import io
+
+    from pypdf import PdfReader
+
+    reader = PdfReader(io.BytesIO(data))
+    pages = [(pg.extract_text() or "") for pg in reader.pages]
+    text = "\n".join(pages)
+    lines = [ln.strip() for ln in text.splitlines()]
+    text = "\n".join(ln for ln in lines if ln)
+    text = re.sub(r"\n{3,}", "\n\n", text)[:max_chars]
+    title = ""
+    try:
+        meta = reader.metadata or {}
+        title = str(meta.get("/Title") or "").strip()
+    except Exception:
+        title = ""
+    if not title:
+        first = next((ln for ln in text.splitlines() if len(ln) > 8), "")
+        title = first[:120]
+    return {"url": url, "title": title, "text": text, "images": []}
+
+
 def fetch_source(url: str, max_chars: int = 6000) -> dict:
-    """Tải trang nguồn: trả về tiêu đề, văn bản, danh sách ảnh."""
-    r = httpx.get(url, headers=UA, follow_redirects=True, timeout=40)
+    """Tải trang nguồn: trả về tiêu đề, văn bản, danh sách ảnh.
+
+    Hỗ trợ cả HTML và FILE PDF (link .pdf hoặc file PDF trên máy).
+    """
+    # file trên máy
+    try:
+        local = Path(url)
+        if local.exists() and local.is_file():
+            data = local.read_bytes()
+            if local.suffix.lower() == ".pdf" or data[:4] == b"%PDF":
+                return _pdf_source(url, data, max_chars)
+            html = data.decode("utf-8", errors="ignore")
+            soup = BeautifulSoup(html, "lxml")
+            title = soup.title.string.strip() if (soup.title and soup.title.string) else local.stem
+            for tag in soup(["script", "style", "noscript", "header", "footer", "nav", "form"]):
+                tag.decompose()
+            text = "\n".join(ln.strip() for ln in soup.get_text("\n").splitlines() if ln.strip())
+            return {"url": url, "title": title, "text": re.sub(r"\n{3,}", "\n\n", text)[:max_chars],
+                    "images": _extract_images(soup, url)}
+    except OSError:
+        pass
+
+    r = httpx.get(url, headers=UA, follow_redirects=True, timeout=60)
     r.raise_for_status()
+
+    # nguồn là PDF?
+    ctype = (r.headers.get("content-type") or "").lower()
+    if url.lower().split("?")[0].endswith(".pdf") or "application/pdf" in ctype \
+            or r.content[:4] == b"%PDF":
+        try:
+            return _pdf_source(url, r.content, max_chars)
+        except Exception as exc:      # noqa: BLE001
+            raise RuntimeError(f"Không đọc được file PDF: {exc}") from exc
+
     html = r.text
 
     soup = BeautifulSoup(html, "lxml")

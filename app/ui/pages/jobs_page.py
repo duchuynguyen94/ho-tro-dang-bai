@@ -616,10 +616,11 @@ class JobsPage(QWidget):
             msg = task.message or "Lỗi không xác định."
             r = task.result or {}
             has_content = bool(r.get("content_html") or r.get("title"))
+            stage = getattr(task, "error_stage", "") or ("post" if has_content else "content")
             low = msg.lower()
             missing_key = "thiếu api key" in low or ("api key" in low and "thiếu" in low)
 
-            if has_content:
+            if stage == "post":
                 # Nội dung đã có -> lỗi ở bước ĐĂNG BÀI, không cần tạo lại nội dung
                 self.retry_btn.setText("↻ Thử ĐĂNG LẠI")
                 self.retry_btn.setToolTip("Nội dung đã có sẵn — chỉ đăng lại, không tạo lại nội dung")
@@ -641,11 +642,13 @@ class JobsPage(QWidget):
         self._load(task)
 
     def _on_retry(self) -> None:
-        """Nút thử lại: có nội dung rồi -> ĐĂNG LẠI; chưa có -> tạo lại nội dung."""
+        """Nút thử lại: lỗi ở bước ĐĂNG -> đăng lại; lỗi ở bước TẠO NỘI DUNG -> tạo lại."""
         if not self.current:
             return
         r = self.current.result or {}
-        if r.get("content_html") or r.get("title"):
+        has_content = bool(r.get("content_html") or r.get("title"))
+        stage = getattr(self.current, "error_stage", "") or ("post" if has_content else "content")
+        if stage == "post":
             self.post.emit(self.current)
         else:
             self.regenerate.emit(self.current, "")
