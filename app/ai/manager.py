@@ -54,12 +54,14 @@ CONTENT_OUTPUT_SPEC = (
     "bảng model [Keyword] [Brand] [Model] đầy đủ? Gửi yêu cầu: thach.phan@ngochuyduong.com”\n"
     "13. <h2>FAQ (5 câu)</h2>: 5 câu hỏi kèm câu trả lời ngắn, sát sản phẩm.\n"
     "Giữ NGUYÊN các dòng liên hệ lặp lại giữa các mục (không bỏ, không đổi website/điện thoại/email).\n"
-    "ICON ĐẦU MỤC (BẮT BUỘC, đặt NGAY TRƯỚC tiêu đề mục): 🔖 tiêu đề bài viết (h1); 📌 Giới thiệu tổng quan; "
+    "ICON ĐẦU MỤC (BẮT BUỘC, đặt NGAY TRƯỚC tiêu đề mục): 🏷️ tiêu đề bài viết (h1); 📌 Giới thiệu tổng quan; "
     "⚙️ Tính năng kỹ thuật nổi bật; 📋 Thông số kỹ thuật tiêu chuẩn; 🧱 Vật liệu & xử lý – Độ bền vượt trội; "
     "🔄 Tương thích – Thay thế – Mở rộng; 🎯 Ứng dụng thực tế; 💡 Tại sao nên mua tại Ngọc Huy Dương?; "
-    "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; ✳️ Phiên bản & Mã sản phẩm; ✳️ FAQ (5 câu).\n"
-    "ICON Ở DÒNG LIÊN HỆ: 🌐 trước website, 📞 trước số điện thoại, 📧 trước “Gửi yêu cầu tư vấn kỹ thuật”, "
-    "✉️ trước email trong dòng “Liên hệ ngay”, 📩 trước “Bạn cần bảng model … đầy đủ?”."
+    "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; 🧩 Phiên bản & Mã sản phẩm; 🧩 FAQ (5 câu).\n"
+    "ICON Ở DÒNG LIÊN HỆ: 🌐 trước website; ☎️ trước số điện thoại trong dòng liên hệ lặp lại; "
+    "📞 trước hotline ở các dòng “Liên hệ ngay:”, “Hotline:”, “Hỗ trợ chọn cấu hình…”, “Gọi tư vấn theo ngành:”; "
+    "📧 trước “Gửi yêu cầu tư vấn kỹ thuật”, ✉️ trước email trong dòng “Liên hệ ngay”, "
+    "📩 trước “Bạn cần bảng model … đầy đủ?”."
 )
 
 # Kết quả bước 2 (theo Rule SEO)
@@ -485,7 +487,7 @@ DEFAULT_SECTIONS = (
 
 
 # Icon đầu mục theo template (mục 5. TEMPLATE của Rule_Content)
-TITLE_ICON = "🔖"
+TITLE_ICON = "🏷️"
 SECTION_ICONS = (
     ("Giới thiệu tổng quan", "📌"),
     ("Giới thiệu chung", "📌"),
@@ -500,13 +502,13 @@ SECTION_ICONS = (
     ("Ứng dụng thực tế", "🎯"),
     ("Tại sao nên mua", "💡"),
     ("Liên hệ – Đặt hàng", "📞"),
-    ("Phiên bản & Mã sản phẩm", "✳️"),
-    ("Phiên bản và Mã sản phẩm", "✳️"),
-    ("FAQ", "✳️"),
-    ("Hỏi đáp", "✳️"),
-    ("Hỏi & Đáp", "✳️"),
-    ("Câu hỏi thường gặp", "✳️"),
-    ("Câu hỏi đáp", "✳️"),
+    ("Phiên bản & Mã sản phẩm", "🧩"),
+    ("Phiên bản và Mã sản phẩm", "🧩"),
+    ("FAQ", "🧩"),
+    ("Hỏi đáp", "🧩"),
+    ("Hỏi & Đáp", "🧩"),
+    ("Câu hỏi thường gặp", "🧩"),
+    ("Câu hỏi đáp", "🧩"),
 )
 _PHONE_RE = re.compile(r"0\d{2,4}[\s.\-]?\d{3}[\s.\-]?\d{3,4}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
@@ -526,12 +528,16 @@ def split_leading_icon(text: str) -> tuple[str, str]:
     return m.group(1), text[m.end():]
 
 
-def _prepend_icon(s: str, icon: str) -> str:
-    """Thêm icon vào đầu dòng, giữ nguyên khoảng trắng đầu (không thêm nếu đã có)."""
-    if not s.strip() or s.lstrip().startswith(icon):
+def _prepend_icon(s: str, icon: str, alt: tuple[str, ...] = ()) -> str:
+    """Thêm icon vào đầu dòng (thay icon cũ cùng nhóm nếu có), giữ khoảng trắng đầu."""
+    st = s.lstrip()
+    if not st:
         return s
-    lead = s[: len(s) - len(s.lstrip())]
-    return f"{lead}{icon} {s.lstrip()}"
+    lead = s[: len(s) - len(st)]
+    for ic in (icon, *alt):
+        if st.startswith(ic):
+            return f"{lead}{icon}{st[len(ic):]}"
+    return f"{lead}{icon} {st}"
 
 
 def _section_icon(text: str) -> str:
@@ -545,29 +551,38 @@ def _section_icon(text: str) -> str:
 def _decorate_line(text: str) -> str:
     """Chèn icon vào các DÒNG LIÊN HỆ theo đúng template (idempotent)."""
     s = text
-    low = s.strip().lower()
+    if not s.strip():
+        return s
+    # bỏ icon ở đầu để nhận dạng NHÃN (vd "☎️ Liên hệ ngay: …" -> "Liên hệ ngay: …")
+    low = re.sub(rf"^[\s{_ICON_CHARS}]+", "", s).strip().lower()
     if not low:
         return s
 
-    # dòng liên hệ có cả website + số điện thoại: 🌐 website | 📞 phone | email
+    # dòng liên hệ có cả website + số điện thoại: 🌐 website | ☎️ phone | email
     if ("www." in low or "http" in low) and _PHONE_RE.search(s):
         s = re.sub(r"(?<!🌐\s)((?:https?://)?www\.[^\s|]+)", r"🌐 \1", s, count=1, flags=re.I)
-        s = re.sub(rf"(?<!📞\s)({_PHONE_RE.pattern})", r"📞 \1", s, count=1)
+        m = _PHONE_RE.search(s)
+        if m:
+            prefix = re.sub(r"[☎📞]️?\s*$", "", s[: m.start()])   # bỏ icon điện thoại cũ
+            s = f"{prefix}☎️ {s[m.start():]}"
         return s
 
     if low.startswith("liên hệ ngay"):
-        s = re.sub(rf"(?<!✉️\s)({_EMAIL_RE.pattern})", r"✉️ \1", s, count=1)
-        return _prepend_icon(s, "📞")
+        m = _EMAIL_RE.search(s)
+        if m:
+            prefix = re.sub(r"[✉📧]️?\s*$", "", s[: m.start()])   # bỏ icon email cũ
+            s = f"{prefix}✉️ {s[m.start():]}"
+        return _prepend_icon(s, "📞", ("☎️", "☎"))
     if low.startswith("gửi yêu cầu tư vấn kỹ thuật"):
-        return _prepend_icon(s, "📧")
+        return _prepend_icon(s, "📧", ("✉️", "✉"))
     if low.startswith("hỗ trợ chọn cấu hình") or low.startswith("gọi tư vấn theo ngành"):
-        return _prepend_icon(s, "📞")
+        return _prepend_icon(s, "📞", ("☎️", "☎"))
     if low.startswith("website:"):
         return _prepend_icon(s, "🌐")
     if low.startswith("email:"):
-        return _prepend_icon(s, "📧")
+        return _prepend_icon(s, "📧", ("✉️", "✉"))
     if low.startswith("hotline:"):
-        return _prepend_icon(s, "📞")
+        return _prepend_icon(s, "📞", ("☎️", "☎"))
     if low.startswith("bạn cần bảng model"):
         return _prepend_icon(s, "📩")
     return s
@@ -582,26 +597,35 @@ def apply_template_icons(html_text: str) -> str:
         return html_text
     parts = re.split(r"(<[^>]+>)", html_text)
     out: list[str] = []
-    open_head: list[dict] = []      # heading h1/h2 đang mở
+    open_head: list[dict] = []      # heading h1-h4 đang mở
     head_seen = 0
     for part in parts:
         if part.startswith("<"):
             if re.match(r"^<h([1-4])\b", part, re.I):
                 head_seen += 1
-                open_head.append({"pos": len(out), "n": head_seen, "text": []})
+                open_head.append({"pos": len(out), "n": head_seen, "text": [],
+                                  "first": None})
                 out.append(part)
                 continue
             if re.match(r"^</h[1-4]", part, re.I) and open_head:
                 info = open_head.pop()
                 inner = "".join(info["text"]).strip()
                 icon = TITLE_ICON if info["n"] == 1 else _section_icon(inner)
-                if icon and _HAS_ICON_RE.match(inner):
-                    out.insert(info["pos"] + 1, f"{icon} ")
+                if icon:
+                    idx = info["first"]
+                    if idx is not None:
+                        # thay icon cũ (nếu AI viết sai) bằng icon ĐÚNG của template
+                        _old, rest = split_leading_icon(out[idx])
+                        out[idx] = f"{icon} {rest}" if rest.strip() else f"{icon} "
+                    else:
+                        out.insert(info["pos"] + 1, f"{icon} ")
                 out.append(part)
                 continue
             out.append(part)
             continue
         if open_head:
+            if open_head[-1]["first"] is None and part.strip():
+                open_head[-1]["first"] = len(out)
             open_head[-1]["text"].append(part)
         out.append(_decorate_line(part))
     return "".join(out)
