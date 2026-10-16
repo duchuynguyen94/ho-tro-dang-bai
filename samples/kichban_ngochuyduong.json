@@ -266,6 +266,28 @@
       "optional": true
     },
     {
+      "action": "type",
+      "note": "Image Caption ảnh 1 ← tiêu đề bài viết",
+      "selector": "#attachment-details-caption",
+      "selectors": [
+        "#attachment-details-caption"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "type",
+      "note": "Miêu tả ảnh 1 ← tiêu đề bài viết",
+      "selector": "#attachment-details-description",
+      "selectors": [
+        "#attachment-details-description"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
       "action": "click",
       "note": "Đặt làm ảnh sản phẩm",
       "selector": "button.media-button-select",
@@ -348,6 +370,28 @@
       "selectors": [
         "#attachment-details-alt-text",
         ".media-sidebar textarea"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "type",
+      "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
+      "selector": "#attachment-details-caption",
+      "selectors": [
+        "#attachment-details-caption"
+      ],
+      "value": "{{title}}",
+      "source": "auto",
+      "optional": true
+    },
+    {
+      "action": "type",
+      "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
+      "selector": "#attachment-details-description",
+      "selectors": [
+        "#attachment-details-description"
       ],
       "value": "{{title}}",
       "source": "auto",
