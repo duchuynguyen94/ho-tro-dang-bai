@@ -300,8 +300,7 @@ class SitePanel(QWidget):
         bar = QHBoxLayout()
         for label, slot in [
             ("⬇ Export", self._export),
-            ("⬆ Import", self._import),
-            ("🗑 Xoá kịch bản", self._clear_script),
+            ("⬆ Import (thay kịch bản cũ)", self._import),
         ]:
             b = QPushButton(label)
             b.setProperty("class", "ghost")
@@ -406,45 +405,39 @@ class SitePanel(QWidget):
 
     # ------------------------------------------------------------------ #
     def _save_steps(self) -> None:
-        steps: list[dict] = []
-        for i in range(self.script_table.rowCount()):
-            old = dict(self._steps[i]) if i < len(self._steps) else {}
-            old["note"] = self._cell(i, 1)
-            old["selector"] = self._cell(i, 2)
-            old.setdefault("action", "click")
-            old.setdefault("value", "")
-            old.setdefault("selectors", [])
-            old.setdefault("source", "recorded")
-            steps.append(old)
         try:
-            self._steps = steps
-            self.site.script = Script(steps=[ScriptStep.from_dict(x) for x in steps]) if steps else None
-            self.store.upsert_site(self.site)
-            self.store.save()
+            steps: list[dict] = []
+            for i in range(self.script_table.rowCount()):
+                old = dict(self._steps[i]) if i < len(self._steps) else {}
+                old["note"] = self._cell(i, 1)
+                old["selector"] = self._cell(i, 2)
+                old.setdefault("action", "click")
+                old.setdefault("value", "")
+                old.setdefault("selectors", [])
+                old.setdefault("source", "recorded")
+                steps.append(old)
         except Exception as exc:      # noqa: BLE001
             show_toast(self, f"Lưu kịch bản THẤT BẠI: {exc}", 3400, ok=False)
             return
-        show_toast(self, "Đã lưu kịch bản")
+        self._apply_steps(steps, "Đã lưu kịch bản")
 
     def _cell(self, row: int, col: int) -> str:
         item = self.script_table.item(row, col)
         return item.text() if item else ""
 
-    def _clear_script(self) -> None:
-        from PySide6.QtWidgets import QMessageBox
-
-        ans = QMessageBox.question(
-            self, "Xoá kịch bản", "Xoá toàn bộ kịch bản của website này?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if ans != QMessageBox.Yes:
+    def _apply_steps(self, steps: list[dict], msg: str) -> None:
+        """Ghi kịch bản vào cấu hình website (tự lưu)."""
+        try:
+            self._steps = steps
+            self.site.script = (Script(steps=[ScriptStep.from_dict(x) for x in steps])
+                                if steps else None)
+            self.store.upsert_site(self.site)
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"{msg} THẤT BẠI: {exc}", 3400, ok=False)
             return
-        self._steps = []
-        self.site.script = None
-        self.store.upsert_site(self.site)
-        self.store.save()
         self._refresh_steps()
-        show_toast(self, "Đã xoá kịch bản")
+        show_toast(self, msg)
 
     def _export(self) -> None:
         path, _ = QFileDialog.getSaveFileName(
@@ -456,15 +449,20 @@ class SitePanel(QWidget):
         Path(path).write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def _import(self) -> None:
+        """Import kịch bản từ file — THAY LUÔN kịch bản cũ và tự lưu."""
         path = _pick_file(self, "Import kịch bản", "JSON (*.json)")
         if not path:
             return
         try:
             data = json.loads(Path(path).read_text(encoding="utf-8"))
-            self._steps = list(data.get("steps", []))
-            self._refresh_steps()
-        except (json.JSONDecodeError, OSError):
-            pass
+        except (json.JSONDecodeError, OSError) as exc:
+            show_toast(self, f"File kịch bản không đọc được: {exc}", 3400, ok=False)
+            return
+        steps = [dict(x) for x in (data.get("steps") or []) if isinstance(x, dict)]
+        if not steps:
+            show_toast(self, "File kịch bản không có bước nào", 3400, ok=False)
+            return
+        self._apply_steps(steps, f"Đã import kịch bản ({len(steps)} bước) — thay kịch bản cũ")
 
     def _test(self) -> None:
         if self.login_worker and self.login_worker.isRunning():
