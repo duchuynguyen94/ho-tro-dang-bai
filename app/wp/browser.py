@@ -178,6 +178,8 @@ class WPBrowser:
                     kwargs = dict(
                         user_data_dir=_user_data_dir(self.site_id),
                         headless=self.headless,
+                        # giữ SANDBOX của Chrome (tránh cảnh báo "--no-sandbox")
+                        chromium_sandbox=True,
                         args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
                     )
                     if self.headless:

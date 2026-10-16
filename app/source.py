@@ -189,7 +189,7 @@ def search_images(query: str, limit: int = 10, log=None) -> list[str]:
             br = None
             for kwargs in ({"channel": "chrome"}, {"channel": "msedge"}, {}):
                 try:
-                    br = pw.chromium.launch(headless=True, **kwargs)
+                    br = pw.chromium.launch(headless=True, chromium_sandbox=True, **kwargs)
                     break
                 except Exception:
                     br = None
