@@ -157,12 +157,21 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 _locate(page, step).click(force=bool(step.force), timeout=15000)
             elif action == "type":
                 value = render(step.value, ctx)
-                loc = _locate(page, step)
-                try:
-                    loc.fill(value, force=bool(step.force), timeout=15000)
-                except Exception:
-                    loc.click(force=True)
-                    page.keyboard.insert_text(value)
+                _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
+            elif action in ("panel", "open_panel"):
+                # Mở bảng (metabox) nếu phần tử bên trong đang bị ẩn
+                check = render(step.value or "", ctx)
+                need = True
+                if check:
+                    try:
+                        loc = _make(page, check)
+                        n = min(loc.count(), 5)
+                        need = not any(loc.nth(i).is_visible() for i in range(n))
+                    except Exception:
+                        need = True
+                if need:
+                    _locate(page, step).click(force=True, timeout=8000)
+                    time.sleep(0.6)
             elif action == "select":
                 _locate(page, step).select_option(render(step.value, ctx))
             elif action == "upload":

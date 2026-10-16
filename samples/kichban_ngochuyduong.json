@@ -89,6 +89,20 @@
       "source": "auto"
     },
     {
+      "action": "open_panel",
+      "note": "Mở card Rank Math SEO (nếu đang thu gọn)",
+      "selector": "#rank_math_metabox .handlediv",
+      "selectors": [
+        "#rank_math_metabox .handlediv",
+        "#rank_math_metabox button.handlediv",
+        "#rank_math_metabox h2",
+        "#rank_math_metabox .hndle"
+      ],
+      "value": "input[placeholder='Ví dụ: Rank Math SEO']",
+      "source": "auto",
+      "optional": true
+    },
+    {
       "action": "type",
       "note": "AI focus keyword → Từ khoá chính (Rank Math)",
       "selector": "input[placeholder='Ví dụ: Rank Math SEO']",
@@ -98,8 +112,7 @@
         "#rank_math_metabox input[type='text']"
       ],
       "value": "{{focus_keyword}}",
-      "source": "auto",
-      "force": true
+      "source": "auto"
     },
     {
       "action": "type",
