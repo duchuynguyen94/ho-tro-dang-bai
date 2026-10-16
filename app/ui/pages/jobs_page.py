@@ -627,14 +627,14 @@ class JobsPage(QWidget):
             missing_key = "thiếu api key" in low or ("api key" in low and "thiếu" in low)
 
             if stage == "post":
-                # Nội dung đã có -> lỗi ở bước ĐĂNG BÀI, không cần tạo lại nội dung
-                self.retry_btn.setText("↻ Thử ĐĂNG LẠI")
-                self.retry_btn.setToolTip("Nội dung đã có sẵn — chỉ đăng lại, không tạo lại nội dung")
-                title = "Không đăng được bài."
-            else:
-                self.retry_btn.setText("↻ Thử tạo lại")
-                self.retry_btn.setToolTip("Tạo lại nội dung bằng AI")
-                title = "Không tạo được nội dung."
+                # Lỗi ở bước ĐĂNG BÀI: việc đăng do người dùng tự bấm trên WordPress,
+                # nên KHÔNG báo lỗi — vẫn hiện panel kết quả bình thường để họ tự kiểm tra.
+                self.footer.show()
+                self._load(task)
+                return
+            self.retry_btn.setText("↻ Thử tạo lại")
+            self.retry_btn.setToolTip("Tạo lại nội dung bằng AI")
+            title = "Không tạo được nội dung."
 
             body = f"<b>{title}</b><br><br>{str(msg).replace(chr(10), '<br>')}"
             # CHỈ gợi ý khi provider thiếu API key; các lỗi khác chỉ báo lý do (đã lưu vào Log lỗi)

@@ -421,11 +421,9 @@ class MainWindow(QMainWindow):
             traceback.print_exc()
             self._log_err("Hiển thị kết quả", str(exc))
         self._refresh_count()
-        if has_content:
-            show_toast(self, "Đăng bài lỗi — nội dung vẫn được giữ nguyên", 3600, ok=False)
-            self.status("Đăng bài lỗi — nội dung vẫn giữ. Xem tab Log lỗi.")
-        else:
-            self.status("Sẵn sàng")
+        # KHÔNG hiện cảnh báo "không đăng được bài": việc đăng do người dùng tự bấm
+        # trên WordPress. Lỗi vẫn được ghi vào tab Log lỗi để tra khi cần.
+        self.status("Nội dung vẫn được giữ nguyên — bạn tự kiểm tra/đăng lại trên WordPress.")
 
     def _maybe_sheets(self, task) -> None:
         cfg = self.store.sheets
