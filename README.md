@@ -56,6 +56,5 @@ app/
   wp/                  # trình duyệt, ghi & phát lại kịch bản
   sheets/              # Google Sheets
   ui/                  # giao diện PySide6
-mockups/               # bản phác thảo giao diện (HTML/PNG)
 tools/dev_shot.py      # tạo dữ liệu mẫu + chụp ảnh màn hình (khi phát triển)
 ```
