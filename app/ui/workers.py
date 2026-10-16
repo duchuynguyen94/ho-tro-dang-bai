@@ -304,14 +304,11 @@ class ContentWorker(TrackedThread):
             page = src.fetch_source(t.source_url)
             self.progress.emit(25)
 
-            product_urls = page.get("images", [])[:3]
-            self.log.emit(f"Tìm thấy {len(page.get('images', []))} ảnh; tải {len(product_urls)} ảnh sản phẩm.")
+            # KHÔNG tự tải/chèn ảnh nữa: chỉ lưu danh sách ảnh nguồn để người dùng chọn
+            source_images = [u for u in (page.get("images") or []) if u]
+            self.log.emit(f"Tìm thấy {len(source_images)} ảnh trên trang nguồn "
+                          "(chọn trong trình sửa ảnh → “Hình từ nguồn”).")
             product_paths: list[str] = []
-            for u in product_urls:
-                try:
-                    product_paths.append(src.download_image(u))
-                except Exception as exc:
-                    self.log.emit(f"  bỏ qua 1 ảnh: {exc}")
             self.progress.emit(45)
 
             if self._stopped():
@@ -373,6 +370,7 @@ class ContentWorker(TrackedThread):
                     "images": images,
                     "brand_logo": brand_logo,
                     "product_images": product_paths,
+                    "source_images": source_images,
                     "source_title": page.get("title", ""),
                 }
             )
@@ -693,6 +691,37 @@ class ImageRefetchWorker(TrackedThread):
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))
+
+
+class SourceImageDownloadWorker(TrackedThread):
+    """Tải danh sách ảnh từ link nguồn về máy (để hiện trong popup chọn ảnh)."""
+
+    done = Signal(str, str)        # (url, đường dẫn file) hoặc (url, "")
+    progress = Signal(str)
+
+    def __init__(self, urls: list[str]) -> None:
+        super().__init__()
+        self.urls = list(urls)
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        from .. import source as src
+
+        total = len(self.urls)
+        for i, url in enumerate(self.urls, 1):
+            if self._stop:
+                break
+            self.progress.emit(f"Đang tải ảnh {i}/{total}…")
+            path = ""
+            try:
+                path = src.download_image(url)
+            except Exception:
+                path = ""
+            self.done.emit(url, path)
+        self.progress.emit("")
 
 
 class ImageEditWorker(TrackedThread):

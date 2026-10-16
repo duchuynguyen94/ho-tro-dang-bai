@@ -28,18 +28,19 @@ def _extract_images(soup: BeautifulSoup, base_url: str) -> list[str]:
             val = img.get(attr)
             if not val:
                 continue
-            candidate = val.split(",")[0].strip().split(" ")[0]
-            if not candidate:
-                continue
+            candidate = str(val).split(",")[0].strip().split(" ")[0]
+            if not candidate or candidate.startswith("data:"):
+                continue  # bỏ ảnh placeholder nội tuyến, thử thuộc tính kế tiếp (data-src…)
             full = urljoin(base_url, candidate)
             if _is_usable_image(full):
                 urls.append(full)
-            break
-    # loại trùng, giữ thứ tự
+                break
+    # loại trùng (kể cả các biến thể -300x300, -150x150 của cùng 1 ảnh), giữ thứ tự
     seen, out = set(), []
     for u in urls:
-        if u not in seen:
-            seen.add(u)
+        key = re.sub(r"-\d{2,4}x\d{2,4}(?=\.[a-z]+$)", "", u.lower())
+        if key not in seen:
+            seen.add(key)
             out.append(u)
     return out
 

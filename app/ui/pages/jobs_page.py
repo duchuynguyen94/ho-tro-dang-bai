@@ -9,6 +9,7 @@ from PySide6.QtGui import QDesktopServices, QDrag, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
+    QDialog,
     QFileDialog,
     QFrame,
     QHBoxLayout,
@@ -467,6 +468,7 @@ class JobsPage(QWidget):
                                                              getattr(self, "_sel_index", 0)))
         self.img_editor.request_export.connect(
             lambda: self.current and self.export_images.emit(self.current))
+        self.img_editor.request_source_picker.connect(self._pick_source_image)
         ev2.addWidget(self.img_editor)
 
         # Ctrl/Cmd + V: dán ảnh (copy từ web hoặc máy tính) vào canvas
@@ -948,8 +950,46 @@ class JobsPage(QWidget):
             traceback.print_exc()
         return super().eventFilter(obj, event)
 
+    def _pick_source_image(self) -> None:
+        """Popup: chọn 1 ảnh từ link nguồn để chèn vào canvas (hình đang sửa)."""
+        if not self.current:
+            return
+        urls = [u for u in ((self.current.result or {}).get("source_images") or []) if u]
+        if not urls:
+            # chưa có danh sách -> lấy lại từ link nguồn
+            src_url = (self.current.source_url or "").strip()
+            if not src_url:
+                show_toast(self, "Không có link nguồn để lấy ảnh", 3000, ok=False)
+                return
+            from PySide6.QtCore import Qt as _Qt
+
+            from ...source import fetch_source
+
+            QApplication.setOverrideCursor(_Qt.WaitCursor)
+            try:
+                page = fetch_source(src_url)
+                urls = [u for u in (page.get("images") or []) if u]
+            except Exception as exc:      # noqa: BLE001
+                show_toast(self, f"Không đọc được link nguồn: {exc}", 3400, ok=False)
+                return
+            finally:
+                QApplication.restoreOverrideCursor()
+            if not urls:
+                show_toast(self, "Link nguồn không có ảnh nào", 3000, ok=False)
+                return
+            r = self.current.result = dict(self.current.result or {})
+            r["source_images"] = urls
+            self.store.upsert_task(self.current)
+            self.store.save()
+        from ..widgets.source_images import SourceImageDialog
+
+        dlg = SourceImageDialog(urls, self)
+        if dlg.exec() == QDialog.Accepted and dlg.chosen:
+            self._add_upload_component(dlg.chosen, getattr(self, "_sel_index", 0))
+            show_toast(self, "Đã chèn ảnh vào canvas", 2000)
+
     def _add_upload_component(self, path: str, index: int) -> None:
-        """Thêm 1 ảnh (tải lên hoặc dán) thành thành phần ở giữa canvas."""
+        """Thêm 1 ảnh (tải lên / dán / chọn từ nguồn) thành thành phần ở giữa canvas."""
         if not self.current or not path:
             return
         self._save()
