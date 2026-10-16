@@ -134,22 +134,14 @@ Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 
 def build_combined_short_prompt(source: dict) -> str:
     """1 prompt ngắn cho ChatGPT (2 file rule nằm trong Project đã đính kèm)."""
-    return f"""Đọc bài viết tại link dưới đây, viết lại thành 1 bài viết mới theo file **rule_content.pdf**
-đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file **rule_seo.pdf**
-cũng trong Project này.
-
-Link bài viết nguồn: {source.get('url', '')}
+    return f"""Đọc bài viết tại link nguồn **{source.get('url', '')}** viết lại thành 1 bài viết mới theo file "rule_content.pdf" đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này.
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
-1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng **HTML thật** theo rule_content.pdf, đủ các mục:
-{CONTENT_OUTPUT_SPEC}
-
-
+1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng "HTML" theo template trong rule_content.pdf
 2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TRÍCH XUẤT TỪ CHÍNH NỘI DUNG TRÊN:
 {SEO_JSON_SPEC}
 
-Không giải thích gì thêm.
-"""
+Không giải thích gì thêm."""
 
 
 # --------------------------------------------------------------------------- #
