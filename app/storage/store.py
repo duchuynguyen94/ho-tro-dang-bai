@@ -207,6 +207,17 @@ class Store:
     def set_image_rules(self, rules: list[str]) -> None:
         self.data.setdefault("formats", {})["image_rules"] = [str(r) for r in rules]
 
+    @property
+    def title_links(self) -> list[str]:
+        """Danh sách link chèn vào tiêu đề mục (h2 số 2 trở đi)."""
+        links = self.data.get("title_links")
+        if not isinstance(links, list):
+            return []
+        return [str(x).strip() for x in links if str(x).strip()]
+
+    def set_title_links(self, links: list[str]) -> None:
+        self.data["title_links"] = [str(x).strip() for x in links if str(x).strip()]
+
     # ------------------------------------------------------------------ #
     # Phần cấu hình con
     # ------------------------------------------------------------------ #

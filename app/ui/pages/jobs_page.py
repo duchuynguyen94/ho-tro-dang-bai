@@ -781,9 +781,8 @@ class JobsPage(QWidget):
         if len(images) >= MAX_IMAGES:
             show_toast(self, f"Tối đa {MAX_IMAGES} ảnh", 2200, ok=False)
             return
-        # ảnh mới lấy thanh thông tin KHÁC ảnh bên cạnh (ảnh cuối)
-        prev_mode = self._footer_mode_of(self.current, len(images) - 1) if images else "bar1"
-        new_mode = "bar2" if prev_mode == "bar1" else "bar1"
+        # quy luật thanh thông tin: ảnh ĐẦU = thanh 1, các ảnh sau = thanh 2
+        new_mode = "bar2" if images else "bar1"
         images.append({"path": "", "footer": ""})
         r["images"] = images
         lst = list(r.get("image_opts_list") or [])

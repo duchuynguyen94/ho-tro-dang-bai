@@ -141,10 +141,12 @@ class ConfigPage(QWidget):
         ai_c = AIContentPanel(self.store)
         ai_i = AIImagePanel(self.store)
         fmt = FormatPanel(self.store, self.changed.emit)
+        tlinks = TitleLinksPanel(self.store, self.changed.emit)
         for key, panel, label in [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
             ("format", fmt, "Format Rule"),
+            ("title_links", tlinks, "Link tiêu đề"),
         ]:
             self._panels[key] = panel
             self.stack.addWidget(panel)
@@ -1034,6 +1036,111 @@ class SheetsPanel(QScrollArea):
             show_toast(self, f"Lưu Google Sheets THẤT BẠI: {exc}", 3400, ok=False)
             return
         show_toast(self, "Đã lưu Google Sheets")
+
+
+# ======================================================================= #
+# Panel "Link tiêu đề" (link chèn vào các tiêu đề mục)
+# ======================================================================= #
+class TitleLinksPanel(QWidget):
+    """Danh sách link sẽ được chèn vào các tiêu đề mục (từ h2 thứ 2 trở đi)."""
+
+    def __init__(self, store, on_saved=None, parent=None) -> None:
+        super().__init__(parent)
+        self.store = store
+        self.on_saved = on_saved
+        self._rows: list[QLineEdit] = []
+        self._build()
+
+    def _build(self) -> None:
+        outer = QVBoxLayout(self)
+        outer.setContentsMargins(20, 18, 20, 12)
+        outer.setSpacing(10)
+
+        head = QHBoxLayout()
+        t = QLabel("Link tiêu đề")
+        t.setProperty("class", "h2")
+        head.addWidget(t)
+        head.addStretch(1)
+        save = QPushButton("Lưu danh sách link")
+        save.setProperty("class", "primary")
+        save.clicked.connect(self._save)
+        head.addWidget(save)
+        outer.addLayout(head)
+
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.NoFrame)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        root = QWidget()
+        v = QVBoxLayout(root)
+        v.setContentsMargins(0, 0, 0, 8)
+        v.setSpacing(10)
+
+        sub = QLabel(
+            "Các link dưới đây sẽ được chèn vào <b>tiêu đề mục</b> của bài viết "
+            "(từ <b>h2 thứ 2</b> trở đi). <b>h2 đầu tiên</b> luôn chèn link của chính website đang đăng. "
+            "Mỗi link chèn <b>1 lần</b> — có 2 link thì chèn 2 lần."
+        )
+        sub.setProperty("class", "sub")
+        sub.setWordWrap(True)
+        v.addWidget(sub)
+
+        card = Card("Danh sách link")
+        self.box = QVBoxLayout()
+        self.box.setSpacing(8)
+        card.body.addLayout(self.box)
+
+        self.add_btn = QPushButton("+ Thêm link")
+        self.add_btn.setProperty("class", "ghost")
+        self.add_btn.clicked.connect(lambda: self._add_row(""))
+        card.body.addWidget(self.add_btn, alignment=Qt.AlignLeft)
+        v.addWidget(card)
+
+        v.addStretch(1)
+        scroll.setWidget(root)
+        outer.addWidget(scroll, 1)
+        self._load()
+
+    def _add_row(self, value: str = "") -> None:
+        row = QHBoxLayout()
+        lab = QLabel("Link chèn")
+        lab.setFixedWidth(70)
+        edit = QLineEdit(value)
+        edit.setPlaceholderText("https://vidu.com")
+        row.addWidget(lab)
+        row.addWidget(edit, 1)
+        del_btn = QPushButton("✕")
+        del_btn.setObjectName("imgDel")
+        del_btn.setFixedSize(22, 22)
+        del_btn.setToolTip("Xoá link này")
+        holder = QWidget()
+        holder.setLayout(row)
+        del_btn.clicked.connect(lambda _=False, h=holder, e=edit: self._remove_row(h, e))
+        row.addWidget(del_btn)
+        self.box.addWidget(holder)
+        self._rows.append(edit)
+
+    def _remove_row(self, holder, edit) -> None:
+        if edit in self._rows:
+            self._rows.remove(edit)
+        holder.setParent(None)
+        holder.deleteLater()
+
+    def _load(self) -> None:
+        for link in self.store.title_links:
+            self._add_row(link)
+
+    def _save(self) -> None:
+        links = [e.text().strip() for e in self._rows if e.text().strip()]
+        try:
+            self.store.set_title_links(links)
+            self.store.save()
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Lưu link tiêu đề THẤT BẠI: {exc}", 3400, ok=False)
+            return
+        show_toast(self, f"Đã lưu {len(links)} link chèn tiêu đề")
+        if self.on_saved:
+            self.on_saved()
 
 
 # ======================================================================= #

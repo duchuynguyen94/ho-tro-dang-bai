@@ -428,6 +428,62 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
     return "".join(out)
 
 
+def insert_title_links(html_text: str, site_url: str, links: list[str],
+                       candidates: list[str] | None) -> str:
+    """Chèn link vào TIÊU ĐỀ MỤC của bài viết.
+
+    - <h2> ĐẦU TIÊN  -> chèn link của CHÍNH website đang đăng (site_url)
+    - Từ tiêu đề thứ 2 trở đi -> lần lượt các link trong danh sách cấu hình
+      (mỗi link chèn 1 lần; 2 link thì chèn 2 lần)
+    """
+    if not html_text:
+        return html_text
+    cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
+    if not cands:
+        return html_text
+
+    parts = re.split(r"(<[^>]+>)", html_text)
+    out: list[str] = []
+    pending = [l for l in (links or []) if str(l).strip()]
+    used: set[str] = set()
+    h2_seen = 0
+    depth = 0
+    i = 0
+    while i < len(parts):
+        part = parts[i]
+        if part.startswith("<"):
+            m = HEADING_RE.match(part)
+            if m:
+                depth += 1
+                if m.group(1) == "2":
+                    h2_seen += 1
+            elif re.match(r"^</h[2-6]", part, re.I):
+                depth = max(0, depth - 1)
+            out.append(part)
+            i += 1
+            continue
+
+        text = part
+        if depth and text.strip():
+            href = ""
+            if h2_seen == 1:
+                href = _norm_url(site_url) if site_url else ""
+            else:
+                href = next((l for l in pending if l not in used), "")
+            if href:
+                for cand in cands:
+                    mm = re.search(re.escape(cand), text, re.I)
+                    if mm:
+                        text = (text[:mm.start()]
+                                + f'<a href="{_norm_url(href)}">{mm.group(0)}</a>'
+                                + text[mm.end():])
+                        used.add(href)
+                        break
+        out.append(text)
+        i += 1
+    return "".join(out)
+
+
 def clean_content_html(html_text: str) -> str:
     """Bỏ chữ rác đầu (Writing…), bỏ ký hiệu đầu dòng trùng trong <li>."""
     t = html_text or ""

@@ -9,7 +9,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import extract_product_name, insert_external_links, linkify_domains
+from ..ai.manager import extract_product_name, insert_title_links, linkify_domains
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -158,7 +158,8 @@ def pick_footer_by_index(site, index: int, mode: str = "") -> str:
         return bars[0]
     if mode == "bar2":
         return bars[1] if len(bars) > 1 else bars[0]
-    return bars[index % len(bars)]
+    # mặc định: hình ĐẦU dùng thanh 1, các hình sau dùng thanh 2
+    return bars[0] if index == 0 else (bars[1] if len(bars) > 1 else bars[0])
 
 
 def _opts_list_of(result: dict) -> list[dict]:
@@ -322,21 +323,19 @@ class ContentWorker(TrackedThread):
             all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
             html_out = linkify_domains(raw_html, all_sites)
 
-            # 2) link NGOÀI: mỗi site khác trong danh sách chèn 1 lần vào heading (h2..h5)
-            others = [(x.url or "", x.name or "") for x in self.store.sites
-                      if x.id != site.id and (x.url or "").strip()]
-            if others:
-                pname = extract_product_name(
-                    raw_html, page.get("title", "") or data.get("title", "")
-                )
-                html_out = insert_external_links(
-                    html_out, others,
-                    [pname, data.get("focus_keyword", ""), data.get("title", ""),
-                     page.get("title", "")],
-                )
-                self.log.emit(f"Chèn {len(others)} liên kết ngoài vào tiêu đề mục.")
-            else:
-                self.log.emit("Chỉ có 1 website trong danh sách — không chèn liên kết ngoài.")
+            # 2) link vào TIÊU ĐỀ MỤC: h2 đầu = website đang đăng; từ h2 thứ 2 = link trong cấu hình
+            title_links = list(self.store.title_links)
+            pname = extract_product_name(
+                raw_html, page.get("title", "") or data.get("title", "")
+            )
+            html_out = insert_title_links(
+                html_out, site.url or "", title_links,
+                [pname, data.get("focus_keyword", ""), data.get("title", ""),
+                 page.get("title", "")],
+            )
+            self.log.emit(
+                f"Chèn link tiêu đề: h2 đầu → website, {len(title_links)} link cấu hình cho các mục sau."
+            )
             data["content_html"] = html_out
             self.progress.emit(70)
 
