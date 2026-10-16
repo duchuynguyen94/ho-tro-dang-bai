@@ -12,6 +12,29 @@
 - Nếu thay đổi **có thể xung đột / ảnh hưởng chỗ khác** → **báo trước** để người dùng quyết.
 - Làm xong: **báo rõ đã đổi gì + đã test gì**.
 
+### 0.1. CHỈ 5 CÂU LỆNH NÀY MỚI ĐƯỢC PHÉP LÀM
+
+Người dùng chỉ dùng đúng 5 câu sau để ra lệnh; **phải khớp nguyên câu**:
+
+1. `ok làm đi`
+2. `ok fix đi`
+3. `ok sửa đi`
+4. `ok cập nhật đi`
+5. `ok thực hiện đi`
+
+**Mọi cách nói khác đều KHÔNG phải lệnh** — kể cả *"ok"*, *"được"*, *"ừ"*, *"triển khai đi"*,
+*"làm luôn"*, *"sao không sửa"*, *"cần thêm X"*, *"nên là Y"*, *"hình như lỗi"*…
+→ Khi đó **chỉ được tóm tắt lại ý + gợi ý + hỏi xác nhận**, tuyệt đối **không sửa code**.
+
+Mẫu phản hồi khi người dùng nêu vấn đề/ý kiến:
+
+```
+Tôi hiểu là: …
+Gợi ý thêm: …
+Bạn xác nhận giúp (ok làm đi / ok sửa đi …)?
+```
+
+
 ## 1. Sản phẩm
 
 App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/ảnh cho bài đăng WordPress
