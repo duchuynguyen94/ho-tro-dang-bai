@@ -107,10 +107,10 @@ def normalize_description(desc: str) -> str:
 
 # Kết quả bước 2 (theo Rule SEO)
 SEO_JSON_SPEC = """{
-  "title": "tiêu đề SEO 55-60 ký tự, dạng: [Keyword] [Brand] [Model] + [USP] (chọn ngẫu nhiên 1 USP)",
-  "focus_keyword": "từ khoá chính (thường là Model của sản phẩm)",
+  "title": "55-60 ký tự, dạng: [Keyword] [Brand] [Model] + [USP] — chọn NGẪU NHIÊN 1 USP trong: Chính hãng, Giá tốt, CO/CQ đầy đủ, Báo giá nhanh, Hàng sẵn, Giao nhanh, Đại lý, Phân phối, Hỗ trợ kỹ thuật, Bảo hành chính hãng, Tổng kho",
+  "focus_keyword": "01 từ khoá chính duy nhất = Model của sản phẩm (vd: BI15U-EM30WDTC-AP6X)",
   "description": "mô tả siêu ngắn ĐÚNG mục 3 của rule_seo, gồm 4 phần trên các dòng riêng: (1) câu mô tả: “<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc.”; (2) dòng liên hệ: “🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com”; (3) “Tên sản phẩm <Brand> models tiêu biểu”; (4) tối đa 5 model tiêu biểu, MỖI DÒNG 1 model theo mẫu “<Tên sản phẩm> <Hãng> <Model>” (vd: Cảm biến siêu âm Carlo Gavazzi UA18CAD04PM1)",
-  "tags": "danh sách thẻ tìm kiếm đầy đủ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy"
+  "tags": "trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy; GỒM: tên sản phẩm + đồng nghĩa, thương hiệu, sản phẩm + model nổi bật, từ khoá địa phương/tiếng Việt thông dụng, thông tin công ty"
 }"""
 
 
@@ -173,8 +173,9 @@ Yêu cầu HTML: dùng <h2>, <h3> cho tiêu đề mục; <p> cho đoạn văn; <
 và <table><tr><td> cho bảng thông số kỹ thuật. KHÔNG dùng Markdown, KHÔNG bọc trong ```.
 GIỮ ĐÚNG ĐỊNH DẠNG CỦA RULE CONTENT, kể cả các ký hiệu/icon đầu dòng (●, ▪, ►, ✅…).
 
-2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TẠO THEO **RULE SEO Ở TRÊN**
-và TRÍCH XUẤT TỪ CHÍNH NỘI DUNG VỪA VIẾT (điền nội dung THẬT, không trả lại mẫu):
+2) SAU CÙNG: DUY NHẤT 1 khối JSON thông tin SEO, TẠO THEO **RULE SEO Ở TRÊN** và
+DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT Ở MỤC 1 (đúng sản phẩm, thương hiệu, model, thông số trong bài;
+điền nội dung THẬT, không trả lại mẫu):
 {SEO_JSON_SPEC}
 
 Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
@@ -187,7 +188,12 @@ def build_combined_short_prompt(source: dict) -> str:
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng "HTML" theo template trong rule_content.pdf
-2) SAU CÙNG: 1 khối JSON thông tin SEO theo file rule_seo.pdf bao gồm: title, focus_keyword, description, tags\n   (riêng "description" viết ĐÚNG mục 3 của rule_seo.pdf, 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc."; dòng liên hệ 🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com; "Tên sản phẩm <Brand> models tiêu biểu"; rồi tối đa 5 model tiêu biểu, MỖI DÒNG 1 model dạng "<Tên sản phẩm> <Hãng> <Model>")
+2) SAU CÙNG: 1 khối JSON thông tin SEO theo file rule_seo.pdf bao gồm: title, focus_keyword, description, tags
+   - TOÀN BỘ thông tin SEO phải DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT Ở MỤC 1 (đúng sản phẩm, thương hiệu, model, thông số trong bài; không bịa thêm).
+   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 USP trong danh sách: Chính hãng / Giá tốt / CO/CQ đầy đủ / Báo giá nhanh / Hàng sẵn / Giao nhanh / Đại lý / Phân phối / Hỗ trợ kỹ thuật / Bảo hành chính hãng / Tổng kho
+   - "focus_keyword": 01 từ khoá chính duy nhất = Model của sản phẩm (vd: BI15U-EM30WDTC-AP6X)
+   - "description": 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc."; dòng liên hệ 🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com; "Tên sản phẩm <Brand> models tiêu biểu"; rồi tối đa 5 model tiêu biểu, MỖI DÒNG 1 model dạng "<Tên sản phẩm> <Hãng> <Model>"
+   - "tags": trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy, gồm: tên sản phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa phương/tiếng Việt thông dụng; thông tin công ty
 
 Không giải thích gì thêm."""
 
