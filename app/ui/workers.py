@@ -465,22 +465,51 @@ class ImagesWorker(TrackedThread):
 
 
 class PostWorker(TrackedThread):
-    """Mở trình duyệt -> tự đăng nhập -> phát lại kịch bản (điền form)."""
+    """Mở trình duyệt -> tự đăng nhập -> phát lại kịch bản (điền form).
+
+    Sau khi điền xong, luồng này CHỜ người dùng đóng trình duyệt rồi mới phát
+    tín hiệu `closed` — dùng để mở lại nút "Đăng bài" (mỗi việc chỉ 1 Chrome).
+    """
 
     log = Signal(str)
     ok = Signal(str)
     failed = Signal(str)
+    closed = Signal(str)          # người dùng đã đóng trình duyệt
 
     def __init__(self, site, result: dict) -> None:
         super().__init__()
         self.site = site
         self.result = result
+        self._running = True
+
+    def stop(self) -> None:
+        self._running = False
+
+    def _wait_closed(self, page, br, timeout: int = 7200) -> None:
+        """Chờ người dùng đóng cửa sổ Chrome (tối đa 2 giờ) rồi dọn dẹp."""
+        import time
+
+        deadline = time.time() + timeout
+        while self._running and time.time() < deadline:
+            try:
+                if page.is_closed():
+                    break
+                page.wait_for_timeout(500)
+            except Exception:      # noqa: BLE001
+                break
+        try:
+            if br:
+                br.close()
+        except Exception:
+            pass
 
     def run(self) -> None:
         from ..wp import WPBrowser, play_script
         from ..wp.player import make_slug, show_page_notice, wait_editor_ready
 
         site = self.site
+        br = None
+        page = None
         try:
             self.log.emit("Mở trình duyệt…")
             br = WPBrowser(headless=False, site_id=site.id)
@@ -553,6 +582,16 @@ class PostWorker(TrackedThread):
         except Exception as exc:
             traceback.print_exc()
             self.failed.emit(str(exc))
+        finally:
+            # Nút "Đăng bài" chỉ mở lại khi NGƯỜI DÙNG đóng trình duyệt
+            if page is not None:
+                try:
+                    if not page.is_closed():
+                        self.log.emit("Bạn tự kiểm tra rồi bấm Đăng; đóng trình duyệt khi xong.")
+                except Exception:      # noqa: BLE001
+                    pass
+                self._wait_closed(page, br)
+            self.closed.emit("")
 
 
 class OpenLoginWorker(TrackedThread):

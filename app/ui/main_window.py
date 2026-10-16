@@ -397,12 +397,13 @@ class MainWindow(QMainWindow):
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda url: self._on_post_ok(task, url))
         worker.failed.connect(lambda err: self._on_post_failed(task, err))
+        worker.closed.connect(lambda _u: self.jobs_page.set_posting(task.id, False))
         worker.finished.connect(lambda: self._cleanup(worker))
         self._workers.append(worker)
         worker.start()
 
     def _on_post_ok(self, task, url: str) -> None:
-        self.jobs_page.set_posting(task.id, False)     # mở lại nút Đăng bài
+        # KHÔNG mở lại nút ở đây: chờ người dùng đóng trình duyệt (xem _on_post_closed)
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.result["result_url"] = url
         fresh.status = STATUS_DONE
@@ -414,7 +415,6 @@ class MainWindow(QMainWindow):
         self._maybe_sheets(fresh)
 
     def _on_post_failed(self, task, err: str) -> None:
-        self.jobs_page.set_posting(task.id, False)     # mở lại nút Đăng bài
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         r = fresh.result or {}
         has_content = bool(r.get("content_html") or r.get("title"))

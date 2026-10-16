@@ -413,6 +413,12 @@ class JobsPage(QWidget):
         self.error_label.setWordWrap(True)
         self.error_label.setAlignment(Qt.AlignCenter)
         ev.addWidget(self.error_label)
+        retry = QPushButton("↻ Tạo lại")
+        retry.setProperty("class", "primary")
+        retry.setToolTip("Tạo lại nội dung bằng AI")
+        retry.clicked.connect(self._on_retry)
+        self.retry_btn = retry
+        ev.addWidget(retry, alignment=Qt.AlignHCenter)
         ev.addStretch(1)
         self.stack.addWidget(self.page_error)
 
@@ -504,15 +510,10 @@ class JobsPage(QWidget):
         self.model_btn.setProperty("class", "ghost")
         self.model_btn.setToolTip("Nhập danh sách link nguồn → trích xuất Product Models theo Rule Model Extractor")
         self.model_btn.clicked.connect(self.open_model_extractor.emit)
-        self.retry_btn = QPushButton("↻ Random lại")
-        self.retry_btn.setProperty("class", "ghost")
-        self.retry_btn.setToolTip("Tạo lại nội dung bằng AI (chỉ có ở panel kết quả)")
-        self.retry_btn.clicked.connect(self._on_retry)
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
         self.post_btn.clicked.connect(self._emit_post)
         f.addWidget(self.model_btn)
-        f.addWidget(self.retry_btn)          # nằm BÊN TRÁI nút Đăng bài
         f.addWidget(self.post_btn)
         right.body.addWidget(self.footer)
         self.footer.hide()
