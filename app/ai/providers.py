@@ -15,6 +15,78 @@ class AIError(RuntimeError):
 
 
 # --------------------------------------------------------------------------- #
+# Dịch lỗi HTTP của nhà cung cấp sang tiếng Việt cho người dùng hiểu
+# --------------------------------------------------------------------------- #
+STATUS_VI = {
+    400: "Yêu cầu gửi lên không hợp lệ",
+    401: "API key không hợp lệ",
+    403: "Không có quyền truy cập (kiểm tra API key / khu vực)",
+    404: "Không tìm thấy model này",
+    408: "Máy chủ AI phản hồi quá chậm",
+    413: "Nội dung gửi lên quá lớn",
+    422: "Dữ liệu gửi lên không đúng định dạng",
+    429: "Đã hết hạn mức / gửi quá nhiều yêu cầu",
+    500: "Máy chủ AI bị lỗi nội bộ",
+    502: "Kết nối tới máy chủ AI bị lỗi",
+    503: "Máy chủ AI đang QUÁ TẢI",
+    504: "Máy chủ AI phản hồi quá lâu",
+}
+
+STATUS_HINT = {
+    429: "Chờ hạn mức làm mới (hoặc đổi model/provider khác) rồi thử lại.",
+    500: "Lỗi tạm thời phía nhà cung cấp — thử lại sau ít phút.",
+    502: "Lỗi tạm thời — thử lại sau ít phút.",
+    503: "Thường chỉ tạm thời — thử lại sau ít phút.",
+    504: "Thử lại sau ít phút.",
+    401: "Vào Cấu hình → AI nội dung để kiểm tra lại API key.",
+    403: "Vào Cấu hình → AI nội dung để kiểm tra lại API key.",
+}
+
+
+def _extract_provider_message(body: str) -> str:
+    """Lấy câu mô tả gốc của nhà cung cấp (nếu có) để hiện kèm."""
+    if not body:
+        return ""
+    try:
+        data = json.loads(body)
+    except (ValueError, TypeError):
+        return ""
+    if isinstance(data, dict):
+        err = data.get("error")
+        if isinstance(err, dict) and err.get("message"):
+            return str(err["message"]).strip()
+        for key in ("message", "detail", "error"):
+            if isinstance(data.get(key), str) and data[key].strip():
+                return data[key].strip()
+    return ""
+
+
+def http_error_vi(status: int, body: str = "", who: str = "") -> str:
+    """Câu báo lỗi tiếng Việt cho mã HTTP của nhà cung cấp AI."""
+    base = STATUS_VI.get(status) or f"Máy chủ AI trả về mã lỗi {status}"
+    head = f"{who}: " if who else ""
+    text = f"{head}{base} (mã {status})."
+    hint = STATUS_HINT.get(status)
+    if hint:
+        text += f" {hint}"
+    # chỉ kèm mô tả gốc khi lỗi liên quan tới DỮ LIỆU gửi lên (các mã khác đã đủ rõ bằng tiếng Việt)
+    if status not in STATUS_VI or status in (400, 404, 422):
+        detail = _extract_provider_message(body)
+        if detail and detail.lower() not in text.lower():
+            text += f"\nChi tiết từ nhà cung cấp: {detail[:300]}"
+    return text
+
+
+def network_error_vi(exc: Exception, who: str = "") -> str:
+    head = f"{who}: " if who else ""
+    name = type(exc).__name__
+    if "Timeout" in name:
+        return (f"{head}Không kết nối được tới máy chủ AI (quá thời gian chờ). "
+                "Kiểm tra mạng rồi thử lại.")
+    return (f"{head}Không kết nối được tới máy chủ AI ({name}). Kiểm tra mạng rồi thử lại.")
+
+
+# --------------------------------------------------------------------------- #
 # OpenAI-compatible (Groq, OpenRouter, OpenAI, Ollama)
 # --------------------------------------------------------------------------- #
 def _openai_compatible(base_url: str, model: str, prompt: str, api_key: str) -> str:
@@ -29,11 +101,12 @@ def _openai_compatible(base_url: str, model: str, prompt: str, api_key: str) -> 
         ],
         "temperature": 0.8,
     }
-    r = httpx.post(base_url, json=body, headers=headers, timeout=TIMEOUT)
-    if r.status_code == 429:
-        raise AIError("hết quota / quá nhiều yêu cầu (429)")
+    try:
+        r = httpx.post(base_url, json=body, headers=headers, timeout=TIMEOUT)
+    except httpx.HTTPError as exc:
+        raise AIError(network_error_vi(exc, "AI")) from exc
     if r.status_code >= 400:
-        raise AIError(f"{base_url} trả về {r.status_code}: {r.text[:200]}")
+        raise AIError(http_error_vi(r.status_code, r.text, "AI"))
     data = r.json()
     try:
         return data["choices"][0]["message"]["content"] or ""
@@ -79,7 +152,10 @@ def _gemini(model: str, prompt: str, api_key: str) -> str:
     if not api_key:
         raise AIError("Chưa có API key cho Gemini.")
     model = model or "gemini-3.8-flash"
-    r = _gemini_call(model, prompt, api_key)
+    try:
+        r = _gemini_call(model, prompt, api_key)
+    except httpx.HTTPError as exc:
+        raise AIError(network_error_vi(exc, "Gemini")) from exc
 
     # Model không còn khả dụng -> tự dò model khác đang hoạt động
     if r.status_code == 404:
@@ -101,10 +177,8 @@ def _gemini(model: str, prompt: str, api_key: str) -> str:
             f"Vào Cấu hình → AI nội dung để đổi model.{hint}"
         )
 
-    if r.status_code == 429:
-        raise AIError("Gemini hết quota (429). Chờ hạn mức làm mới hoặc đổi provider khác.")
     if r.status_code >= 400:
-        raise AIError(f"Gemini trả về {r.status_code}: {r.text[:200]}")
+        raise AIError(http_error_vi(r.status_code, r.text, "Gemini"))
     return _gemini_text(r)
 
 

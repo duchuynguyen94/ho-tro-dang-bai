@@ -642,7 +642,7 @@ class JobsPage(QWidget):
                 self.retry_btn.setToolTip("Tạo lại nội dung bằng AI")
                 title = "Không tạo được nội dung."
 
-            body = f"<b>{title}</b><br><br>{msg}"
+            body = f"<b>{title}</b><br><br>{str(msg).replace(chr(10), '<br>')}"
             # CHỈ gợi ý khi provider thiếu API key; các lỗi khác chỉ báo lý do (đã lưu vào Log lỗi)
             if missing_key:
                 body += ("<br><br><span style='color:#64748b'>Provider này chưa có API key — "

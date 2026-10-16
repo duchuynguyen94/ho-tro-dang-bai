@@ -8,6 +8,7 @@ from pathlib import Path
 import httpx
 
 from ..config import output_dir
+from ..ai.providers import http_error_vi
 from ..storage import crypto
 from ..storage.models import new_id
 
@@ -64,7 +65,7 @@ def _gemini_edit_once(image_path: str, prompt: str, api_key: str, model: str) ->
     if r.status_code == 404:
         return None
     if r.status_code >= 400:
-        raise AIEditError(f"Gemini Image trả về {r.status_code}: {r.text[:200]}")
+        raise AIEditError(http_error_vi(r.status_code, r.text, "Gemini Image"))
     data = r.json()
     for cand in data.get("candidates", []):
         for part in (cand.get("content") or {}).get("parts", []):
@@ -108,7 +109,7 @@ def _openai_edit(image_path: str, prompt: str, api_key: str, model: str) -> str:
             timeout=240,
         )
     if r.status_code >= 400:
-        raise AIEditError(f"OpenAI trả về {r.status_code}: {r.text[:200]}")
+        raise AIEditError(http_error_vi(r.status_code, r.text, "OpenAI Images"))
     item = (r.json().get("data") or [{}])[0]
     if item.get("b64_json"):
         return _save_bytes(base64.b64decode(item["b64_json"]), ".png")
@@ -133,7 +134,7 @@ def _fal_edit(image_path: str, prompt: str, api_key: str, model: str) -> str:
         timeout=240,
     )
     if r.status_code >= 400:
-        raise AIEditError(f"fal.ai trả về {r.status_code}: {r.text[:200]}")
+        raise AIEditError(http_error_vi(r.status_code, r.text, "fal.ai"))
     images = r.json().get("images") or []
     if images and images[0].get("url"):
         img = httpx.get(images[0]["url"], timeout=120)
