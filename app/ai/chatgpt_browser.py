@@ -48,21 +48,42 @@ _REPLY_JS = r"""() => {
   const sels = ['[data-message-author-role="assistant"]','[class*="MarkdownRoot"]',
                 '[class*="DilResponseRoot"]','[class*="assistant-message"]',
                 '.prose','[class*="prose"]'];
-  const set = new Set();
   for (const s of sels) {
-    for (const el of document.querySelectorAll(s)) set.add(el);
+    const els = [...document.querySelectorAll(s)].filter(el => {
+      const t = (el.innerText || '').trim();
+      if (!t) return false;
+      if (el.closest('[class*="user-message"]')) return false;
+      if (el.matches('[class*="user-message"]')) return false;
+      return true;
+    });
+    if (!els.length) continue;
+    // bỏ các phần tử nằm TRONG phần tử khác (chỉ giữ lớp ngoài cùng)
+    const outer = els.filter(el => !els.some(o => o !== el && el.contains(o)));
+    const pick = outer.length ? outer : els;
+    return pick[pick.length - 1].innerText || '';
   }
-  const arr = [...set].filter(el => {
-    const t = (el.innerText || '').trim();
-    if (!t) return false;
-    if (el.closest('[class*="user-message"]')) return false;
-    if (el.matches('[class*="user-message"]')) return false;
-    return true;
-  });
-  if (!arr.length) return '';
-  arr.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING) ? -1 : 1);
-  return arr[arr.length - 1].innerText || '';
+  return '';
 }"""
+
+# Nút "Dừng tạo" của ChatGPT: còn hiện = câu trả lời đang được viết
+_STOP_SELECTORS = (
+    '[data-testid="stop-button"]',
+    '[aria-label*="Stop generating"]',
+    '[aria-label*="Stop streaming"]',
+    'button[aria-label*="Stop"]',
+    'button[aria-label*="Dừng"]',
+)
+
+
+def _is_streaming(page) -> bool:
+    for sel in _STOP_SELECTORS:
+        try:
+            loc = page.locator(sel)
+            if loc.count() and loc.first.is_visible():
+                return True
+        except Exception:
+            continue
+    return False
 
 
 # --------------------------------------------------------------------------- #
@@ -365,10 +386,11 @@ def _strip_fences(text: str) -> str:
 
 
 def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None) -> str:
-    """Chờ tới khi câu trả lời có đủ JSON + nội dung và đã ổn định."""
+    """Chờ tới khi câu trả lời có đủ JSON + nội dung và ChatGPT viết xong."""
     deadline = time.time() + timeout
     last = ""
     stable = 0
+    best = ""
     while time.time() < deadline:
         if should_stop and should_stop():
             raise AIError("Đã dừng theo yêu cầu.")
@@ -376,17 +398,25 @@ def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None) ->
         text = _reply_text(page, prompt)
         data, i, j = _find_json_block(text)
         has_both = data is not None and (len(text) - (j - i)) > 150
-        if has_both and text == last:
+        if has_both and len(text) > len(best):
+            best = text
+        streaming = _is_streaming(page)
+        if has_both and (not streaming or text == last):
             stable += 1
-            if stable >= 2:
+            if not streaming or stable >= 2:
                 return text
         else:
             stable = 0
         last = text
         if _limit_reached(page, last):
             raise AIError(LIMIT_MSG)
+    # hết thời gian: nếu từng có JSON thì trả về bản dài nhất để bước sau tự xử lý
+    if best:
+        return best
     data, _i, _j = _find_json_block(last)
     if data is not None:
+        return last
+    if last.strip():
         return last
     raise AIError(
         "ChatGPT không trả về đủ JSON SEO + nội dung. Thử lại hoặc đổi provider khác."
@@ -404,13 +434,14 @@ def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = Fals
             raise AIError("Đã dừng theo yêu cầu.")
         page.wait_for_timeout(1500)
         text = _reply_text(page, prompt)
+        streaming = _is_streaming(page)
         if require_json:
             data = _try_extract_json(text)
-            if data is not None:
+            if data is not None and not streaming:
                 return json.dumps(data, ensure_ascii=False)
-        elif text and text == last and len(text) > 20:
+        elif text and text == last and (not streaming or stable >= 1):
             stable += 1
-            if stable >= 2:
+            if not streaming or stable >= 2:
                 return text
         if text != last:
             stable = 0

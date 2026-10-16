@@ -1,6 +1,7 @@
 """Trình duyệt riêng của phần mềm (Playwright + Chrome)."""
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -29,6 +30,44 @@ def _user_data_dir(site_id: str) -> str:
     d = sessions_dir() / site_id
     d.mkdir(parents=True, exist_ok=True)
     return str(d)
+
+
+LOCK_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
+
+
+def _pid_alive(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except OSError:
+        return False
+    except Exception:
+        return False
+
+
+def _clear_profile_lock(user_data_dir: str) -> bool:
+    """Xoá lock cũ của profile (do lần chạy trước bị tắt đột ngột).
+
+    Không xoá nếu tiến trình đang giữ lock vẫn còn sống.
+    """
+    d = Path(user_data_dir)
+    lock = d / "SingletonLock"
+    try:
+        if lock.is_symlink():
+            target = str(os.readlink(str(lock)))
+            pid = int(target.rsplit("-", 1)[-1])
+            if pid > 0 and _pid_alive(pid):
+                return False          # đang có tiến trình dùng profile -> không đụng vào
+    except Exception:
+        pass
+    for name in LOCK_FILES:
+        try:
+            p = d / name
+            if p.is_symlink() or p.exists():
+                p.unlink()
+        except OSError:
+            pass
+    return True
 
 
 class WPBrowser:
@@ -71,6 +110,10 @@ class WPBrowser:
             except Exception as exc:  # thử cách khác
                 first_line = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
                 errors.append(f"- {label}: {first_line}")
+                low = str(exc).lower()
+                if ("singleton" in low or "profile" in low or "in use" in low
+                        or "user data directory" in low or "processsingleton" in low):
+                    _clear_profile_lock(_user_data_dir(self.site_id))
                 try:
                     self._pw.stop()
                 except Exception:
