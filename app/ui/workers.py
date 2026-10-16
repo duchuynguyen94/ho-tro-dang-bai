@@ -80,7 +80,7 @@ def export_post_images(store, task) -> list[str]:
     """Lưu ảnh vào thư mục tên = ID công việc (để upload lên website).
 
     - Tên file: theo Rule ảnh (chỉ tên) + đuôi theo cấu hình AI ảnh.
-    - Định dạng (PNG/JPG) và kích thước lấy từ Cấu hình → AI ảnh → Xử lý ảnh cục bộ.
+    - Định dạng (PNG/JPG) và kích thước lấy từ Cài đặt → AI ảnh → Xử lý ảnh cục bộ.
     - Xuất TẤT CẢ ảnh đang có (kể cả ảnh thêm bằng nút "+ Thêm hình").
     """
     from PIL import Image as _Img
@@ -357,7 +357,7 @@ class ContentWorker(TrackedThread):
                     except Exception:
                         brand_logo = ""
             if not brand_logo:
-                self.log.emit("Không tìm được logo thương hiệu — bỏ qua (có thể thêm ở Cấu hình).")
+                self.log.emit("Không tìm được logo thương hiệu — bỏ qua (có thể thêm ở Cài đặt).")
 
             if self._stopped():
                 raise _Cancelled()
@@ -735,6 +735,33 @@ class SourceImageDownloadWorker(TrackedThread):
                 data = b""
             self.done.emit(url, data)
         self.progress.emit("")
+
+
+class UpdateWorker(TrackedThread):
+    """Kiểm tra / tải & áp dụng bản cập nhật phần mềm."""
+
+    log = Signal(str)
+    checked = Signal(dict)     # {"version", "url", "notes"}
+    applied = Signal(str)      # thư mục tạm của bộ cài
+    failed = Signal(str)
+
+    def __init__(self, url: str = "", apply_url: str = "") -> None:
+        super().__init__()
+        self.url = url
+        self.apply_url = apply_url
+
+    def run(self) -> None:
+        from .. import update
+
+        try:
+            if self.apply_url:
+                tmp = update.apply_update(self.apply_url, log=self.log.emit)
+                self.applied.emit(str(tmp))
+                return
+            self.checked.emit(update.check_update(self.url))
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))
 
 
 class ModelExtractorWorker(TrackedThread):

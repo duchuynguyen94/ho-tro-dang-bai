@@ -640,7 +640,7 @@ class JobsPage(QWidget):
             # CHỈ gợi ý khi provider thiếu API key; các lỗi khác chỉ báo lý do (đã lưu vào Log lỗi)
             if missing_key:
                 body += ("<br><br><span style='color:#64748b'>Provider này chưa có API key — "
-                         "vào Cấu hình → AI nội dung để dán key.</span>")
+                         "vào Cài đặt → AI nội dung để dán key.</span>")
             self.error_label.setText(body)
             self.stack.setCurrentWidget(self.page_error)
             return

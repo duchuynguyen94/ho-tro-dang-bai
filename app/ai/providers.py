@@ -38,8 +38,8 @@ STATUS_HINT = {
     502: "Lỗi tạm thời — thử lại sau ít phút.",
     503: "Thường chỉ tạm thời — thử lại sau ít phút.",
     504: "Thử lại sau ít phút.",
-    401: "Vào Cấu hình → AI nội dung để kiểm tra lại API key.",
-    403: "Vào Cấu hình → AI nội dung để kiểm tra lại API key.",
+    401: "Vào Cài đặt → AI nội dung để kiểm tra lại API key.",
+    403: "Vào Cài đặt → AI nội dung để kiểm tra lại API key.",
 }
 
 
@@ -174,7 +174,7 @@ def _gemini(model: str, prompt: str, api_key: str) -> str:
         hint = f" Model đang hoạt động: {', '.join(tried[:5])}." if tried else ""
         raise AIError(
             f"Model “{model}” không còn khả dụng (404). "
-            f"Vào Cấu hình → AI nội dung để đổi model.{hint}"
+            f"Vào Cài đặt → AI nội dung để đổi model.{hint}"
         )
 
     if r.status_code >= 400:

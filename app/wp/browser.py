@@ -225,7 +225,7 @@ class WPBrowser:
             raise RuntimeError(
                 "Không mở được trình duyệt. Đã thử:\n" + detail
                 + "\n\nCách xử lý: đóng hết cửa sổ Chrome của phần mềm rồi thử lại, "
-                "hoặc cài Google Chrome, hoặc mở Cấu hình → website → kiểm tra lại."
+                "hoặc cài Google Chrome, hoặc mở Cài đặt → website → kiểm tra lại."
             )
 
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()

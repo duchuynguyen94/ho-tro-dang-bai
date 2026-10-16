@@ -286,6 +286,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "title_links": [],      # link chèn vào các tiêu đề mục (từ tiêu đề thứ 2 trở đi)
     "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)
+    "update_url": "",       # link version.json để kiểm tra/cập nhật phần mềm (bản Windows)
     "sites": [],
     "tasks": [],
     "formats": {          # format & rule dùng chung cho MỌI website

@@ -42,7 +42,7 @@ class ModelExtractorDialog(QDialog):
         else:
             sub = QLabel(
                 f"Provider đang dùng: <b>{store.ai_content.get('active', '')}</b> — "
-                "sẽ trích xuất theo file <b>Rule Model Extractor</b> trong Cấu hình → Format Rule."
+                "sẽ trích xuất theo file <b>Rule Model Extractor</b> trong Cài đặt → Format Rule."
             )
         sub.setProperty("class", "sub")
         sub.setWordWrap(True)

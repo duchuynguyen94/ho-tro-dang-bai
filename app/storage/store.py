@@ -226,6 +226,14 @@ class Store:
     def set_title_link_first(self, link: str) -> None:
         self.data["title_link_first"] = str(link or "").strip()
 
+    @property
+    def update_url(self) -> str:
+        """Link version.json dùng cho chức năng cập nhật phần mềm."""
+        return str(self.data.get("update_url") or "").strip()
+
+    def set_update_url(self, url: str) -> None:
+        self.data["update_url"] = str(url or "").strip()
+
     # ------------------------------------------------------------------ #
     # Phần cấu hình con
     # ------------------------------------------------------------------ #

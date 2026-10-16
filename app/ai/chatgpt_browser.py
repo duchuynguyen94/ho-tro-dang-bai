@@ -20,7 +20,7 @@ COMPOSER_SELECTORS = [
 ]
 
 LOGIN_HINT = (
-    "Chưa đăng nhập ChatGPT. Vào Cấu hình → AI nội dung → ChatGPT → "
+    "Chưa đăng nhập ChatGPT. Vào Cài đặt → AI nội dung → ChatGPT → "
     "bấm “Đăng nhập ChatGPT” rồi đăng nhập, sau đó thử lại."
 )
 NEED_LOGIN_MARKERS = ("log in", "sign up", "đăng nhập", "đăng ký")
@@ -46,7 +46,7 @@ LIMIT_MARKERS = (
 LIMIT_MSG = (
     "ChatGPT BỊ GIỚI HẠN (đã hết lượt dùng miễn phí). "
     "Hãy chờ tới khi lượt được làm mới, hoặc đổi sang provider khác "
-    "(Gemini/DeepSeek…) trong Cấu hình → AI nội dung."
+    "(Gemini/DeepSeek…) trong Cài đặt → AI nội dung."
 )
 
 _REPLY_JS = r"""() => {
@@ -523,7 +523,7 @@ def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = Fals
         raise AIError(
             "ChatGPT không trả về nội dung thật (chỉ trả lại mẫu). "
             "Nếu tài khoản đang bị giới hạn lượt, hãy chờ lượt làm mới "
-            "hoặc đổi provider khác trong Cấu hình → AI nội dung."
+            "hoặc đổi provider khác trong Cài đặt → AI nội dung."
         )
     raise AIError("ChatGPT không trả về nội dung (quá thời gian chờ).")
 

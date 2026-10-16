@@ -87,7 +87,7 @@ def _gemini_edit(image_path: str, prompt: str, api_key: str, model: str) -> str:
                 break
     if not out:
         raise AIEditError(
-            f"Model “{model}” không còn khả dụng. Vào Cấu hình → AI ảnh để đổi model."
+            f"Model “{model}” không còn khả dụng. Vào Cài đặt → AI ảnh để đổi model."
         )
     return _save_bytes(out, ".png")
 
@@ -152,7 +152,7 @@ def edit_image(store, image_path: str, prompt: str, log=None) -> str:
     model = pcfg.get("model", "")
 
     if active == "off":
-        raise AIEditError("AI chỉnh ảnh đang tắt (Cấu hình → AI ảnh).")
+        raise AIEditError("AI chỉnh ảnh đang tắt (Cài đặt → AI ảnh).")
     if log:
         log(f"Đang gọi {active} để sửa ảnh…")
 

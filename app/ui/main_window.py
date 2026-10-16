@@ -46,7 +46,7 @@ from .workers import (
     shutdown_all_threads,
 )
 
-NAV = ["Đăng bài", "Cấu hình", "Công việc đang làm", "Log lỗi"]
+NAV = ["Cài đặt", "Đăng bài", "Công việc đang làm", "Log lỗi"]
 
 
 class MainWindow(QMainWindow):
@@ -108,7 +108,7 @@ class MainWindow(QMainWindow):
         self.config_page = ConfigPage(self.store)
         self.jobs_page = JobsPage(self.store)
         self.error_log_page = ErrorLogPage(self.store)
-        for page in (self.post_page, self.config_page, self.jobs_page,
+        for page in (self.config_page, self.post_page, self.jobs_page,
                      self.error_log_page):
             self.stack.addWidget(page)
         v.addWidget(self.stack, 1)
@@ -139,7 +139,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     def _check_env(self) -> None:
         if not self.store.sites:
-            self.status("Chưa có website — vào tab Cấu hình để thêm.")
+            self.status("Chưa có website — vào tab Cài đặt để thêm.")
 
     def status(self, text: str) -> None:
         """Chỉ hiển thị việc ĐANG LÀM ở thanh dưới (không dùng cho báo lỗi)."""
@@ -361,7 +361,7 @@ class MainWindow(QMainWindow):
                 self,
                 "Chưa có kịch bản",
                 f"Website “{site.name}” chưa có kịch bản đăng bài.\n\n"
-                "Vào Cấu hình → website → Kịch bản đăng bài để dán/import kịch bản.",
+                "Vào Cài đặt → website → Kịch bản đăng bài để dán/import kịch bản.",
             )
             return
 

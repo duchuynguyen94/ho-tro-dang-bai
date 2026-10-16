@@ -1,4 +1,4 @@
-"""Màn hình 'Cấu hình'."""
+"""Màn hình 'Cài đặt'."""
 from __future__ import annotations
 
 import json
@@ -33,6 +33,7 @@ from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
 from ..style import Card, polish_combos
 from ..toast import show_toast
+from ..widgets.update_panel import UpdatePanel
 from ..workers import LoginWorker, OpenLoginWorker
 
 IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
@@ -142,11 +143,13 @@ class ConfigPage(QWidget):
         ai_i = AIImagePanel(self.store)
         fmt = FormatPanel(self.store, self.changed.emit)
         tlinks = TitleLinksPanel(self.store, self.changed.emit)
+        updt = UpdatePanel(self.store)
         for key, panel, label in [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
             ("format", fmt, "Format Rule"),
             ("title_links", tlinks, "Link tiêu đề"),
+            ("update", updt, "Cập nhật phần mềm"),
         ]:
             self._panels[key] = panel
             self.stack.addWidget(panel)
@@ -664,7 +667,7 @@ class ProviderList(QWidget):
 
 
 class AIContentPanel(QWidget):
-    """Cấu hình AI nội dung — nút Lưu GHIM cố định trên đầu panel."""
+    """Cài đặt AI nội dung — nút Lưu GHIM cố định trên đầu panel."""
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -831,7 +834,7 @@ class AIContentPanel(QWidget):
 
 
 class AIImagePanel(QWidget):
-    """Cấu hình AI ảnh — nút Lưu GHIM cố định trên đầu panel."""
+    """Cài đặt AI ảnh — nút Lưu GHIM cố định trên đầu panel."""
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)

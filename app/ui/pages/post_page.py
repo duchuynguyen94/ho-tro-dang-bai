@@ -170,7 +170,7 @@ class PostPage(QWidget):
 
         sites = self.store.sites
         if not sites:
-            lab = QLabel("Chưa có website nào. Vào tab Cấu hình để thêm.")
+            lab = QLabel("Chưa có website nào. Vào tab Cài đặt để thêm.")
             lab.setProperty("class", "hint")
             self.sites_box.addWidget(lab)
             self._validate()
@@ -212,7 +212,7 @@ class PostPage(QWidget):
         if not has_rule:
             problems.append(
                 "chưa có file quy định nội dung "
-                "(vào <b>Cấu hình → Format &amp; rule bài viết</b> để thêm)"
+                "(vào <b>Cài đặt → Format &amp; rule bài viết</b> để thêm)"
             )
         if not has_link:
             problems.append("chưa nhập link bài viết nguồn")
