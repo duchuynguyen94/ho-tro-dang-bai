@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import os
+import signal
+import subprocess
 import time
 from pathlib import Path
 
@@ -33,6 +35,80 @@ def _user_data_dir(site_id: str) -> str:
 
 
 LOCK_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
+
+
+def _pids_using_profile(user_data_dir: str) -> list[int]:
+    """Các tiến trình Chrome/Edge đang dùng profile của app (do lần trước còn sót)."""
+    pids: list[int] = []
+    want = user_data_dir.lower()
+    if os.name == "nt":
+        try:
+            ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*"
+                  + user_data_dir.replace("'", "''") + "*' } | ForEach-Object { $_.ProcessId }")
+            out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
+                                 capture_output=True, text=True, timeout=20)
+            for line in (out.stdout or "").splitlines():
+                line = line.strip()
+                if line.isdigit():
+                    pids.append(int(line))
+        except Exception:
+            pass
+        return pids
+    try:
+        out = subprocess.run(["ps", "-Ao", "pid=,command="],
+                             capture_output=True, text=True, timeout=15)
+    except Exception:
+        return pids
+    for line in (out.stdout or "").splitlines():
+        line = line.strip()
+        if not line or want not in line.lower():
+            continue
+        pid_s, _, cmd = line.partition(" ")
+        low = cmd.lower()
+        if not any(k in low for k in ("chrome", "chromium", "msedge", "edge")):
+            continue
+        try:
+            pid = int(pid_s)
+        except ValueError:
+            continue
+        if pid > 0 and pid != os.getpid():
+            pids.append(pid)
+    return pids
+
+
+def _kill_profile_browsers(user_data_dir: str) -> int:
+    """Tắt hẳn các tiến trình Chrome/Edge đang giữ profile của app.
+
+    An toàn: chỉ đụng tới tiến trình có `--user-data-dir` = thư mục session của app
+    (trình duyệt cá nhân của người dùng dùng profile khác).
+    """
+    pids = _pids_using_profile(user_data_dir)
+    if not pids:
+        return 0
+    killed = 0
+    for pid in pids:
+        try:
+            if os.name == "nt":
+                subprocess.run(["taskkill", "/PID", str(pid), "/F"],
+                               capture_output=True, timeout=15)
+            else:
+                os.kill(pid, signal.SIGTERM)
+            killed += 1
+        except Exception:
+            pass
+    if os.name != "nt":
+        # chờ tối đa ~4s cho tiến trình thoát hẳn
+        for _ in range(16):
+            if not any(_pid_alive(p) for p in pids):
+                break
+            time.sleep(0.25)
+        for pid in pids:                       # còn cứng đầu -> kill -9
+            if _pid_alive(pid):
+                try:
+                    os.kill(pid, signal.SIGKILL)
+                except Exception:
+                    pass
+    return killed
 
 
 def _pid_alive(pid: int) -> bool:
@@ -96,39 +172,58 @@ class WPBrowser:
 
         errors: list[str] = []
         for label, extra in attempts:
-            try:
-                kwargs = dict(
-                    user_data_dir=_user_data_dir(self.site_id),
-                    headless=self.headless,
-                    args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
-                )
-                if self.headless:
-                    kwargs["viewport"] = {"width": 1400, "height": 900}
-                else:
-                    # cửa sổ mở TO HẾT màn hình: tránh bị che mất thanh cuộn / phần dưới
-                    kwargs["no_viewport"] = True
-                kwargs.update(extra)
-                self.context = self._pw.chromium.launch_persistent_context(**kwargs)
-                self.channel_used = label
-                break
-            except Exception as exc:  # thử cách khác
-                first_line = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
-                errors.append(f"- {label}: {first_line}")
-                low = str(exc).lower()
-                if ("singleton" in low or "profile" in low or "in use" in low
-                        or "user data directory" in low or "processsingleton" in low):
-                    _clear_profile_lock(_user_data_dir(self.site_id))
+            opened = False
+            for retry in (False, True):
                 try:
-                    self._pw.stop()
-                except Exception:
-                    pass
-                self._pw = sync_playwright().start()
-        else:
+                    kwargs = dict(
+                        user_data_dir=_user_data_dir(self.site_id),
+                        headless=self.headless,
+                        args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
+                    )
+                    if self.headless:
+                        kwargs["viewport"] = {"width": 1400, "height": 900}
+                    else:
+                        # cửa sổ mở TO HẾT màn hình: tránh bị che mất thanh cuộn / phần dưới
+                        kwargs["no_viewport"] = True
+                    kwargs.update(extra)
+                    self.context = self._pw.chromium.launch_persistent_context(**kwargs)
+                    self.channel_used = label
+                    opened = True
+                    break
+                except Exception as exc:  # thử cách khác
+                    first_line = str(exc).splitlines()[0][:200] if str(exc) else type(exc).__name__
+                    low = str(exc).lower()
+                    in_use = any(k in low for k in (
+                        "singleton", "in use", "existing browser session",
+                        "user data directory", "processsingleton", "profile"))
+                    if in_use and not retry:
+                        # Chrome cũ còn giữ profile (lần chạy trước chưa tắt)
+                        # -> tắt nó rồi thử lại CHÍNH cách này
+                        d = _user_data_dir(self.site_id)
+                        _clear_profile_lock(d)
+                        _kill_profile_browsers(d)
+                        _clear_profile_lock(d)
+                        try:
+                            self._pw.stop()
+                        except Exception:
+                            pass
+                        self._pw = sync_playwright().start()
+                        continue
+                    errors.append(f"- {label}: {first_line}")
+                    try:
+                        self._pw.stop()
+                    except Exception:
+                        pass
+                    self._pw = sync_playwright().start()
+                    break
+            if opened:
+                break
+        if self.context is None:
             detail = "\n".join(errors) if errors else "không rõ"
             raise RuntimeError(
                 "Không mở được trình duyệt. Đã thử:\n" + detail
-                + "\n\nCách xử lý: cài Google Chrome, hoặc mở Cấu hình → website → "
-                "kiểm tra lại."
+                + "\n\nCách xử lý: đóng hết cửa sổ Chrome của phần mềm rồi thử lại, "
+                "hoặc cài Google Chrome, hoặc mở Cấu hình → website → kiểm tra lại."
             )
 
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
