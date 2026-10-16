@@ -234,6 +234,18 @@ class Store:
     def set_update_url(self, url: str) -> None:
         self.data["update_url"] = str(url or "").strip()
 
+    @property
+    def update_token(self) -> str:
+        """Token GitHub (chỉ cần khi repo private) — lưu mã hoá."""
+        from . import crypto
+
+        return crypto.decrypt(str(self.data.get("update_token_enc") or ""))
+
+    def set_update_token(self, token: str) -> None:
+        from . import crypto
+
+        self.data["update_token_enc"] = crypto.encrypt(str(token or "").strip())
+
     # ------------------------------------------------------------------ #
     # Phần cấu hình con
     # ------------------------------------------------------------------ #

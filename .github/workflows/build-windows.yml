@@ -4,6 +4,14 @@ name: build-windows
 # Vào GitHub → Actions → build-windows → Run workflow để build.
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Phiên bản phát hành (vd 0.2.0) — để trống nếu chỉ build thử"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -15,16 +23,19 @@ jobs:
         with:
           python-version: "3.12"
 
+      - name: Ghi số phiên bản vào app
+        if: ${{ inputs.version != '' }}
+        shell: pwsh
+        run: |
+          $v = "${{ inputs.version }}"
+          (Get-Content app/__init__.py) -replace '__version__ = ".*"', "__version__ = `"$v`"" | Set-Content app/__init__.py
+          Select-String -Path app/__init__.py -Pattern __version__
+
       - name: Cài thư viện
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
-
-      - name: Tải Chromium kèm theo app
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: "0"
-        run: python -m playwright install chromium
 
       - name: Kiểm tra ứng dụng khởi động (smoke test)
         env:
@@ -32,9 +43,8 @@ jobs:
           HTDB_DATA_DIR: ${{ runner.temp }}\htdb_smoke
         run: python -c "from app.ui.main_window import MainWindow; from PySide6.QtWidgets import QApplication; a=QApplication([]); w=MainWindow(); print('OK', w.stack.count())"
 
+      # KHÔNG kèm Chromium: app dùng Google Chrome có sẵn trên máy (gói nhẹ)
       - name: Build .exe (PyInstaller)
-        env:
-          PLAYWRIGHT_BROWSERS_PATH: "0"
         run: >
           pyinstaller --noconfirm --clean --windowed
           --name HoTroDangBai
@@ -95,3 +105,13 @@ jobs:
           name: HoTroDangBai-windows
           path: HoTroDangBai-windows.zip
           if-no-files-found: error
+
+      - name: Tạo Release (để máy Windows bấm "Cập nhật ngay" là xong)
+        if: ${{ inputs.version != '' }}
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >
+          gh release create "v${{ inputs.version }}" HoTroDangBai-windows.zip
+          --title "v${{ inputs.version }}"
+          --notes "Bản phát hành v${{ inputs.version }}. Máy Windows: mở Cài đặt - Cập nhật phần mềm - bấm Cập nhật ngay."

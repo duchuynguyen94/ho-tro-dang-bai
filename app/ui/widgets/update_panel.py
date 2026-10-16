@@ -73,16 +73,23 @@ class UpdatePanel(QWidget):
         # ---- nguồn cập nhật ----
         card2 = Card("Nguồn cập nhật")
         sub = QLabel(
-            "App đã <b>gắn sẵn link mặc định</b> — chỉ đổi nếu bạn để file ở chỗ khác.<br>"
-            "File <b>version.json</b> đặt trên website/hosting của bạn, nội dung:<br>"
-            '<code>{ "version": "0.2.0", "url": "https://.../HoTroDangBai-windows.zip", '
-            '"notes": "mô tả thay đổi (không bắt buộc)" }</code>'
+            "App đã <b>gắn sẵn nguồn mặc định</b> (GitHub Releases) — máy Windows không phải "
+            "dán gì, chỉ cần bấm <b>Cập nhật ngay</b>.<br>"
+            "Có thể đổi thành <b>owner/repo</b> GitHub khác, link GitHub, hoặc link "
+            "<code>version.json</code> trên website của bạn."
         )
         sub.setProperty("class", "sub")
         sub.setWordWrap(True)
         card2.body.addWidget(sub)
         self.url_edit = QLineEdit(upd.update_url(self.store))   # điền sẵn link mặc định
         card2.body.addWidget(self.url_edit)
+
+        self.token_edit = QLineEdit(self.store.update_token)
+        self.token_edit.setEchoMode(QLineEdit.Password)
+        self.token_edit.setPlaceholderText(
+            "Token GitHub — chỉ cần khi repo private (bỏ trống nếu repo public)"
+        )
+        card2.body.addWidget(self.token_edit)
         v.addWidget(card2)
 
         # ---- nút ----
@@ -142,6 +149,7 @@ class UpdatePanel(QWidget):
     def _save_url(self) -> str:
         url = self.url_edit.text().strip()
         self.store.set_update_url(url)
+        self.store.set_update_token(self.token_edit.text().strip())
         self.store.save()
         return url
 
@@ -162,7 +170,7 @@ class UpdatePanel(QWidget):
         self._info = None
         self.status.setText("Đang kiểm tra bản mới…")
         self._set_busy(True)
-        w = UpdateWorker(url)
+        w = UpdateWorker(url, token=self.store.update_token)
         self.worker = w
         w.log.connect(self.status.setText)
         w.checked.connect(self._on_checked)
