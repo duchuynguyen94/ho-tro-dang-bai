@@ -312,6 +312,7 @@ class JobsPage(QWidget):
     recompose_all = Signal(object)           # (task) ghép lại TOÀN BỘ ảnh (sau thêm/xoá/sắp xếp)
     export_images = Signal(object)           # (task) xuất ảnh vào thư mục bài + mở thư mục
     trim_component = Signal(object, str, int)  # (task, loại thành phần, chỉ số) cắt viền ảnh
+    open_model_extractor = Signal()            # mở popup Model Extractor
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
@@ -503,9 +504,14 @@ class JobsPage(QWidget):
         self.check_label.setObjectName("taskMeta")
         f.addWidget(self.check_label)
         f.addStretch(1)
+        self.model_btn = QPushButton("Model Extractor")
+        self.model_btn.setProperty("class", "ghost")
+        self.model_btn.setToolTip("Nhập danh sách link nguồn → trích xuất Product Models theo Rule Model Extractor")
+        self.model_btn.clicked.connect(self.open_model_extractor.emit)
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
         self.post_btn.clicked.connect(lambda: self.current and self.post.emit(self.current))
+        f.addWidget(self.model_btn)
         f.addWidget(self.post_btn)
         right.body.addWidget(self.footer)
         self.footer.hide()

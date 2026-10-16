@@ -730,3 +730,71 @@ def generate_field(store, source: dict, field: str, current: str = "", log=None)
 
 def parse_json_response(text: str) -> dict:  # tương thích ngược
     return providers.parse_json_response(text)
+
+
+# --------------------------------------------------------------------------- #
+# Model Extractor: trích xuất product models từ danh sách link nguồn
+# --------------------------------------------------------------------------- #
+def build_extractor_prompt(rules, url: str, text: str) -> str:
+    """Prompt cho provider API: nhúng nội dung file Rule Model Extractor."""
+    rule = read_rule(getattr(rules, "extractor", ""))
+    return f"""Bạn là chuyên gia trích xuất dữ liệu sản phẩm.
+Hãy làm theo ĐÚNG file quy định dưới đây.
+
+=== RULE MODEL EXTRACTOR ===
+{rule or "(Không có quy định riêng — hãy liệt kê mọi model sản phẩm tìm thấy.)"}
+
+=== NỘI DUNG TRANG NGUỒN ===
+URL: {url}
+{text}
+
+=== YÊU CẦU ===
+Trích xuất TOÀN BỘ product models theo đúng rule trên.
+CHỈ trả về danh sách model, mỗi dòng 1 model. Không giải thích, không thêm tiêu đề.
+"""
+
+
+def build_extractor_short_prompt(url: str, text: str) -> str:
+    """Prompt ngắn cho ChatGPT (file rule nằm trong Project)."""
+    return f"""Đọc nội dung trang nguồn dưới đây và trích xuất TOÀN BỘ product models theo file
+**Rule_Model_Extractor.pdf** đã đính kèm (sources) trong Project này.
+
+Link nguồn: {url}
+
+=== NỘI DUNG TRANG NGUỒN ===
+{text}
+
+CHỈ trả về danh sách model, mỗi dòng 1 model. Không giải thích.
+"""
+
+
+def extract_models(store, link: str, text: str, log=None, should_stop=None) -> str:
+    """Gọi provider (theo chuỗi ưu tiên) để trích xuất product models từ 1 link nguồn."""
+    cfg = store.ai_content
+    rules = store.formats
+    full = build_extractor_prompt(rules, link, text)
+    short = build_extractor_short_prompt(link, text)
+    errors: list[str] = []
+
+    for provider in _active_chain(cfg):
+        pcfg = (cfg.get("providers") or {}).get(provider, {})
+        api_key = crypto.decrypt(pcfg.get("api_key_enc", ""))
+        if provider in API_PROVIDERS and not api_key:
+            errors.append(f"{provider}: thiếu API key")
+            continue
+        try:
+            if should_stop and should_stop():
+                raise providers.AIError("Đã dừng theo yêu cầu.")
+            if provider == "chatgpt":
+                from .chatgpt_browser import generate_with_chatgpt
+
+                show = bool(pcfg.get("show_browser", False))
+                return generate_with_chatgpt(pcfg, short, log, show_browser=show) or ""
+            if log:
+                log(f"Đang trích xuất bằng {provider}…")
+            return providers.generate_text(provider, pcfg, full, api_key) or ""
+        except Exception as exc:      # noqa: BLE001
+            errors.append(f"{provider}: {exc}")
+            if log:
+                log(f"{provider} lỗi → thử provider khác…")
+    raise providers.AIError(_fmt_errors(errors))

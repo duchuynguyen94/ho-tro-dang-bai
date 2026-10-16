@@ -487,23 +487,34 @@ def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = Fals
 # API chính
 # --------------------------------------------------------------------------- #
 def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
-                          require_json: bool = False) -> str:
-    """1 lượt: gửi prompt, chờ trả lời."""
+                          require_json: bool = False, show_browser: bool = True) -> str:
+    """1 lượt: gửi prompt, chờ trả lời. show_browser=False -> chạy ẩn (có tự thử lại khi lỗi)."""
     from ..wp import WPBrowser
 
     project_url = (pcfg or {}).get("project_url", "") or ""
-    br = WPBrowser(headless=False, site_id="chatgpt")
-    try:
-        page = _open_page(br, project_url, log)
-        if log:
-            log("Đang gửi yêu cầu cho ChatGPT…")
-        _send(page, prompt)
-        return _wait_reply(page, prompt, timeout, require_json)
-    finally:
+
+    def _run(headless: bool) -> str:
+        br = WPBrowser(headless=headless, site_id="chatgpt")
         try:
-            br.close()
-        except Exception:
-            pass
+            page = _open_page(br, project_url, log)
+            if log:
+                log("Đang gửi yêu cầu cho ChatGPT…")
+            _send(page, prompt)
+            return _wait_reply(page, prompt, timeout, require_json)
+        finally:
+            try:
+                br.close()
+            except Exception:
+                pass
+
+    try:
+        return _run(not show_browser)
+    except AIError as exc:
+        if show_browser or "Đã dừng" in str(exc):
+            raise
+        if log:
+            log("Chế độ ẩn không chạy được — mở cửa sổ Chrome và thử lại…")
+        return _run(False)
 
 
 def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,

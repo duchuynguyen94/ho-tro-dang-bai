@@ -122,6 +122,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.recompose_all.connect(self._on_recompose_all)
         self.jobs_page.export_images.connect(self._on_export_images)
         self.jobs_page.trim_component.connect(self._on_trim_component)
+        self.jobs_page.open_model_extractor.connect(self._on_model_extractor)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.config_page.changed.connect(self._on_config_changed)
@@ -516,6 +517,13 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         show_toast(self, f"Đã xuất {len(paths)} ảnh — đã mở thư mục bài", 3000)
+
+    def _on_model_extractor(self) -> None:
+        """Mở popup Model Extractor (nhập list link nguồn -> trích xuất product models)."""
+        from .widgets.model_extractor import ModelExtractorDialog
+
+        dlg = ModelExtractorDialog(self.store, self)
+        dlg.exec()
 
     def _on_trim_component(self, task, kind: str, index: int) -> None:
         """Cắt viền thừa (trim) cho ảnh sản phẩm / logo brand rồi ghép lại ảnh."""
