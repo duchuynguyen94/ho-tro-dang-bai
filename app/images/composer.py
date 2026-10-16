@@ -14,37 +14,82 @@ PRODUCT_BOX = 0.30      # tỉ lệ cạnh hộp sản phẩm so với khổ ả
 # --------------------------------------------------------------------------- #
 # Tiện ích
 # --------------------------------------------------------------------------- #
+def _font_dirs() -> list[Path]:
+    return [
+        Path("/Library/Fonts"),
+        Path.home() / "Library/Fonts",
+        Path("/System/Library/Fonts"),
+        Path("/System/Library/Fonts/Supplemental"),
+        Path("C:/Windows/Fonts"),
+        Path("/usr/share/fonts"),
+        Path("/usr/share/fonts/truetype"),
+    ]
+
+
+# Thứ tự ưu tiên: Canva Sans (nếu có cài) -> Avenir/Futura (giống Canva Sans) -> còn lại
+FONT_PREFERENCE = (
+    "canvasans",
+    "avenirnext",
+    "avenir",
+    "futura",
+    "centurygothic",
+    "montserrat",
+    "poppins",
+    "inter",
+    "helveticaneue",
+    "helvetica",
+    "segoeui",
+    "arial",
+    "dejavusans",
+)
+
+
 def _find_font(size: int) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
-    # ưu tiên "Canva Sans" nếu người dùng đã cài trên máy
-    for d in (Path("/Library/Fonts"), Path.home() / "Library/Fonts",
-              Path("/System/Library/Fonts"), Path("/System/Library/Fonts/Supplemental")):
+    """Chọn font watermark: ưu tiên Canva Sans, rồi Avenir/Futura (giống Canva Sans)."""
+    files: list[Path] = []
+    for d in _font_dirs():
         try:
-            if not d.exists():
-                continue
-            for p in sorted(d.glob("*")):
-                n = p.name.lower().replace(" ", "").replace("-", "").replace("_", "")
-                if "canvasans" in n and p.suffix.lower() in (".ttf", ".otf", ".ttc"):
-                    try:
-                        return ImageFont.truetype(str(p), size)
-                    except OSError:
-                        pass
+            if d.exists():
+                files += [p for p in sorted(d.glob("*"))
+                          if p.is_file() and p.suffix.lower() in (".ttf", ".otf", ".ttc")]
         except OSError:
             continue
-    candidates = [
-        "/System/Library/Fonts/Supplemental/Arial.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
-        "/Library/Fonts/Arial.ttf",
-        "C:/Windows/Fonts/arial.ttf",
-        "C:/Windows/Fonts/segoeui.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-    ]
-    for c in candidates:
-        p = Path(c)
-        if p.exists():
-            try:
-                return ImageFont.truetype(str(p), size)
-            except OSError:
+
+    bad = ("condensed", "narrow", "light", "ultra", "thin", "italic", "oblique",
+           "extended", "expanded", "black")
+
+    def norm(p: Path) -> str:
+        return p.name.lower().replace(" ", "").replace("-", "").replace("_", "")
+
+    def usable(p: Path) -> bool:
+        n = p.name.lower()
+        return not any(b in n for b in bad)
+
+    for want in FONT_PREFERENCE:
+        for f in files:
+            if want not in norm(f) or not usable(f):
                 continue
+            best = None
+            for idx in range(0, 9):
+                try:
+                    fnt = ImageFont.truetype(str(f), size, index=idx)
+                except (OSError, ValueError):
+                    continue
+                try:
+                    _fam, style = fnt.getname()
+                except Exception:
+                    style = ""
+                st = (style or "").lower()
+                if "italic" in st or "oblique" in st:
+                    continue
+                if any(k in st for k in ("demibold", "semi", "bold")):
+                    return fnt
+                if any(k in st for k in ("medium", "regular")) and best is None:
+                    best = fnt
+                elif best is None:
+                    best = fnt
+            if best is not None:
+                return best
     return ImageFont.load_default()
 
 

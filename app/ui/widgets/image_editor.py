@@ -590,7 +590,8 @@ class ImageEditorPanel(QFrame):
         painter.setRenderHint(QPainter.Antialiasing)
         font = QFont()
         try:
-            font.setFamilies(["Canva Sans", "Arial", "Helvetica Neue", "Helvetica"])
+            font.setFamilies(["Canva Sans", "Avenir Next", "Avenir", "Futura",
+                              "Century Gothic", "Montserrat", "Arial", "Helvetica"])
         except Exception:
             font.setFamily("Arial")
         font.setBold(True)
