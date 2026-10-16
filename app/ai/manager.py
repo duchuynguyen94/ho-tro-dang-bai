@@ -58,7 +58,7 @@ CONTENT_OUTPUT_SPEC = (
     "⚙️ Tính năng kỹ thuật nổi bật; 📋 Thông số kỹ thuật tiêu chuẩn; 🧱 Vật liệu & xử lý – Độ bền vượt trội; "
     "🔄 Tương thích – Thay thế – Mở rộng; 🎯 Ứng dụng thực tế; 💡 Tại sao nên mua tại Ngọc Huy Dương?; "
     "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; 🧩 Phiên bản & Mã sản phẩm; 🧩 FAQ (5 câu).\n"
-    "ICON Ở DÒNG LIÊN HỆ: 🌐 trước website; ☎️ trước số điện thoại trong dòng liên hệ lặp lại; "
+    "ICON Ở DÒNG LIÊN HỆ: 🌐 trước website; ☎️ trước số điện thoại và ✉️ trước email trong dòng liên hệ lặp lại; "
     "📞 trước hotline ở các dòng “Liên hệ ngay:”, “Hotline:”, “Hỗ trợ chọn cấu hình…”, “Gọi tư vấn theo ngành:”; "
     "📧 trước “Gửi yêu cầu tư vấn kỹ thuật”, ✉️ trước email trong dòng “Liên hệ ngay”, "
     "📩 trước “Bạn cần bảng model … đầy đủ?”."
@@ -565,6 +565,10 @@ def _decorate_line(text: str) -> str:
         if m:
             prefix = re.sub(r"[☎📞]️?\s*$", "", s[: m.start()])   # bỏ icon điện thoại cũ
             s = f"{prefix}☎️ {s[m.start():]}"
+        m = _EMAIL_RE.search(s)
+        if m:
+            prefix = re.sub(r"[✉📧]️?\s*$", "", s[: m.start()])   # bỏ icon email cũ
+            s = f"{prefix}✉️ {s[m.start():]}"
         return s
 
     if low.startswith("liên hệ ngay"):
