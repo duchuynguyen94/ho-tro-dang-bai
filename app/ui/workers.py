@@ -753,7 +753,7 @@ class ModelExtractorWorker(TrackedThread):
 
     def run(self) -> None:
         from .. import source as src
-        from ..ai.manager import extract_models
+        from ..ai.manager import clean_model_lines, extract_models
 
         try:
             if not self.links:
@@ -779,7 +779,7 @@ class ModelExtractorWorker(TrackedThread):
                     continue
                 res = extract_models(self.store, link, text, log=self.log.emit,
                                      should_stop=lambda: self._cancel)
-                block = (res or "").strip()
+                block = clean_model_lines(res)
                 if block:
                     out.append(block)
                     self.partial.emit("\n".join(out))

@@ -750,7 +750,16 @@ URL: {url}
 
 === YÊU CẦU ===
 Trích xuất TOÀN BỘ product models theo đúng rule trên.
-CHỈ trả về danh sách model, mỗi dòng 1 model. Không giải thích, không thêm tiêu đề.
+
+ĐỊNH DẠNG KẾT QUẢ (BẮT BUỘC):
+- MỖI DÒNG chỉ ghi ĐÚNG 1 mã model, không gì khác.
+- KHÔNG đánh số (1., 2., …), KHÔNG gạch đầu dòng (-, •, *), KHÔNG markdown.
+- KHÔNG thêm tiêu đề, không giải thích, không dòng trống.
+
+Ví dụ kết quả đúng:
+BI15U-EM30WDTC-AP6X
+BI10U-EM30WDTC-AP6X
+BI8U-EM30WDTC-AP6X
 """
 
 
@@ -764,7 +773,10 @@ Link nguồn: {url}
 === NỘI DUNG TRANG NGUỒN ===
 {text}
 
-CHỈ trả về danh sách model, mỗi dòng 1 model. Không giải thích.
+ĐỊNH DẠNG KẾT QUẢ (BẮT BUỘC): MỖI DÒNG chỉ ghi ĐÚNG 1 mã model, không đánh số,
+không gạch đầu dòng, không markdown, không thêm chữ nào khác. Ví dụ:
+BI15U-EM30WDTC-AP6X
+BI10U-EM30WDTC-AP6X
 """
 
 
@@ -798,3 +810,24 @@ def extract_models(store, link: str, text: str, log=None, should_stop=None) -> s
             if log:
                 log(f"{provider} lỗi → thử provider khác…")
     raise providers.AIError(_fmt_errors(errors))
+
+
+def clean_model_lines(text: str) -> str:
+    """Dọn kết quả Model Extractor: mỗi dòng 1 mã, bỏ gạch đầu dòng / số thứ tự / markdown."""
+    out: list[str] = []
+    for raw in (text or "").splitlines():
+        s = raw.strip()
+        if not s:
+            continue
+        s = re.sub(r"^[-*•·▪◦‣–—]+\s*", "", s)      # gạch đầu dòng
+        s = re.sub(r"^\d+[.)]\s+", "", s)           # "1. " / "2) "
+        s = re.sub(r"^[*_`]{1,3}", "", s)
+        s = re.sub(r"[*_`]{1,3}$", "", s)
+        s = s.strip().strip(",\"'").strip()
+        # bỏ nhãn ở đầu dòng nhưng GIỮ LẠI mã phía sau ("Kết quả: ABC-123" -> "ABC-123")
+        s = re.sub(r"^(output|kết quả|ket qua|ví dụ|vi du|product\s*models?)\s*[:.\-–]?\s*",
+                   "", s, flags=re.I).strip()
+        if not s:
+            continue
+        out.append(s)
+    return "\n".join(out)
