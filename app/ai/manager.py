@@ -16,11 +16,44 @@ REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags")
 
 # Kết quả bước 1 (theo Rule Content)
 CONTENT_OUTPUT_SPEC = (
-    "• Tiêu đề bài viết\n"
-    "• Nội dung bài viết\n"
-    "• Danh sách Product Models\n"
-    "• Bảng thông số kỹ thuật\n"
-    "• Thông tin liên hệ"
+    "Bám ĐÚNG mục 5. TEMPLATE của RULE CONTENT: đúng THỨ TỰ mục, đúng TÊN MỤC, đúng các dòng "
+    "liên hệ lặp lại giữa các mục. (Nếu RULE CONTENT ghi khác danh sách này thì theo RULE CONTENT.)\n"
+    "1. <h1> tiêu đề bài viết: [Keyword] [Brand] [Model] – [Tính năng hoặc ứng dụng nổi bật]\n"
+    "2. <p> “Được phân phối chính hãng bởi Ngọc Huy Dương – Đơn vị chuyên cung cấp thiết bị "
+    "công nghiệp tại Việt Nam”\n"
+    "3. <p> dòng liên hệ: www.ngochuyduong.com | 0909 399 174 | thach.phan@ngochuyduong.com\n"
+    "4. <h2>Giới thiệu tổng quan</h2>: 3 gạch đầu dòng như template (giới thiệu sản phẩm/dòng sản "
+    "phẩm, công năng, mục đích sử dụng; giới thiệu thương hiệu: trụ sở, lịch sử, thị trường, chứng "
+    "nhận uy tín; khẳng định Ngọc Huy Dương là nhà phân phối chính thức tại Việt Nam – hàng chính "
+    "hãng, đủ CO/CQ, hỗ trợ kỹ thuật & bảo hành toàn quốc) → kết mục bằng dòng "
+    "“Liên hệ ngay: 0909 399 174 | thach.phan@ngochuyduong.com - [Keyword] [Brand] [Model]”\n"
+    "5. <h2>Tính năng kỹ thuật nổi bật [Keyword] [Brand] [Model]</h2>: 3–5 ưu điểm (hiệu suất, độ "
+    "bền, chịu nhiệt, chống ăn mòn, thông minh, tiết kiệm năng lượng), ghi rõ chứng nhận CE/ISO/UL "
+    "nếu có → dòng “Gửi yêu cầu tư vấn kỹ thuật: thach.phan@ngochuyduong.com”\n"
+    "6. <h2>Thông số kỹ thuật tiêu chuẩn [Keyword] [Brand] [Model]</h2>: dòng liên hệ, rồi <table> "
+    "2 cột “Thông số kỹ thuật” | “Giá trị điển hình” với ĐÚNG 5 hàng: Áp suất làm việc, Nhiệt độ làm "
+    "việc, Kích thước kết nối, Chất liệu thân, Tín hiệu ra / Đầu vào → dòng “Hỗ trợ chọn cấu hình "
+    "theo yêu cầu thực tế: 0909 399 174 - [Keyword] [Brand] [Model]”\n"
+    "7. <h2>Vật liệu & xử lý – Độ bền vượt trội [Keyword] [Brand] [Model]</h2>: vật liệu (inox, nhôm, "
+    "nhựa kỹ thuật, gang cầu…), xử lý bề mặt (sơn epoxy, mạ kẽm, tôi cứng, phủ PTFE…) kèm 1–2 ví dụ "
+    "cụ thể → dòng liên hệ\n"
+    "8. <h2>Tương thích – Thay thế – Mở rộng [Keyword] [Brand] [Model]</h2>: so sánh tương thích với "
+    "thương hiệu khác (GEMÜ, Alfa Laval, Festo…), khả năng thay thế, chuẩn công nghiệp, dễ nâng cấp "
+    "hệ thống → dòng liên hệ\n"
+    "9. <h2>Ứng dụng thực tế [Keyword] [Brand] [Model]</h2>: dòng liên hệ, rồi 5 ứng dụng (nhà máy "
+    "dược phẩm; dây chuyền thực phẩm – đồ uống; hệ thống xử lý nước – CIP; hệ thống khí sạch – phòng "
+    "sạch; nhà máy hóa chất – mỹ phẩm) → dòng “Gọi tư vấn theo ngành: 0909 399 174 - [Keyword] "
+    "[Brand] [Model]”\n"
+    "10. <h2>Tại sao nên mua tại Ngọc Huy Dương?</h2>: 4 gạch đầu dòng như template (hơn 15 năm kinh "
+    "nghiệm; chính hãng – giá cạnh tranh; hỗ trợ kỹ thuật tận tâm & sau bán hàng toàn quốc; hợp tác "
+    "lâu dài với nhà máy, kỹ sư thiết kế, nhà thầu lớn) → dòng liên hệ\n"
+    "11. <h2>Liên hệ – Đặt hàng / Tư vấn kỹ thuật [Keyword] [Brand] [Model]</h2>: CÔNG TY TNHH NGỌC "
+    "HUY DƯƠNG + Website: www.ngochuyduong.com, Email: thach.phan@ngochuyduong.com, Hotline: 0909 399 "
+    "174 + câu mời liên hệ để được tư vấn sản phẩm\n"
+    "12. <h2>Phiên bản & Mã sản phẩm [Keyword] [Brand] [Model]</h2>: dòng liên hệ → dòng “Bạn cần "
+    "bảng model [Keyword] [Brand] [Model] đầy đủ? Gửi yêu cầu: thach.phan@ngochuyduong.com”\n"
+    "13. <h2>FAQ (5 câu)</h2>: 5 câu hỏi kèm câu trả lời ngắn, sát sản phẩm.\n"
+    "Giữ NGUYÊN các dòng liên hệ lặp lại giữa các mục (không bỏ, không đổi website/điện thoại/email)."
 )
 
 # Kết quả bước 2 (theo Rule SEO)
@@ -429,10 +462,38 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
 
 
 DEFAULT_SECTIONS = (
-    "giới thiệu tổng quan",
-    "tính năng kỹ thuật nổi bật",
-    "thông số kỹ thuật tiêu chuẩn",
+    "Giới thiệu tổng quan",
+    "Tính năng kỹ thuật nổi bật",
+    "Thông số kỹ thuật tiêu chuẩn",
+    "Vật liệu & xử lý – Độ bền vượt trội",
+    "Tương thích – Thay thế – Mở rộng",
+    "Ứng dụng thực tế",
+    "Tại sao nên mua tại Ngọc Huy Dương?",
+    "Liên hệ – Đặt hàng / Tư vấn kỹ thuật",
+    "Phiên bản & Mã sản phẩm",
+    "FAQ (5 câu)",
 )
+
+
+def _section_re(name: str) -> re.Pattern:
+    """Regex linh hoạt cho tên mục: bỏ dấu câu cuối, cho phép “&”/“và”,
+    gạch “-”/“–”/“—” và khoảng trắng (kể cả xuống dòng)."""
+    toks = re.split(r"\s+", str(name or "").strip())
+    parts: list[str] = []
+    for t in toks:
+        t = t.strip("?:.,;!()")
+        if not t:
+            continue
+        if t in ("&", "và"):
+            parts.append(r"(?:&|và)")
+        elif t in ("-", "–", "—"):
+            parts.append(r"[-–—]")
+        else:
+            parts.append(re.escape(t))
+    if not parts:
+        return re.compile(r"(?!)")
+    # giữa các từ cho phép khoảng trắng + dấu câu (vd "FAQ (5 câu)")
+    return re.compile(r"[\s\W_]*".join(parts), re.I)
 
 
 def insert_title_links(html_text: str, site_url: str, links: list[str],
@@ -451,7 +512,7 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
     if not html_text:
         return html_text
     cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
-    secs = [x.strip().lower() for x in (sections or DEFAULT_SECTIONS) if str(x).strip()]
+    sec_res = [_section_re(x) for x in (sections or DEFAULT_SECTIONS) if str(x).strip()]
 
     head_re = re.compile(r"^<h([1-6])\b", re.I)      # tính cả h1 (tiêu đề bài viết)
     close_re = re.compile(r"^</h[1-6]", re.I)
@@ -479,20 +540,20 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
 
         text = part
         if depth and text.strip():
-            low = text.lower()
             href = ""
+            # tìm TÊN MỤC CHUẨN trong tiêu đề (linh hoạt &/và, -/–/—, dấu câu)
+            hit = None
+            for _re_sec in sec_res:
+                mm = _re_sec.search(text)
+                if mm:
+                    hit = mm
+                    break
             if heading_seen == 1:
                 href = _norm_url(site_url) if site_url else ""
-            elif any(sec in low for sec in secs):
+            elif hit:
                 href = next((l for l in pending if l not in used), "")
             if href:
-                # tìm TÊN MỤC CHUẨN trong tiêu đề -> bọc TOÀN BỘ chữ còn lại sau nó
-                hit = None
-                for sec in secs:
-                    mm = re.search(re.escape(sec), low)
-                    if mm:
-                        hit = mm
-                        break
+                # bọc TOÀN BỘ chữ còn lại SAU tên mục
                 if hit is not None and text[hit.end():].strip():
                     tail_raw = text[hit.end():]
                     tail = tail_raw.strip()
