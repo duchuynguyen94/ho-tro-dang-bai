@@ -1,8 +1,17 @@
 """Giao diện: màu sắc, style chung."""
 from __future__ import annotations
 
+from PySide6.QtCore import QEvent, QObject
 from PySide6.QtGui import QFont, QFontDatabase
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QLabel, QSizePolicy, QVBoxLayout, QWidget
+from PySide6.QtWidgets import (
+    QFrame,
+    QGraphicsOpacityEffect,
+    QHBoxLayout,
+    QLabel,
+    QSizePolicy,
+    QVBoxLayout,
+    QWidget,
+)
 
 ACCENT = "#2563eb"
 ACCENT_DARK = "#1d4ed8"
@@ -171,6 +180,12 @@ QPushButton.green {{ background: {GREEN}; color: #ffffff; border: none; border-r
 QPushButton.green:hover {{ background: #15803d; }}
 QPushButton.danger {{ background: #ffffff; color: {RED}; border: 1px solid #fecaca; border-radius: 7px; padding: 8px 12px; }}
 QPushButton.danger:hover {{ background: #fef2f2; }}
+/* nút bị khoá: làm mờ rõ ràng */
+QPushButton:disabled {{ color: #b8c0cc; }}
+QPushButton.ghost:disabled {{ background: #f8fafc; color: #b8c0cc; border-color: #e5e7eb; }}
+QPushButton.green:disabled {{ background: #e2e8f0; color: #94a3b8; }}
+QPushButton.danger:disabled {{ background: #f8fafc; color: #cbd5e1; border-color: #eef1f5; }}
+QPushButton.primary:disabled {{ background: #eef1f5; color: #b8c0cc; }}
 QPushButton#recordBtn {{ background: {RED}; color: #ffffff; border: none; border-radius: 7px; padding: 8px 14px; font-weight: 600; }}
 QPushButton#recordBtn:hover {{ background: #b91c1c; }}
 
@@ -272,3 +287,41 @@ class Card(QFrame):
 
     def add_header_widget(self, w: QWidget) -> None:
         self.header_layout.addWidget(w)
+
+
+class _DimOnDisable(QObject):
+    """Giữ nút ở trạng thái MỜ khi bị disabled (QSS không hỗ trợ opacity)."""
+
+    def __init__(self, btn, opacity: float = 0.45) -> None:
+        super().__init__(btn)
+        self.btn = btn
+        self.opacity = opacity
+        self.eff = QGraphicsOpacityEffect(btn)
+        self.eff.setOpacity(1.0)
+        btn.setGraphicsEffect(self.eff)
+        btn.installEventFilter(self)
+        self._sync()
+
+    def _sync(self) -> None:
+        try:
+            self.eff.setOpacity(self.opacity if not self.btn.isEnabled() else 1.0)
+        except RuntimeError:
+            pass
+
+    def eventFilter(self, obj, ev):      # noqa: N802
+        if ev.type() == QEvent.EnabledChange:
+            self._sync()
+        return False
+
+
+def dim_when_disabled(btn, opacity: float = 0.45) -> None:
+    """Nút sẽ MỜ đi khi bị disabled, sáng lại khi bật."""
+    _DimOnDisable(btn, opacity)
+
+
+def dim_all_buttons(root, opacity: float = 0.45) -> None:
+    """Áp dụng cho mọi QPushButton trong 1 widget (dùng sau khi dựng UI)."""
+    from PySide6.QtWidgets import QPushButton
+
+    for b in root.findChildren(QPushButton):
+        dim_when_disabled(b, opacity)

@@ -61,6 +61,12 @@ class MainWindow(QMainWindow):
         self._content_workers: dict = {}
         self._img_workers: dict = {}
         self._build()
+        try:                       # nút bị khoá -> mờ đi (mọi nút trong cửa sổ)
+            from .style import dim_all_buttons
+
+            dim_all_buttons(self)
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ #
     def _build(self) -> None:

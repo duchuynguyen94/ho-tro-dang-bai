@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QVBoxLayout,
 )
 
+from ..style import dim_when_disabled
 from ..workers import ModelExtractorWorker
 
 
@@ -70,6 +71,7 @@ class ModelExtractorDialog(QDialog):
         self.stop_btn = QPushButton("■ Dừng")
         self.stop_btn.setProperty("class", "danger")
         self.stop_btn.setEnabled(False)
+        dim_when_disabled(self.stop_btn)          # mờ hẳn khi không có gì để dừng
         self.stop_btn.clicked.connect(self._stop)
         row.addWidget(self.stop_btn)
         row.addWidget(self.create_btn)
