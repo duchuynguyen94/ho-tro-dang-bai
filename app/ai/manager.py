@@ -758,6 +758,23 @@ def clean_content_html(html_text: str) -> str:
         )
     t = t.strip()
     t = re.sub(r"^\s*<p>\s*(Writing|Đang viết)\s*</p>\s*", "", t, flags=re.I)
+
+    # 3b) rác ở CUỐI: nhãn + khối JSON SEO mà AI để lại sau nội dung
+    t = re.sub(r"\s*```\s*json\s*[\s\S]*$", "", t, flags=re.I)            # ```json … cuối
+    t = re.sub(r"\s*\{\s*[\"']?(?:title|focus_keyword|description|tags)[\s\S]*$",
+               "", t, flags=re.I)                                          # khối JSON còn sót
+    t = re.sub(r"\s*```[a-zA-Z]*\s*$", "", t)                              # ``` trơ ở cuối
+    for _ in range(4):
+        t = re.sub(r"\s*(?:\d\)|\d\.|\-|\*|•)\s*(?:JSON|SEO)\b[^<\n]{0,120}[:：]\s*$",
+                   "", t, flags=re.I)                                      # "2) JSON SEO:"
+        t = re.sub(r"\s*(?:\d\)|\d\.|\-|\*|•)\s*JSON\b[^<\n]{0,120}$",
+                   "", t, flags=re.I)                                      # "2) JSON …"
+        t = re.sub(r"\s*(?:JSON|SEO)\b[^<\n]{0,200}\b(?:focus_keyword|description|tags)\b[^<\n]{0,80}$",
+                   "", t, flags=re.I)                                      # "JSON … title, focus_keyword…"
+        t = re.sub(r"\s*JSON\b[^<\n]{0,200}$", "", t, flags=re.I)          # dòng nhãn bắt đầu bằng JSON
+        t = re.sub(r"\s*(?:\d\)|\d\.|\-|\*|•)\s*$", "", t)                 # dấu/số trơ ở cuối
+    t = t.strip()
+
     # ký hiệu đầu dòng trùng trong <li> (rule dùng ● nhưng <ul> đã tự có bullet)
     t = re.sub(r"(<li[^>]*>)\s*[●•▪◦‣·►▶]\s*", r"\1", t, flags=re.I)
     t = re.sub(r"(<li[^>]*>)\s*[-*+]\s+", r"\1", t)
