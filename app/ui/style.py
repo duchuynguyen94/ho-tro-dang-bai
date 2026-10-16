@@ -71,7 +71,9 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 #card {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 10px; }}
 #cardHeader {{ border-bottom: 1px solid {LINE}; }}
 #cardHeader QLabel {{ font-weight: 700; font-size: 13px; }}
-#cardBody {{ background: #ffffff; }}
+#cardBody {{ background: #ffffff; border-radius: 10px; }}
+/* vùng cuộn panel kết quả: nền trong suốt (bỏ màu xám mặc định của Qt) */
+QScrollArea#resultScroll, QScrollArea#resultScroll > QWidget > QWidget {{ background: transparent; }}
 
 QLabel.hint {{ color: {MUTED}; font-size: 11px; }}
 QLabel.h2 {{ font-size: 18px; font-weight: 700; }}

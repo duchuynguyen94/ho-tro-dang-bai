@@ -416,6 +416,7 @@ class JobsPage(QWidget):
 
         # 3: kết quả
         self.editor = QWidget()
+        self.editor.setObjectName("resultScrollInner")
         ev2 = QVBoxLayout(self.editor)
         ev2.setContentsMargins(0, 0, 0, 0)
         ev2.setSpacing(10)
@@ -484,6 +485,7 @@ class JobsPage(QWidget):
         ev2.addStretch(1)
 
         self.editor_scroll = QScrollArea()
+        self.editor_scroll.setObjectName("resultScroll")     # nền trong suốt (xem style.py)
         self.editor_scroll.setWidgetResizable(True)
         self.editor_scroll.setFrameShape(QFrame.NoFrame)
         self.editor_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
