@@ -291,7 +291,7 @@ class ImageEditorPanel(QFrame):
         # tự động lưu sau khi ngừng thao tác
         self._autosave = QTimer(self)
         self._autosave.setSingleShot(True)
-        self._autosave.setInterval(700)
+        self._autosave.setInterval(2000)      # chờ người dùng NGỪNG chỉnh 2s mới ghép lại
         self._autosave.timeout.connect(self._emit_opts)
         for w in (self.s_logo, self.s_wm, self.s_wm_size, self.s_wm_rot):
             w.valueChanged.connect(self._schedule_save)
@@ -325,6 +325,15 @@ class ImageEditorPanel(QFrame):
         return sl
 
     # ------------------------------------------------------------------ #
+    def set_background(self, path: str) -> None:
+        """Chỉ cập nhật ẢNH NỀN của canvas (không nạp lại toàn bộ trình sửa)."""
+        bg = Path(str(path or ""))
+        if bg.exists():
+            self.canvas.setPixmap(
+                QPixmap(str(bg)).scaled(CANVAS, CANVAS, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            )
+            self._preview["background"] = str(bg)
+
     def load(self, preview: dict, opts: dict | None = None,
              footer_mode: str = "random", title: str = "") -> None:
         self._preview = dict(preview or {})

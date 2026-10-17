@@ -388,7 +388,15 @@ class MainWindow(QMainWindow):
         self.store.upsert_task(fresh)
         self.store.save()
         self.jobs_page.current = fresh
-        self.jobs_page._load(fresh)
+        # CHỈ cập nhật thumbnail + ảnh nền của trình sửa (KHÔNG nạp lại panel -> không đóng menu chuột phải)
+        self.jobs_page.reload_thumbs()
+        try:
+            idx = self.jobs_page._sel_index
+            imgs = fresh.result.get("images") or []
+            if 0 <= idx < len(imgs) and imgs[idx].get("path"):
+                self.jobs_page.img_editor.set_background(imgs[idx]["path"])
+        except Exception:
+            pass
         self.status("Đã tạo lại ảnh.")
 
     def _on_regenerate(self, task, field: str) -> None:

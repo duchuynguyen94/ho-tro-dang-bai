@@ -978,6 +978,39 @@ class JobsPage(QWidget):
         self.ai_edit.emit(self.current, index, prompt.strip())
 
     # ------------------------------------------------------------------ #
+    def reload_thumbs(self) -> None:
+        """Chỉ dựng lại DANH SÁCH ẢNH (thumbnail) — không nạp lại cả panel/trình sửa."""
+        try:
+            task = self.current
+            if task is None:
+                return
+            r = task.result or {}
+            images = r.get("images") or []
+            if not images:
+                return
+            try:
+                QPixmapCache.clear()
+            except Exception:
+                pass
+            while self.images_row.count():
+                it = self.images_row.takeAt(0)
+                wd = it.widget()
+                if wd is self.add_img_btn:
+                    continue
+                if wd:
+                    wd.deleteLater()
+            self._thumbs = []
+            for i, im in enumerate(images, 1):
+                box = self._image_box(i, im, len(images) > 1)
+                box.setFixedWidth(THUMB_W)
+                self.images_row.addWidget(box, 0, Qt.AlignTop)
+                self._thumbs.append(box)
+            self.images_row.addStretch(1)
+            self.images_row.addWidget(self.add_img_btn, 0, Qt.AlignTop)
+            self.add_img_btn.setEnabled(len(images) < MAX_IMAGES)
+        except Exception:
+            traceback.print_exc()
+
     def _select_image(self, index: int) -> None:
         self._sel_index = index
         if self.current:
