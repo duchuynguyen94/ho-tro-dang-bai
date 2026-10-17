@@ -213,15 +213,13 @@ class PostPage(QWidget):
 
         has_link = bool(self.source_url.text().strip())
         has_rule = self.store.has_format_content()
-        ok = bool(site and has_link and has_rule)
+        ok = bool(site and has_rule)
         self.create_btn.setEnabled(ok)
 
         problems: list[str] = []
         if not site:
             problems.append("chưa chọn website")
-        # rule nội dung: luôn có (file riêng hoặc file mặc định của phần mềm) -> không cảnh báo
-        if not has_link:
-            problems.append("chưa nhập link bài viết nguồn")
+        # link nguồn: CÓ THỂ để trống -> sẽ tạo job trống (không chạy AI)
 
         if problems:
             self.warn.setText("⚠ <b>Chưa thể tạo nội dung:</b> " + "; ".join(problems) + ".")
@@ -240,7 +238,8 @@ class PostPage(QWidget):
     def _create(self) -> None:
         site = self._selected_site()
         url = self.source_url.text().strip()
-        if not site or not url or not self.store.has_format_content():
+        # link nguồn ĐỂ TRỐNG -> tạo job trống (kind="blank"): không chạy AI, tự điền tay
+        if not site or not self.store.has_format_content():
             self._validate()
             return
         count = int(self.image_count.currentText().split()[0])
@@ -248,6 +247,7 @@ class PostPage(QWidget):
             site_id=site.id,
             site_name=site.name,
             source_url=url,
+            kind="" if url else "blank",
             brand_logo_fallback=self.brand_logo.text().strip(),
             image_count=count,
         )

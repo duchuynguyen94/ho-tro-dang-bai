@@ -233,6 +233,7 @@ class Task:
     site_id: str = ""
     site_name: str = ""
     source_url: str = ""
+    kind: str = ""          # "" = có link nguồn | "blank" = job trống (không chạy AI)
     brand_logo_fallback: str = ""
     image_count: int = 3
     footer_mode: str = "random"      # random | bar1 | bar2 (chọn ở trình sửa ảnh)
@@ -255,6 +256,7 @@ class Task:
             site_id=d.get("site_id", ""),
             site_name=d.get("site_name", ""),
             source_url=d.get("source_url", ""),
+            kind=d.get("kind", ""),
             brand_logo_fallback=d.get("brand_logo_fallback", ""),
             image_count=int(d.get("image_count", 3)),
             footer_mode=d.get("footer_mode", "random"),

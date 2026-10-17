@@ -240,17 +240,19 @@ class TaskRow(QFrame):
         v = QVBoxLayout()
         v.setSpacing(3)
 
-        url = QLabel(task.source_url or "(chưa có link)")
+        is_blank = (getattr(task, "kind", "") or "") == "blank"
+        url = QLabel(task.site_name if is_blank else (task.source_url or "(chưa có link)"))
         url.setObjectName("taskTitleDone" if task.status == STATUS_FINISH else "taskTitle")
         url.setWordWrap(True)
         v.addWidget(url)
 
-        label = STATUS_LABELS.get(task.status, task.status)
-        if task.status == STATUS_ERROR and (task.message or "").strip():
-            label = f"lỗi: {str(task.message).splitlines()[0][:70]}"   # hiện nội dung lỗi để soi
-        meta = QLabel(f"{label}  ·  {task.site_name}")
-        meta.setObjectName("taskMeta")
-        v.addWidget(meta)
+        if not is_blank:                     # job trống: ẩn phần trạng thái
+            label = STATUS_LABELS.get(task.status, task.status)
+            if task.status == STATUS_ERROR and (task.message or "").strip():
+                label = f"lỗi: {str(task.message).splitlines()[0][:70]}"   # hiện nội dung lỗi để soi
+            meta = QLabel(f"{label}  ·  {task.site_name}")
+            meta.setObjectName("taskMeta")
+            v.addWidget(meta)
 
         if task.status == STATUS_GENERATING:
             bar = QProgressBar()
@@ -1061,6 +1063,8 @@ class JobsPage(QWidget):
         preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
         self.img_editor.set_ai_enabled((self.store.ai_image or {}).get("active") != "off")
         # thanh thông tin: select phản ánh ĐÚNG thanh đang có trong ảnh
+        # job trống: không chạy AI -> ẩn nút Random lại
+        self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
 
     def _apply_image_opts(self, opts: dict) -> None:

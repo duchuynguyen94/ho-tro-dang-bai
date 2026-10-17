@@ -176,6 +176,23 @@ class MainWindow(QMainWindow):
         site = self.store.get_site(task.site_id)
         if not site:
             return
+        if (getattr(task, "kind", "") or "") == "blank":
+            # JOB TRỐNG: không chạy AI -> mở thẳng panel kết quả, các ô để trống
+            task.status = STATUS_FINISH
+            task.progress = 100
+            task.message = ""
+            task.error_stage = ""
+            task.result = {"title": "", "focus_keyword": "", "description": "",
+                           "tags": "", "content_html": "",
+                           "images": [], "product_images": []}
+            self.store.upsert_task(task)
+            self.store.save()
+            self._go(2)
+            self.jobs_page.refresh()
+            self.jobs_page.select_task(task.id)
+            self._refresh_count()
+            self.status(f"Đã tạo job trống cho {site.name} — bạn tự điền nội dung.")
+            return
         task.status = STATUS_QUEUED
         task.progress = 0
         task.message = ""
