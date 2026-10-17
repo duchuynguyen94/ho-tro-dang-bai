@@ -545,7 +545,7 @@ class ImageEditorPanel(QFrame):
             pm_nb = self._display_pixmap(brand_path, True)
             if pm_nb is not None and not pm_nb.isNull():
                 brand_src = pm_nb
-        brand_pm, bw, bh = self._pixmap_for(brand_path, 0.374, 0.143,
+        brand_pm, bw, bh = self._pixmap_for(brand_path, 0.4114, 0.1573,
                                             float(self._opts.get("brand_scale", 1.0) or 1.0),
                                             brand_src)
         if self._opts.get("brand_hidden"):
