@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from ...images.composer import default_product_positions, product_box
 from ..style import polish_combos
 
-CANVAS = 500          # khung chỉnh sửa (ảnh đăng bài vẫn luôn 1080px)
+CANVAS = 420          # khung chỉnh sửa (ảnh đăng bài vẫn theo Cài đặt → AI ảnh)
 SRC = 1080
 
 
