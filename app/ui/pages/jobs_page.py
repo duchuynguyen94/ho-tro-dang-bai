@@ -246,15 +246,29 @@ class TaskRow(QFrame):
 
         is_blank = (getattr(task, "kind", "") or "") == "blank"
         url = QLabel(task.site_name if is_blank else (task.source_url or "(chưa có link)"))
-        url.setObjectName("taskTitleDone" if task.status == STATUS_FINISH else "taskTitle")
+        url.setObjectName("taskTitle")        # tiêu đề luôn màu đen (mọi trạng thái)
         url.setWordWrap(True)
         v.addWidget(url)
 
         if not is_blank:                     # job trống: ẩn phần trạng thái
             label = STATUS_LABELS.get(task.status, task.status)     # lỗi -> chỉ báo "lỗi"
-            meta = QLabel(f"{label}  ·  {task.site_name}")
-            meta.setObjectName("taskMeta")
-            v.addWidget(meta)
+            if task.status == STATUS_FINISH:
+                # "đã xong" -> XANH + ĐẬM (tiêu đề vẫn màu đen); tên website vẫn xám
+                mrow = QHBoxLayout()
+                mrow.setContentsMargins(0, 0, 0, 0)
+                mrow.setSpacing(4)
+                st = QLabel(label)
+                st.setObjectName("taskDone")
+                nm = QLabel(f"·  {task.site_name}")
+                nm.setObjectName("taskMeta")
+                mrow.addWidget(st)
+                mrow.addWidget(nm)
+                mrow.addStretch(1)
+                v.addLayout(mrow)
+            else:
+                meta = QLabel(f"{label}  ·  {task.site_name}")
+                meta.setObjectName("taskMeta")
+                v.addWidget(meta)
 
         if task.status == STATUS_GENERATING:
             bar = QProgressBar()
