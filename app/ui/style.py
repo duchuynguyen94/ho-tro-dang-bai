@@ -73,7 +73,8 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 #cardHeader QLabel {{ font-weight: 700; font-size: 13px; }}
 #cardBody {{ background: #ffffff; border-radius: 10px; }}
 /* vùng cuộn panel kết quả: nền trong suốt (bỏ màu xám mặc định của Qt) */
-QScrollArea#resultScroll, QScrollArea#resultScroll > QWidget > QWidget {{ background: transparent; }}
+QScrollArea#resultScroll, QScrollArea#resultScroll > QWidget,
+QScrollArea#resultScroll > QWidget > QWidget {{ background: transparent; }}
 
 QLabel.hint {{ color: {MUTED}; font-size: 11px; }}
 QLabel.h2 {{ font-size: 18px; font-weight: 700; }}
@@ -201,7 +202,15 @@ QListWidget::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; }}
 #sideBar QPushButton:checked {{ background: #eff6ff; color: {ACCENT_DARK}; font-weight: 600; }}
 #sideBar QLabel.section {{ color: #94a3b8; font-size: 10px; font-weight: 700; padding: 10px 8px 4px 8px; }}
 
-QTabWidget::pane {{ border: none; }}
+/* Trang Cài đặt → website: nền panel nhạt, vùng nội dung tab là khối TRẮNG bo 15px */
+QWidget#sitePanel {{ background: #f8fafc; }}
+QTabWidget::pane {{ border: none; background: #f8fafc; }}
+QTabWidget > QStackedWidget {{ background: #f8fafc; }}
+QScrollArea#siteTabScroll {{
+    background: #ffffff; border: 1px solid {LINE}; border-radius: 15px;
+}}
+QScrollArea#siteTabScroll > QWidget,
+QScrollArea#siteTabScroll > QWidget > QWidget {{ background: transparent; }}
 QTabBar::tab {{ background: transparent; color: #64748b; padding: 8px 14px; border-bottom: 2px solid transparent; font-weight: 600; }}
 QTabBar::tab:selected {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; }}
 

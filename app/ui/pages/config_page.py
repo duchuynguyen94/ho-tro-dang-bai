@@ -47,6 +47,7 @@ def _pick_file(parent, caption, filt) -> str:
 
 def _wrap_scroll(w: QWidget) -> QScrollArea:
     s = QScrollArea()
+    s.setObjectName("siteTabScroll")      # nền trong suốt (xem style.py)
     s.setWidgetResizable(True)
     s.setFrameShape(QFrame.NoFrame)
     s.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -233,6 +234,8 @@ class SitePanel(QWidget):
         self._load()
 
     def _build(self) -> None:
+        self.setObjectName("sitePanel")                       # nền #f8fafc
+        self.setAttribute(Qt.WA_StyledBackground, True)
         outer = QVBoxLayout(self)
         outer.setContentsMargins(20, 18, 20, 20)
 
