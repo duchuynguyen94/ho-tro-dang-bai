@@ -246,23 +246,20 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_worker_log(self, msg: str) -> None:
-        # việc phải CHỜ trình duyệt của việc khác -> hiện rõ trên dòng công việc đó
-        if "Đang chờ trình duyệt" in str(msg):
-            try:
-                w = self.sender()
-                tid = next((k for k, v in self._content_workers.items() if v is w), "")
-                if tid:
-                    fresh = next((x for x in self.store.tasks if x.id == tid), None)
-                    if fresh:
-                        fresh.message = "Đang chờ việc khác đóng trình duyệt…"
-                        self.store.upsert_task(fresh)
-                        self.store.save()
-                        self.jobs_page.refresh()
-            except Exception:
-                pass
-
+        """Log của worker: chỉ cập nhật panel nếu panel đang xem ĐÚNG việc đó."""
+        try:
+            w = self.sender()
+            tid = next((k for k, v in self._content_workers.items() if v is w), "")
+        except Exception:
+            tid = ""
         self.status(msg)
-        self.jobs_page.set_loading_message(msg)
+        # chỉ ghi message vào panel khi đang xem đúng công việc đang chạy
+        try:
+            cur = getattr(self.jobs_page, "current", None)
+            if tid and cur is not None and getattr(cur, "id", "") == tid:
+                self.jobs_page.set_loading_message(msg)
+        except Exception:
+            pass
 
     def _on_content_ok(self, task, result: dict) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
