@@ -8,13 +8,11 @@ from .models import (
     Task,
     new_id,
     now_iso,
-    STATUS_DONE,
     STATUS_ERROR,
     STATUS_GENERATING,
     STATUS_LABELS,
-    STATUS_POSTING,
     STATUS_QUEUED,
-    STATUS_REVIEW,
+    STATUS_FINISH,
 )
 from .store import Store
 
@@ -30,9 +28,7 @@ __all__ = [
     "now_iso",
     "STATUS_QUEUED",
     "STATUS_GENERATING",
-    "STATUS_REVIEW",
-    "STATUS_POSTING",
-    "STATUS_DONE",
+    "STATUS_FINISH",
     "STATUS_ERROR",
     "STATUS_LABELS",
 ]

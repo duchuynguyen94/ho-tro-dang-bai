@@ -17,7 +17,6 @@
   tự sinh selector theo thứ tự ưu tiên; **Export/Import** sang máy khác
 - **Đăng bài:** mở trình duyệt riêng (Chrome core), tự đăng nhập, điền sẵn theo kịch bản;
   người dùng tự kiểm tra và bấm Đăng trên WordPress
-- **Google Sheets:** ghi link nguồn + link kết quả
 
 ## Cài đặt (phát triển)
 
@@ -54,7 +53,6 @@ app/
   ai/                  # provider AI viết nội dung
   images/              # ghép ảnh (Pillow)
   wp/                  # trình duyệt, ghi & phát lại kịch bản
-  sheets/              # Google Sheets
   ui/                  # giao diện PySide6
 tools/dev_shot.py      # tạo dữ liệu mẫu + chụp ảnh màn hình (khi phát triển)
 ```

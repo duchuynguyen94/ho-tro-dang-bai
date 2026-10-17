@@ -56,6 +56,12 @@ class Store:
         self.data = copy.deepcopy(DEFAULT_CONFIG)
 
     def _migrate(self) -> None:
+        # trạng thái cũ -> trạng thái mới (chỉ còn 5 trạng thái)
+        for t in self.data.get("tasks", []):
+            st = str(t.get("status") or "")
+            if st in ("review", "posting", "done"):
+                t["status"] = "finish"
+
         """Chuyển format của site cũ sang format dùng chung (nếu chưa có)."""
         fmt = self.data.setdefault("formats", {})
         for k in ("content", "seo", "extractor"):
@@ -311,9 +317,6 @@ class Store:
     def ai_image(self) -> dict:
         return self.data["ai_image"]
 
-    @property
-    def sheets(self) -> dict:
-        return self.data["sheets"]
 
     # ------------------------------------------------------------------ #
     # Lưu file người dùng tải lên

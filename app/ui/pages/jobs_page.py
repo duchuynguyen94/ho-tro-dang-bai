@@ -31,13 +31,11 @@ from PySide6.QtWidgets import (
 
 from ...storage.models import (
     STATUS_CANCELLED,
-    STATUS_DONE,
     STATUS_ERROR,
     STATUS_GENERATING,
     STATUS_LABELS,
-    STATUS_POSTING,
     STATUS_QUEUED,
-    STATUS_REVIEW,
+    STATUS_FINISH,
 )
 from ...config import output_dir
 from ...images import compose, save_composed
@@ -50,9 +48,7 @@ from ..toast import show_toast
 STATUS_OBJECTS = {
     STATUS_QUEUED: "chipGray",
     STATUS_GENERATING: "chipAmber",
-    STATUS_REVIEW: "chipBlue",
-    STATUS_POSTING: "chipAmber",
-    STATUS_DONE: "chipGreen",
+    STATUS_FINISH: "chipGreen",
     STATUS_ERROR: "chipRed",
 }
 
@@ -322,7 +318,8 @@ class JobsPage(QWidget):
         self.current = None
         self._posting: dict[str, bool] = {}      # task_id -> đang mở Chrome để đăng
         self._field_btns: list = []              # các nút "↻ Random" từng trường
-        self._ai_busy = False      # task_id -> đang mở Chrome để đăng
+        self._ai_busy = False
+        self._posting_locked = False      # task_id -> đang mở Chrome để đăng
         self._rows: dict[str, TaskRow] = {}
         self._thumbs: list = []
         self._sel_index = 0
@@ -603,7 +600,7 @@ class JobsPage(QWidget):
 
     def _sync_post_btn(self) -> None:
         cur = getattr(self.current, "id", None)
-        busy = bool(cur and self._posting.get(cur))
+        busy = bool(cur and self._posting.get(cur)) or bool(self._posting_locked)
         self.post_btn.setEnabled(not busy)
         self.post_btn.setText("Đang mở trình duyệt…" if busy else "OK — Đăng bài")
 
@@ -625,6 +622,15 @@ class JobsPage(QWidget):
         "retry_btn": ("↻ Tạo lại", "có 1 công việc khác đang làm"),
         "regen_all_btn": ("↻ Random lại", "Random - có 1 công việc khác đang làm"),
     }
+
+    def set_posting_locked(self, locked: bool) -> None:
+        """Có 1 việc đang đăng bài -> khoá nút "OK — Đăng bài" của mọi job."""
+        self._posting_locked = bool(locked)
+        self.post_btn.setEnabled(not locked)
+        if locked:
+            self.post_btn.setToolTip("Đang có 1 việc đăng bài — chờ việc đó xong đã")
+        else:
+            self.post_btn.setToolTip("")
 
     def set_ai_busy(self, busy: bool) -> None:
         """ChatGPT đang chạy 1 việc -> khoá + đổi chữ các nút gọi AI (tạo lại / random)."""

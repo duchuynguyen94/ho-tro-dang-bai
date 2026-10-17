@@ -21,11 +21,10 @@ from PySide6.QtWidgets import (
 
 from ..storage.models import (
     STATUS_CANCELLED,
-    STATUS_DONE,
     STATUS_ERROR,
+    STATUS_QUEUED,
     STATUS_GENERATING,
-    STATUS_POSTING,
-    STATUS_REVIEW,
+    STATUS_FINISH,
 )
 from ..storage.store import Store
 from .pages.config_page import ConfigPage
@@ -172,11 +171,12 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ #
     def _on_create_task(self, task) -> None:
+        """Việc mới: đưa vào HÀNG ĐỢI (queued) rồi để bộ điều phối chạy khi tới lượt."""
         site = self.store.get_site(task.site_id)
         if not site:
             return
-        task.status = STATUS_GENERATING
-        task.progress = 10
+        task.status = STATUS_QUEUED
+        task.progress = 0
         task.message = ""
         task.error_stage = ""
         self.store.upsert_task(task)
@@ -187,7 +187,41 @@ class MainWindow(QMainWindow):
         self.jobs_page.refresh()
         self.jobs_page.select_task(task.id)
         self._refresh_count()
+        self._start_next_content()
 
+    def _running_content_id(self) -> str:
+        """Id của việc ĐANG tạo nội dung (rỗng nếu không có)."""
+        return next(iter(self._content_workers), "")
+
+    def _start_next_content(self) -> None:
+        """Bộ điều phối: mỗi lúc CHỈ 1 việc tạo nội dung; chọn việc cũ nhất đang chờ."""
+        try:
+            if self._running_content_id():
+                self._update_ai_busy()
+                return
+            queued = [t for t in self.store.tasks if t.status == STATUS_QUEUED]
+            if not queued:
+                self._update_ai_busy()
+                return
+            task = queued[0]                      # job cũ nhất chạy trước
+            site = self.store.get_site(task.site_id)
+            if not site:
+                return
+            task.status = STATUS_GENERATING
+            task.progress = 10
+            task.message = ""
+            task.error_stage = ""
+            self.store.upsert_task(task)
+            self.store.save()
+            self._spawn_content_worker(task, site)
+            self.jobs_page.refresh()
+            self._refresh_count()
+            self._update_ai_busy()
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Hàng đợi tạo nội dung", str(exc))
+
+    def _spawn_content_worker(self, task, site) -> None:
         worker = ContentWorker(self.store, task, site)
         self._content_workers[task.id] = worker
         worker.log.connect(self._on_worker_log)
@@ -196,7 +230,7 @@ class MainWindow(QMainWindow):
         worker.cancelled.connect(lambda: self._on_content_cancelled(task))
         worker.finished.connect(lambda: (self._content_workers.pop(task.id, None),
                                          self._cleanup(worker),
-                                         self._update_ai_busy()))
+                                         self._start_next_content()))
         self._workers.append(worker)
         worker.start()
         self._update_ai_busy()
@@ -205,8 +239,7 @@ class MainWindow(QMainWindow):
     def _update_ai_busy(self) -> None:
         """ChatGPT đang chạy việc nào -> khoá nút gọi AI ở mọi việc (provider API thì không)."""
         try:
-            active = str(self.store.ai_content.get("active") or "")
-            busy = active == "chatgpt" and bool(self._content_workers)
+            busy = bool(self._content_workers)      # mọi provider đều chạy tuần tự
             self.jobs_page.set_ai_busy(busy)
         except Exception:
             pass
@@ -234,7 +267,7 @@ class MainWindow(QMainWindow):
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         try:
             fresh.result = result
-            fresh.status = STATUS_REVIEW
+            fresh.status = STATUS_FINISH
             fresh.progress = 100
             fresh.error_stage = ""
             self.store.upsert_task(fresh)
@@ -339,9 +372,9 @@ class MainWindow(QMainWindow):
         self.status("Đã tạo lại ảnh.")
 
     def _on_regenerate(self, task, field: str) -> None:
-        # việc ĐANG CHẠY thì không cho tạo lại (tránh chồng nhiều lượt chạy)
-        if task.id in self._content_workers:
-            self.status("Việc này đang chạy — chờ xong rồi hãy tạo lại.")
+        # đang có việc tạo nội dung -> không cho tạo lại (chạy tuần tự)
+        if self._content_workers:
+            self.status("Đang có 1 công việc tạo nội dung — chờ xong rồi hãy tạo lại.")
             return
         site = self.store.get_site(task.site_id)
         if not site:
@@ -392,6 +425,12 @@ class MainWindow(QMainWindow):
         # Mỗi công việc chỉ mở 1 Chrome: nếu đang đăng thì bỏ qua lần bấm sau
         if self.jobs_page.is_posting(task.id):
             return
+        # CHỈ 1 việc đăng bài tại 1 thời điểm
+        other = [tid for tid, busy in self.jobs_page._posting.items()
+                 if busy and tid != task.id]
+        if other:
+            show_toast(self, "Đang có 1 việc đăng bài — chờ việc đó xong đã", 3200, ok=False)
+            return
         site = self.store.get_site(task.site_id)
         if not site:
             return
@@ -422,38 +461,41 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self._log_err("Lưu ảnh đăng bài", str(exc))
 
-        task.status = STATUS_POSTING
         self.store.upsert_task(task)
         self.store.save()
         self.jobs_page.refresh()
 
+        self.jobs_page.set_posting_locked(True)      # khoá nút OK — Đăng bài của mọi job
         worker = PostWorker(site, task.result or {})
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda url: self._on_post_ok(task, url))
         worker.failed.connect(lambda err: self._on_post_failed(task, err))
-        worker.closed.connect(lambda _u: self.jobs_page.set_posting(task.id, False))
+        worker.closed.connect(lambda _u: (self.jobs_page.set_posting(task.id, False),
+                                          self._on_post_closed(task)))
         worker.finished.connect(lambda: self._cleanup(worker))
         self._workers.append(worker)
         worker.start()
+
+    def _on_post_closed(self, task) -> None:
+        self.jobs_page.set_posting_locked(False)     # đã đóng Chrome -> mở khoá lại
 
     def _on_post_ok(self, task, url: str) -> None:
         # KHÔNG mở lại nút ở đây: chờ người dùng đóng trình duyệt (xem _on_post_closed)
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.result["result_url"] = url
-        fresh.status = STATUS_DONE
+        fresh.status = STATUS_FINISH
         self.store.upsert_task(fresh)
         self.store.save()
         self.jobs_page.refresh()
         self._refresh_count()
         self.status("Đã mở trình duyệt và điền thông tin — bạn tự bấm Đăng trên WordPress.")
-        self._maybe_sheets(fresh)
 
     def _on_post_failed(self, task, err: str) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         r = fresh.result or {}
         has_content = bool(r.get("content_html") or r.get("title"))
         # Nội dung đã có -> GIỮ NGUYÊN "Chờ đăng", KHÔNG chuyển sang trang tạo lại
-        fresh.status = STATUS_REVIEW if has_content else STATUS_ERROR
+        fresh.status = STATUS_FINISH if has_content else STATUS_ERROR
         fresh.message = err
         fresh.error_stage = "post" if has_content else "content"
         self.store.upsert_task(fresh)
@@ -470,19 +512,6 @@ class MainWindow(QMainWindow):
         # trên WordPress. Lỗi vẫn được ghi vào tab Log lỗi để tra khi cần.
         self.status("Nội dung vẫn được giữ nguyên — bạn tự kiểm tra/đăng lại trên WordPress.")
 
-    def _maybe_sheets(self, task) -> None:
-        cfg = self.store.sheets
-        if not cfg.get("enabled"):
-            return
-        try:
-            from ..sheets import append_row
-
-            append_row(cfg, task.source_url, task.result.get("result_url", ""), task.site_name)
-            self.status("Đã ghi kết quả vào Google Sheets.")
-        except Exception as exc:
-            self._log_err("Google Sheets", str(exc))
-
-    # ------------------------------------------------------------------ #
     def _log_err(self, source: str, message: str) -> None:
         self.store.log_error(source, message)
         self.error_log_page.refresh()

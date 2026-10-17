@@ -214,20 +214,16 @@ DEFAULT_SITES = (
     "enda-vietnam.com",
 )   # watermark mặc định khi website để trống
 
-STATUS_REVIEW = "review"
-STATUS_POSTING = "posting"
-STATUS_DONE = "done"
+STATUS_FINISH = "finish"        # đã tạo xong nội dung
 STATUS_ERROR = "error"
 STATUS_CANCELLED = "cancelled"
 
 STATUS_LABELS = {
     STATUS_QUEUED: "Đang chờ",
-    STATUS_GENERATING: "Đang tạo nội dung...",
-    STATUS_REVIEW: "Chờ đăng",
-    STATUS_POSTING: "Đang đăng bài...",
-    STATUS_DONE: "Đã đăng",
-    STATUS_ERROR: "Lỗi",
-    STATUS_CANCELLED: "Đã dừng",
+    STATUS_GENERATING: "đang tạo",
+    STATUS_FINISH: "đã xong",
+    STATUS_ERROR: "lỗi",
+    STATUS_CANCELLED: "chưa tạo",
 }
 
 
@@ -298,18 +294,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "off": {},
         },
     },
-    "sheets": {
-        "enabled": False,
-        "account_email": "",
-        "service_account_file": "",
-        "credentials_file": "",
-        "spreadsheet_id": "",
-        "sheet_name": "Bài đã đăng",
-        "col_source": "A",
-        "col_result": "B",
-        "mode": "append",
-    },
-    # link chèn vào các tiêu đề mục (từ tiêu đề thứ 2 trở đi)
     "title_links": ["https://samoapumps.com", "https://enda-vietnam.com"],
     "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)
     "sites": [],
