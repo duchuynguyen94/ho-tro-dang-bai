@@ -195,10 +195,21 @@ class MainWindow(QMainWindow):
         worker.failed.connect(lambda err: self._on_content_failed(task, err))
         worker.cancelled.connect(lambda: self._on_content_cancelled(task))
         worker.finished.connect(lambda: (self._content_workers.pop(task.id, None),
-                                         self._cleanup(worker)))
+                                         self._cleanup(worker),
+                                         self._update_ai_busy()))
         self._workers.append(worker)
         worker.start()
+        self._update_ai_busy()
         self.status(f"Đang tạo nội dung cho {site.name}…")
+
+    def _update_ai_busy(self) -> None:
+        """ChatGPT đang chạy việc nào -> khoá nút gọi AI ở mọi việc (provider API thì không)."""
+        try:
+            active = str(self.store.ai_content.get("active") or "")
+            busy = active == "chatgpt" and bool(self._content_workers)
+            self.jobs_page.set_ai_busy(busy)
+        except Exception:
+            pass
 
     def _on_worker_log(self, msg: str) -> None:
         # việc phải CHỜ trình duyệt của việc khác -> hiện rõ trên dòng công việc đó

@@ -321,6 +321,8 @@ class JobsPage(QWidget):
         self.store = store
         self.current = None
         self._posting: dict[str, bool] = {}      # task_id -> đang mở Chrome để đăng
+        self._field_btns: list = []              # các nút "↻ Random" từng trường
+        self._ai_busy = False      # task_id -> đang mở Chrome để đăng
         self._rows: dict[str, TaskRow] = {}
         self._thumbs: list = []
         self._sel_index = 0
@@ -538,6 +540,7 @@ class JobsPage(QWidget):
             btn.setProperty("class", "ghost")
             btn.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, field))
             row.addWidget(btn)
+            self._field_btns.append(btn)      # để khoá khi ChatGPT đang bận
         box.addLayout(row)
         box.addWidget(widget)
         return box
@@ -616,6 +619,21 @@ class JobsPage(QWidget):
         self.provider_badge.setText(f"Provider: {active}" if active else "")
         self._show_state()
         self._sync_post_btn()
+
+    def set_ai_busy(self, busy: bool) -> None:
+        """ChatGPT đang chạy 1 việc -> khoá mọi nút gọi AI (tạo lại / random)."""
+        busy = bool(busy)
+        self._ai_busy = busy
+        tip = "Đang chạy 1 việc bằng ChatGPT — chờ việc đó xong đã" if busy else ""
+        btns = [getattr(self, "retry_btn", None), getattr(self, "regen_all_btn", None)]
+        btns += list(getattr(self, "_field_btns", []))
+        for b in btns:
+            if b is None:
+                continue
+            b.setEnabled(not busy)
+            if busy:
+                b.setToolTip(tip)
+        # nút "Đăng bài" không liên quan AI -> không đụng
 
     def set_loading_message(self, text: str) -> None:
         if self.current and self.current.status in (STATUS_QUEUED, STATUS_GENERATING):
