@@ -203,9 +203,9 @@ QListWidget::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; }}
 #sideBar QLabel.section {{ color: #94a3b8; font-size: 10px; font-weight: 700; padding: 10px 8px 4px 8px; }}
 
 /* Trang Cài đặt → website: nền panel nhạt, vùng nội dung tab là khối TRẮNG bo 15px */
-QWidget#sitePanel {{ background: #f8fafc; }}
-QTabWidget::pane {{ border: none; background: #f8fafc; }}
-QTabWidget > QStackedWidget {{ background: #f8fafc; }}
+QWidget#sitePanel {{ background: #f1f5f9; }}
+QTabWidget::pane {{ border: none; background: #f1f5f9; }}
+QTabWidget > QStackedWidget {{ background: #f1f5f9; }}
 QScrollArea#siteTabScroll {{
     background: #ffffff; border: 1px solid {LINE}; border-radius: 15px;
 }}
