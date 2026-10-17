@@ -763,7 +763,7 @@ class MainWindow(QMainWindow):
         worker = ImageRefetchWorker(self.store, site, task, index)
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda images: self._on_images_ok(task, images))
-        worker.failed.connect(lambda err: (self._log_err("Lấy ảnh sản phẩm", err),
+        worker.failed.connect(lambda err: (self._log_err("Lấy đối tượng hình ảnh", err),
                                            self.status("Sẵn sàng")))
         worker.finished.connect(lambda: self._cleanup(worker))
         self._workers.append(worker)

@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QPoint, Qt, QTimer, Signal
+from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
@@ -44,6 +44,8 @@ class DraggableImage(QLabel):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         if dashed:
             self.setStyleSheet("border:1px dashed rgba(37,99,235,0.8);")
+        self._base_style = "border:1px dashed rgba(37,99,235,0.8);" if dashed else ""
+        self._selected = False
         self._press: QPoint | None = None
         self._start: QPoint | None = None
         self._mode = ""
@@ -84,6 +86,15 @@ class DraggableImage(QLabel):
 
     def set_source(self, pm: QPixmap) -> None:
         self._src = pm
+
+    def set_selected(self, on: bool) -> None:
+        """Viền nét đứt để biết thành phần ĐANG CHỌN (để Ctrl+C)."""
+        self._selected = bool(on)
+        base = getattr(self, "_base_style", "")
+        if on:
+            self.setStyleSheet("border:2px dashed #1d4ed8;")
+        else:
+            self.setStyleSheet(base)
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         w, h = self.width(), self.height()
@@ -226,6 +237,8 @@ class ImageEditorPanel(QFrame):
         self.canvas.setFixedSize(CANVAS, CANVAS)
         self.canvas.setAlignment(Qt.AlignCenter)
         self.canvas.setFocusPolicy(Qt.ClickFocus)      # bấm vào canvas -> nhận con trỏ (để dán ảnh)
+        self.canvas.installEventFilter(self)           # bấm vào thành phần -> biết đang CHỌN cái nào
+        self._sel_item = None
         left.addWidget(self.canvas)
 
         self.logo_item = DraggableImage(self.canvas, dashed=True, kind="logo")
@@ -313,6 +326,56 @@ class ImageEditorPanel(QFrame):
             return
         self._schedule_save()          # 0.2s -> preview trong list · 0.5s -> ghép file thật
         self.footer_changed.emit(["bar1", "bar2"][max(0, min(1, self.footer_combo.currentIndex()))])
+
+    def eventFilter(self, obj, event):  # noqa: N802
+        """Bấm vào thành phần trên canvas -> đánh dấu ĐANG CHỌN (để Ctrl+C copy)."""
+        try:
+            if obj is self.canvas and event.type() == QEvent.MouseButtonPress:
+                w = self.canvas.childAt(event.pos())
+                while w is not None and not isinstance(w, DraggableImage):
+                    w = w.parentWidget()
+                self._set_sel_item(w if isinstance(w, DraggableImage) else None)
+        except Exception:
+            pass
+        return super().eventFilter(obj, event)
+
+    def _set_sel_item(self, item) -> None:
+        old = getattr(self, "_sel_item", None)
+        if old is item:
+            return
+        for it in (old, item):
+            if it is not None:
+                try:
+                    it.set_selected(it is item)
+                except Exception:
+                    pass
+        self._sel_item = item
+
+    def copy_selected(self) -> dict | None:
+        """Lấy thông tin thành phần ĐANG CHỌN để dán sang ảnh khác (Ctrl+C).
+
+        Chỉ hỗ trợ "đối tượng hình ảnh" (ảnh chèn/dán hoặc ảnh nguồn).
+        """
+        it = getattr(self, "_sel_item", None)
+        if it is None:
+            return None
+        kind = getattr(it, "kind", "")
+        idx = int(getattr(it, "index", 0) or 0)
+        if kind == "upload":
+            ups = list(self._opts.get("uploads") or [])
+            if idx < len(ups) and isinstance(ups[idx], dict):
+                up = ups[idx]
+                return {"path": up.get("path", ""), "scale": float(up.get("scale", 1.0) or 1.0),
+                        "nobg": bool(up.get("nobg"))}
+        elif kind == "product":
+            prods = list(self._preview.get("products") or [])
+            scales = list(self._opts.get("product_scales") or [])
+            nobg = list(self._opts.get("product_nobg") or [])
+            if idx < len(prods):
+                return {"path": prods[idx],
+                        "scale": float(scales[idx]) if idx < len(scales) else 1.0,
+                        "nobg": bool(nobg[idx]) if idx < len(nobg) else False}
+        return None
 
     def flush(self) -> None:
         """CHỐT NGAY phần vừa sửa (dùng trước khi đổi ảnh / đổi job).

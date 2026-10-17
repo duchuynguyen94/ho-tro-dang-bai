@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageOps
 
 DEFAULT_SIZE = 1080
 PAD = 40
-PRODUCT_BOX = 0.30      # tỉ lệ cạnh hộp sản phẩm so với khổ ảnh
+PRODUCT_BOX = 0.35      # tỉ lệ cạnh hộp ảnh chèn/dán so với khổ ảnh (35%)
 
 
 # --------------------------------------------------------------------------- #

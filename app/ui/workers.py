@@ -742,7 +742,7 @@ class ImageRefetchWorker(TrackedThread):
 
     def run(self) -> None:
         try:
-            self.log.emit("Đang lấy ảnh sản phẩm từ link nguồn…")
+            self.log.emit("Đang lấy đối tượng hình ảnh từ link nguồn…")
             page = src.fetch_source(self.task.source_url)
             urls = list(page.get("images", []) or [])[:3]
             paths: list[str] = []
@@ -754,7 +754,7 @@ class ImageRefetchWorker(TrackedThread):
 
             if not paths:
                 raise RuntimeError(
-                    "Link nguồn không có ảnh sản phẩm nào để lấy."
+                    "Link nguồn không có đối tượng hình ảnh nào để lấy."
                 )
             r = self.task.result or {}
             r["product_images"] = paths

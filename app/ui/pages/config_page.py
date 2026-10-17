@@ -972,7 +972,7 @@ class AIImagePanel(QWidget):
         v.setContentsMargins(0, 0, 0, 8)
         v.setSpacing(10)
 
-        sub = QLabel("Gắn logo / khung / watermark / thanh thông tin và chỉnh sửa ảnh sản phẩm.")
+        sub = QLabel("Gắn logo / khung / watermark / thanh thông tin và chỉnh sửa đối tượng hình ảnh.")
         sub.setProperty("class", "sub")
         v.addWidget(sub)
 

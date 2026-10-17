@@ -331,6 +331,7 @@ class JobsPage(QWidget):
         self._sel_index = 0
         self._edit_index = 0              # ảnh mà panel phải ĐANG hiển thị (để áp dụng đúng ảnh)
         self._img_cache: dict = {}        # cache ảnh "Hình tự tìm" RIÊNG từng job (task_id -> {url: bytes})
+        self._copied_component: dict | None = None   # thành phần đã Ctrl+C (dán sang ảnh khác)
         self._build()
         self.refresh()
 
@@ -450,9 +451,13 @@ class JobsPage(QWidget):
         self.add_img_btn.setProperty("class", "ghost")
         self.add_img_btn.setToolTip(
             "Thêm 1 ảnh TRỐNG (chỉ có logo site, logo brand, watermark, thanh thông tin).\n"
-            "Bạn tự tải ảnh sản phẩm lên cho ảnh đó."
+            "Bạn tự tải đối tượng hình ảnh lên cho ảnh đó."
         )
         self.add_img_btn.clicked.connect(self._add_image)
+        try:      # copy ảnh/text từ NGOÀI -> bỏ thành phần đã copy trong app
+            QApplication.clipboard().dataChanged.connect(self._on_clipboard_changed)
+        except Exception:
+            pass
 
         img_head = QHBoxLayout()
         img_lab = QLabel("Ảnh")
@@ -1066,6 +1071,77 @@ class JobsPage(QWidget):
         if self.current:
             self._refresh_preview(self.current)
 
+    def _find_free_spots(self, n: int) -> list[list[float]]:
+        """Tìm n CHỖ TRỐNG trên canvas (tránh chồng lên thành phần đang có)."""
+        n = max(1, int(n or 1))
+        ed = self.img_editor
+        try:
+            size = max(1, int(ed.canvas.width()))
+        except Exception:
+            size = 420
+        rects: list[tuple[float, float, float, float]] = []   # (x1,y1,x2,y2) theo tỉ lệ canvas
+        for it in list(getattr(ed, "_upload_items", [])) + list(getattr(ed, "_product_items", [])):
+            try:
+                rects.append((it.x() / size, it.y() / size,
+                              (it.x() + it.width()) / size, (it.y() + it.height()) / size))
+            except Exception:
+                pass
+        grid = (0.2, 0.5, 0.8)          # 3 × 3 chỗ
+        out: list[list[float]] = []
+        for gy in grid:
+            for gx in grid:
+                if any((x1 - 0.05) <= gx <= (x2 + 0.05) and (y1 - 0.05) <= gy <= (y2 + 0.05)
+                       for x1, y1, x2, y2 in rects):
+                    continue                      # đã có thành phần ở chỗ này
+                if any(abs(gx - ox) < 0.2 and abs(gy - oy) < 0.2 for ox, oy in out):
+                    continue                      # đã chọn chỗ này cho ảnh khác trong lượt dán
+                out.append([round(gx, 4), round(gy, 4)])
+                if len(out) >= n:
+                    return out
+        k = len(out)                    # hết chỗ trống -> xếp so le dần
+        while len(out) < n:
+            v = min(0.9, 0.15 + 0.1 * k)
+            out.append([round(v, 4), round(v, 4)])
+            k += 1
+        return out
+
+    def _on_clipboard_changed(self) -> None:
+        """Clipboard ngoài đổi (người dùng copy ảnh/text khác) -> bỏ thành phần đã copy."""
+        self._copied_component = None
+
+    def _paste_component(self, index: int) -> None:
+        """Dán thành phần đã Ctrl+C vào ẢNH ĐANG MỞ (mỗi lần 1 chỗ trống)."""
+        comp = dict(self._copied_component or {})
+        path = str(comp.get("path") or "")
+        if not path or not self.current:
+            return
+        self._save()
+        r = self.current.result
+        lst = r.get("image_opts_list") or []
+        while len(lst) <= index:
+            lst.append({})
+        ups = list(lst[index].get("uploads") or [])
+        item: dict = {"path": path, "pos": self._find_free_spots(1)[0]}
+        try:
+            sc = float(comp.get("scale", 1.0) or 1.0)
+            if abs(sc - 1.0) > 0.001:
+                item["scale"] = round(sc, 3)
+        except Exception:
+            pass
+        if comp.get("nobg"):
+            item["nobg"] = True
+        if len(ups) >= 8:
+            ups[-1] = item
+        else:
+            ups.append(item)
+        lst[index]["uploads"] = ups
+        r["image_opts_list"] = lst
+        self.store.upsert_task(self.current)
+        self.store.save()
+        self._load(self.current)
+        self.recompose_image.emit(self.current, index)
+        show_toast(self, "Đã dán thành phần vào ảnh này", 2000)
+
     def _flush_editor(self) -> None:
         """Ghép NGAY phần vừa sửa của ẢNH ĐANG MỞ (đúng ảnh đó, không lây sang ảnh khác)."""
         try:
@@ -1221,11 +1297,24 @@ class JobsPage(QWidget):
         Ở ô nhập liệu (Tiêu đề / Nội dung…) thì để widget tự dán text như bình thường.
         """
         try:
+            if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Copy):
+                fw = QApplication.focusWidget()
+                if self._is_text_widget(fw):
+                    return False
+                if self.isVisible() and self.current:
+                    comp = self.img_editor.copy_selected()
+                    if comp and comp.get("path"):
+                        self._copied_component = dict(comp)
+                        show_toast(self, "Đã copy thành phần — sang ảnh khác bấm Ctrl+V", 2400)
+                        return True
             if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Paste):
                 fw = QApplication.focusWidget()
                 if self._is_text_widget(fw):
                     return False
                 if self.isVisible() and self.current:
+                    if self._copied_component:
+                        self._paste_component(getattr(self, "_sel_index", 0))
+                        return True
                     if clipboard_image_path():
                         self._paste_clipboard_image()
                         return True
@@ -1324,13 +1413,13 @@ class JobsPage(QWidget):
         while len(lst) <= index:
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
-        for p in paths:
-            if not p:
-                continue
+        real = [p for p in paths if p]
+        spots = self._find_free_spots(len(real))     # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng)
+        for p, spot in zip(real, spots):
             if len(ups) >= 8:
-                ups[-1] = {"path": p, "pos": [0.5, 0.5]}
+                ups[-1] = {"path": p, "pos": spot}
             else:
-                ups.append({"path": p, "pos": [0.5, 0.5]})
+                ups.append({"path": p, "pos": spot})
         lst[index]["uploads"] = ups
         r["image_opts_list"] = lst
         self.store.upsert_task(self.current)
