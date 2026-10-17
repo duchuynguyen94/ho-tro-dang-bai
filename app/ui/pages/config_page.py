@@ -364,7 +364,7 @@ class SitePanel(QWidget):
         # tiêu đề SÁT ô nhập: giảm padding dưới header + margin trên body + spacing
         wm_card.header_layout.setContentsMargins(14, 11, 14, 4)
         wm_card.body.setContentsMargins(14, 0, 14, 12)
-        wm_card.body.setSpacing(6)
+        wm_card.body.setSpacing(8)      # ô nhập ↔ dòng ghi chú
         wm_card.body.addWidget(self.watermark_edit)
         wm_note = QLabel("Để trống → mặc định <b>https://ngochuyduong.com</b>")
         wm_note.setProperty("class", "sub")
