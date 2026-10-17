@@ -361,6 +361,7 @@ class SitePanel(QWidget):
             "Để trống thì dùng mặc định https://ngochuyduong.com cho mọi website"
         )
         self.watermark_edit.editingFinished.connect(lambda: self._save(silent=True))
+        wm_card.body.setContentsMargins(14, 4, 14, 12)     # tiêu đề sát ô nhập hơn
         wm_card.body.addWidget(self.watermark_edit)
         wm_note = QLabel("Để trống → mặc định <b>https://ngochuyduong.com</b>")
         wm_note.setProperty("class", "sub")
@@ -800,6 +801,7 @@ class AIContentPanel(QWidget):
         )
         self.fallback.setChecked(bool(self.store.ai_content.get("fallback", True)))
         head.addWidget(self.fallback)
+        head.addSpacing(16)                    # không dính sát nút Lưu
         save = QPushButton("Lưu cấu hình AI nội dung")
         save.setProperty("class", "primary")
         save.clicked.connect(self._save)

@@ -75,6 +75,7 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 /* Panel Cài đặt (AI nội dung, AI ảnh, Format Rule, Link tiêu đề, Cập nhật): nền #f1f5f9 */
 QWidget#cfgPanel, QScrollArea#cfgPanel {{ background: #e8edf3; }}
 QScrollArea#cfgPanel > QWidget {{ background: transparent; }}
+QWidget#cfgInner {{ background: transparent; }}
 /* vùng cuộn con bên trong: trong suốt (bỏ màu xám mặc định của Qt) */
 QScrollArea#cfgScroll, QScrollArea#cfgScroll > QWidget,
 QScrollArea#cfgScroll > QWidget > QWidget {{ background: transparent; }}
@@ -99,7 +100,7 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; bo
 QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
 
 /* ô tick cách chữ 8px (trước đây dính sát) */
-QCheckBox {{ spacing: 8px; }}
+QCheckBox {{ spacing: 5px; }}
 
 QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{
     background: #ffffff; border: 1px solid #cbd5e1; border-radius: 7px; padding: 7px 9px;
@@ -367,6 +368,12 @@ def make_cfg_panel(panel) -> None:
     except Exception:
         pass
     panel.setObjectName("cfgPanel")
-    scrolls = panel.findChildren(QScrollArea) if not isinstance(panel, QScrollArea) else []
-    for sa in scrolls:
-        sa.setObjectName("cfgScroll")
+    if isinstance(panel, QScrollArea):
+        # panel LÀ vùng cuộn (Format Rule / Sheets): widget con phải trong suốt
+        inner = panel.widget()
+        if inner is not None:
+            inner.setAutoFillBackground(False)
+            inner.setObjectName("cfgInner")
+    else:
+        for sa in panel.findChildren(QScrollArea):
+            sa.setObjectName("cfgScroll")
