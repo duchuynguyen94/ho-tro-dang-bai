@@ -183,6 +183,7 @@ class ImageEditorPanel(QFrame):
     """Panel chỉnh sửa ảnh: canvas (logo + ảnh sản phẩm) + điều khiển."""
 
     apply_opts = Signal(dict)
+    changed = Signal()            # báo "canvas vừa đổi" -> cập nhật preview trong list ngay (0.2s)
     request_upload = Signal()
     request_ai_edit = Signal()
     request_refetch = Signal()
@@ -292,6 +293,10 @@ class ImageEditorPanel(QFrame):
         self._autosave = QTimer(self)
         self._autosave.setSingleShot(True)
         self._autosave.setInterval(2000)      # chờ người dùng NGỪNG chỉnh 2s mới ghép lại
+        self._quick = QTimer(self)            # cập nhật preview trong list sau 0.2s
+        self._quick.setSingleShot(True)
+        self._quick.setInterval(200)
+        self._quick.timeout.connect(self.changed.emit)
         self._autosave.timeout.connect(self._emit_opts)
         for w in (self.s_logo, self.s_wm, self.s_wm_size, self.s_wm_rot):
             w.valueChanged.connect(self._schedule_save)
@@ -308,6 +313,10 @@ class ImageEditorPanel(QFrame):
         if getattr(self, "_emitting", False) or getattr(self, "_loading", False):
             return
         self._autosave.start()
+        try:
+            self._quick.start()          # 0.2s -> cập nhật preview trong list
+        except Exception:
+            pass
 
     def _slider(self, grid: QGridLayout, row: int, label: str,
                 lo: int, hi: int, value: int, suffix: str = "%") -> QSlider:

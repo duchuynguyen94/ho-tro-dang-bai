@@ -473,6 +473,7 @@ class JobsPage(QWidget):
 
         self.img_editor = ImageEditorPanel()
         self.img_editor.apply_opts.connect(self._apply_image_opts)
+        self.img_editor.changed.connect(self._sync_thumb_from_canvas)
         self.img_editor.request_upload.connect(
             lambda: self._upload_image(getattr(self, "_sel_index", 0)))
         self.img_editor.request_ai_edit.connect(
@@ -1046,7 +1047,8 @@ class JobsPage(QWidget):
         return {
             "background": str(out),
             "logo": (site.logo_path or default_asset("logo.png")) if site else "",
-            "brand": r.get("brand_logo", ""),
+            "brand": (r.get("brand_logo")
+                      or str(getattr(task, "brand_logo_fallback", "") or "")),
             "products": [] if opts.get("no_products") else
                         [p for p in (r.get("product_images") or []) if p],
             "watermark": (site.watermark_text if site else ""),
@@ -1067,6 +1069,20 @@ class JobsPage(QWidget):
         # job trống: không chạy AI -> ẩn nút Random lại
         self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
+
+    def _sync_thumb_from_canvas(self) -> None:
+        """Chụp canvas -> cập nhật preview trong danh sách ảnh (nhanh, không cần worker)."""
+        try:
+            idx = self._sel_index
+            if not (0 <= idx < len(self._thumbs)):
+                return
+            pm = self.img_editor.canvas.grab()
+            box = self._thumbs[idx]
+            pic = getattr(box, "pic", None)
+            if pic is not None and not pm.isNull():
+                pic.set_source(pm)
+        except Exception:
+            pass
 
     def _apply_image_opts(self, opts: dict) -> None:
         if self.current:

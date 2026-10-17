@@ -461,7 +461,9 @@ class ImagesWorker(TrackedThread):
             rb, th = _remove_bg_opts(self.store)
             images = build_template_images(
                 self.site, self.task,
-                r.get("brand_logo", ""), list(r.get("product_images") or []),
+                (r.get("brand_logo")
+                 or str(getattr(self.task, "brand_logo_fallback", "") or "")),
+                list(r.get("product_images") or []),
                 self.footer_mode, log=self.log.emit,
                 rules=self.store.image_rules,
                 remove_bg=rb, remove_bg_thresh=th,
