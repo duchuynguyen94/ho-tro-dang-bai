@@ -837,6 +837,40 @@ class SourceImageDownloadWorker(TrackedThread):
         self.progress.emit("")
 
 
+class CanvasPreviewWorker(TrackedThread):
+    """Dựng ẢNH NỀN cho canvas (nền + thanh thông tin) ở LUỒNG RIÊNG -> app không bị đứng."""
+
+    ok = Signal(str)          # đường dẫn file ảnh nền
+    failed = Signal(str)
+
+    def __init__(self, params: dict) -> None:
+        super().__init__()
+        self.params = dict(params or {})
+
+    def run(self) -> None:
+        try:
+            p = self.params
+            base = compose(
+                size=1080,
+                site_logo="", brand_logo="", products=[],
+                footer_bar=str(p.get("footer", "") or ""),
+                frame="",
+                watermark="",            # watermark vẽ riêng trên canvas
+                watermark_opacity=0,
+                remove_bg=bool(p.get("remove_bg", False)),
+                remove_bg_thresh=int(p.get("remove_bg_thresh", 42) or 42),
+                product_scale=float(p.get("product_scale", 1.0) or 1.0),
+            )
+            out = str(p.get("out", "") or "")
+            if not out:
+                raise RuntimeError("thiếu đường dẫn ảnh nền")
+            save_composed(base, out)
+            self.ok.emit(out)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
 class SeoJsonWorker(TrackedThread):
     """Tạo JSON SEO (title / description / focus_keyword / tags) từ NỘI DUNG đã có."""
 

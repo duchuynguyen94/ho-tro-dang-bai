@@ -4,7 +4,7 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QMimeData, Qt, QUrl, Signal
+from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QPixmapCache, QDesktopServices, QDrag, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
@@ -379,6 +379,9 @@ class JobsPage(QWidget):
         self._copied_component: dict | None = None   # thành phần đã Ctrl+C (dán sang ảnh khác)
         self._seo_busy = False                       # đang tạo JSON SEO
         self._busy = False                           # cờ "khoá toàn bộ" (có tiến trình chạy)
+        self._canvas_worker = None                   # luồng dựng ảnh nền canvas
+        self._canvas_workers: list = []
+        self._preview_token = 0                      # chỉ áp kết quả dựng nền MỚI NHẤT
         self._build()
         self.refresh()
 
@@ -1289,20 +1292,7 @@ class JobsPage(QWidget):
         remove_bg, th = _remove_bg_opts(self.store)
         from ...config import default_asset
 
-        base = compose(
-            size=1080,
-            site_logo="", brand_logo="",
-            products=[],
-            footer_bar=footer,
-            frame="",
-            watermark="",     # watermark vẽ riêng để luôn nằm trên thành phần
-            watermark_opacity=0,
-            remove_bg=remove_bg,
-            remove_bg_thresh=th,
-            product_scale=float(opts.get("product_scale", 1.0) or 1.0),
-        )
         out = output_dir() / f"preview_{task.id}_{index + 1}.png"
-        save_composed(base, str(out))
         return {
             "background": str(out),
             "logo": (site.logo_path or default_asset("logo.png")) if site else "",
@@ -1312,6 +1302,91 @@ class JobsPage(QWidget):
                         [p for p in (r.get("product_images") or []) if p],
             "watermark": (site.watermark_text if site else ""),
         }
+
+    def _preview_params(self, task, index: int, mode_override: str = "") -> dict:
+        """Tham số dựng ẢNH NỀN canvas (ghép ở luồng riêng — không đứng giao diện)."""
+        site = self.store.get_site(task.site_id)
+        r = task.result or {}
+        images = r.get("images") or []
+        footer = str(images[index].get("footer", "") or "") if index < len(images) else ""
+        lst = r.get("image_opts_list") or []
+        opts = dict(lst[index]) if index < len(lst) else (r.get("image_opts") or {})
+        explicit = mode_override or (opts.get("footer_mode")
+                                     if opts.get("footer_mode") in ("bar1", "bar2") else "")
+        if explicit:
+            footer = ""
+        if not footer and site:
+            from ..workers import _site_bars
+            bars = _site_bars(site)
+            mode = explicit or self._footer_mode_of(task, index)
+            if bars:
+                footer = bars[1] if (mode == "bar2" and len(bars) > 1) else bars[0]
+        remove_bg, th = _remove_bg_opts(self.store)
+        out = output_dir() / f"preview_{task.id}_{index + 1}.png"
+        return {
+            "out": str(out),
+            "footer": footer,
+            "remove_bg": remove_bg,
+            "remove_bg_thresh": th,
+            "product_scale": float(opts.get("product_scale", 1.0) or 1.0),
+        }
+
+    def _request_canvas_bg(self, task, index: int, mode_override: str = "") -> None:
+        """Dựng lại ảnh nền canvas Ở LUỒNG RIÊNG (chỉ áp kết quả MỚI NHẤT)."""
+        try:
+            from ..workers import CanvasPreviewWorker
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            return
+        try:
+            params = self._preview_params(task, index, mode_override)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            return
+        self._preview_token = int(getattr(self, "_preview_token", 0)) + 1
+        token = self._preview_token
+        try:
+            old = getattr(self, "_canvas_worker", None)
+            if old is not None and old.isRunning():
+                old.stop()
+        except Exception:      # noqa: BLE001
+            pass
+        w = CanvasPreviewWorker(params)
+        w.ok.connect(lambda path: self._on_canvas_bg_ok(path, token, task, index))
+        w.failed.connect(self._on_canvas_bg_failed)
+        w.finished.connect(lambda: self._canvas_worker_done(w))
+        self._canvas_worker = w
+        self._canvas_workers.append(w)
+        w.start()
+
+    def _canvas_worker_done(self, w) -> None:
+        try:
+            if getattr(self, "_canvas_worker", None) is w:
+                self._canvas_worker = None
+            if w in self._canvas_workers:
+                self._canvas_workers.remove(w)
+        except Exception:      # noqa: BLE001
+            pass
+
+    def _on_canvas_bg_ok(self, path: str, token: int, task, index: int) -> None:
+        """Ảnh nền dựng xong: chỉ áp khi vẫn đang xem ĐÚNG job + ảnh đó (bỏ kết quả cũ)."""
+        try:
+            if token != int(getattr(self, "_preview_token", 0)):
+                return
+            if self.current is not task or int(getattr(self, "_sel_index", 0)) != int(index):
+                return
+            if path:
+                self.img_editor.set_background(path)
+                # canvas vừa có nền mới -> cập nhật luôn preview trong danh sách ảnh
+                QTimer.singleShot(150, self._sync_thumb_from_canvas)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+
+    def _on_canvas_bg_failed(self, err: str) -> None:
+        try:
+            traceback.print_exc()
+        except Exception:      # noqa: BLE001
+            pass
 
     def _refresh_preview(self, task) -> None:
         r = task.result or {}
@@ -1329,6 +1404,7 @@ class JobsPage(QWidget):
         self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
         self._edit_index = idx           # nhớ ĐÚNG ảnh đang mở -> mọi thay đổi áp cho ảnh này
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
+        self._request_canvas_bg(task, idx)      # dựng nền ở luồng riêng
         self._sync_seo_btn()
 
     def _on_footer_changed(self, mode: str) -> None:
@@ -1351,12 +1427,7 @@ class JobsPage(QWidget):
             self.store.save()
         except Exception:
             pass
-        try:
-            prev = self._build_preview(self.current, idx, mode)
-            if prev.get("background"):
-                self.img_editor.set_background(prev["background"])
-        except Exception:
-            pass
+        self._request_canvas_bg(self.current, idx, mode)
 
     def _sync_thumb_from_canvas(self) -> None:
         """Chụp canvas -> cập nhật preview trong danh sách ảnh (nhanh, không cần worker)."""

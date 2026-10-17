@@ -450,10 +450,8 @@ class MainWindow(QMainWindow):
             idx = self.jobs_page._sel_index
             imgs = fresh.result.get("images") or []
             if 0 <= idx < len(imgs):
-                # dùng ảnh nền "SẠCH" (không watermark/logo/sản phẩm) — tránh vẽ trùng 2 lần
-                prev = self.jobs_page._build_preview(fresh, idx)
-                if prev.get("background"):
-                    self.jobs_page.img_editor.set_background(prev["background"])
+                # dựng lại ảnh nền "SẠCH" ở LUỒNG RIÊNG (không đứng giao diện)
+                self.jobs_page._request_canvas_bg(fresh, idx)
         except Exception:
             pass
         self.status("Đã tạo lại ảnh.")
