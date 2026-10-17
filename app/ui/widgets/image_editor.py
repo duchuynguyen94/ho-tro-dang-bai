@@ -300,6 +300,9 @@ class ImageEditorPanel(QFrame):
         self._autosave.timeout.connect(self._emit_opts)
         for w in (self.s_logo, self.s_wm, self.s_wm_size, self.s_wm_rot):
             w.valueChanged.connect(self._schedule_save)
+        # vẽ lại canvas NGAY khi kéo 3 thanh watermark (độ mờ / kích thước / góc xoay)
+        for w in (self.s_wm, self.s_wm_size, self.s_wm_rot):
+            w.valueChanged.connect(lambda _v: self._layout_watermark())
         self.footer_combo.currentIndexChanged.connect(self._schedule_save)
         polish_combos(self)
 
