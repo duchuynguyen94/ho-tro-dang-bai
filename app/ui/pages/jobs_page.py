@@ -334,6 +334,7 @@ class JobsPage(QWidget):
         self._img_cache: dict = {}        # cache ảnh "Hình tự tìm" RIÊNG từng job (task_id -> {url: bytes})
         self._copied_component: dict | None = None   # thành phần đã Ctrl+C (dán sang ảnh khác)
         self._seo_busy = False                       # đang tạo JSON SEO
+        self._busy = False                           # cờ "khoá toàn bộ" (có tiến trình chạy)
         self._build()
         self.refresh()
 
@@ -625,16 +626,18 @@ class JobsPage(QWidget):
             self._posting[task_id] = True
         else:
             self._posting.pop(task_id, None)
-        self._sync_post_btn()
+        self._recompute_busy()
 
     def is_posting(self, task_id: str) -> bool:
         return bool(self._posting.get(task_id))
 
     def _sync_post_btn(self) -> None:
         cur = getattr(self.current, "id", None)
-        busy = bool(cur and self._posting.get(cur)) or bool(self._posting_locked)
+        busy = (bool(cur and self._posting.get(cur))
+                or bool(self._posting_locked) or bool(getattr(self, "_busy", False)))
         self.post_btn.setEnabled(not busy)
-        self.post_btn.setText("Đang mở trình duyệt…" if busy else "OK — Đăng bài")
+        if not getattr(self, "_busy", False):      # đang có cờ khoá -> giữ chữ của cờ khoá
+            self.post_btn.setText("Đang mở trình duyệt…" if busy else "OK — Đăng bài")
 
     def select_task(self, task_id: str) -> None:
         task = next((t for t in self.store.tasks if t.id == task_id), None)
@@ -652,43 +655,58 @@ class JobsPage(QWidget):
         self._sync_post_btn()
 
     # chữ gốc / chữ khi ChatGPT đang bận
-    _BUSY_TEXT = {
-        "retry_btn": ("↻ Tạo lại", "có 1 công việc khác đang làm"),
-        "regen_all_btn": ("↻ Random lại", "Random - có 1 công việc khác đang làm"),
-    }
-
     def set_posting_locked(self, locked: bool) -> None:
-        """Có 1 việc đang đăng bài -> khoá nút "OK — Đăng bài" của mọi job."""
+        """Có 1 việc đang đăng bài -> đặt cờ "khoá toàn bộ"."""
         self._posting_locked = bool(locked)
-        if locked:
-            self.post_btn.setToolTip("Đang có 1 việc đăng bài — chờ việc đó xong đã")
-        else:
-            self.post_btn.setToolTip("")
-        # CẬP NHẬT LẠI NÚT (chữ + bật/tắt) -> mở khoá xong là về đúng "OK — Đăng bài"
-        self._sync_post_btn()
+        self._recompute_busy()
 
     def set_ai_busy(self, busy: bool) -> None:
-        """ChatGPT đang chạy 1 việc -> khoá + đổi chữ các nút gọi AI (tạo lại / random)."""
-        busy = bool(busy)
-        self._ai_busy = busy
-        tip = "Đang chạy 1 việc bằng ChatGPT — chờ việc đó xong đã" if busy else ""
-        names = list(self._BUSY_TEXT.keys()) + ["_field_btns"]
-        for name in names:
-            if name == "_field_btns":
-                btns = list(getattr(self, "_field_btns", []))
-                for b in btns:
-                    b.setEnabled(not busy)
-                    if busy:
-                        b.setToolTip(tip)
-                continue
+        """Có 1 việc tạo nội dung đang chạy -> bật/tắt cờ "khoá toàn bộ"."""
+        self._ai_busy = bool(busy)
+        self._recompute_busy()
+
+    _BUSY_SUFFIX = " - Đang có tiến trình chạy"
+
+    def _busy_targets(self) -> list:
+        """Các nút bị khoá khi có tiến trình chạy."""
+        out = []
+        for name in ("post_btn", "seo_btn", "regen_all_btn", "retry_btn"):
             b = getattr(self, name, None)
-            if b is None:
-                continue
-            normal, busy_text = self._BUSY_TEXT[name]
-            b.setText(busy_text if busy else normal)
-            b.setEnabled(not busy)
-            b.setToolTip(tip if busy else "")
-        # nút "Đăng bài" không liên quan AI -> không đụng
+            if b is not None:
+                out.append(b)
+        out.extend(list(getattr(self, "_field_btns", [])))
+        return out
+
+    def _recompute_busy(self) -> None:
+        """Cờ "khoá toàn bộ" = đang có tiến trình chạy (đăng bài / JSON SEO / tạo nội dung)."""
+        busy = (bool(getattr(self, "_ai_busy", False))
+                or bool(getattr(self, "_seo_busy", False))
+                or bool(getattr(self, "_posting_locked", False))
+                or any(getattr(self, "_posting", {}).values()))
+        self._apply_busy(busy)
+
+    def _apply_busy(self, busy: bool) -> None:
+        """Bật/tắt cờ khoá: nút mờ + chữ "<Tên nút> - Đang có tiến trình chạy"."""
+        self._busy = bool(busy)
+        for b in self._busy_targets():
+            try:
+                if busy:
+                    if not getattr(b, "_normal_text", ""):
+                        b._normal_text = b.text()
+                    b.setText(f"{b._normal_text}{self._BUSY_SUFFIX}")
+                    b.setToolTip("Đang có tiến trình chạy — chờ xong đã")
+                    b.setEnabled(False)
+                else:
+                    txt = getattr(b, "_normal_text", "")
+                    if txt:
+                        b.setText(txt)
+                    b.setToolTip("")
+                    b.setEnabled(True)
+            except Exception:
+                pass
+        if not busy:                 # mở khoá -> đồng bộ lại trạng thái riêng từng nút
+            self._sync_post_btn()
+            self._sync_seo_btn()
 
     def set_loading_message(self, text: str) -> None:
         if self.current and self.current.status in (STATUS_QUEUED, STATUS_GENERATING):
@@ -1164,7 +1182,8 @@ class JobsPage(QWidget):
             has_text = bool(self.content_edit.get_text().strip())
             show = (kind == "blank") and has_text
             self.seo_btn.setVisible(show)
-            self.seo_btn.setEnabled(show and not self._seo_busy)
+            self.seo_btn.setEnabled(show and not self._seo_busy
+                                     and not getattr(self, "_busy", False))
         except Exception:
             pass
 
@@ -1172,12 +1191,11 @@ class JobsPage(QWidget):
         """Đang tạo JSON SEO -> khoá nút + báo ở dòng dưới."""
         self._seo_busy = bool(on)
         try:
-            self.seo_btn.setText("Đang tạo JSON SEO…" if on else "Tạo JSON SEO")
             # xong / lỗi -> XOÁ dòng trạng thái
             self.check_label.setText("Đang tạo JSON SEO từ nội dung…" if on else "")
         except Exception:
             pass
-        self._sync_seo_btn()
+        self._recompute_busy()
 
     def _flush_editor(self) -> None:
         """Ghép NGAY phần vừa sửa của ẢNH ĐANG MỞ (đúng ảnh đó, không lây sang ảnh khác)."""
