@@ -309,6 +309,7 @@ class JobsPage(QWidget):
     export_images = Signal(object)           # (task) xuất ảnh vào thư mục bài + mở thư mục
     trim_component = Signal(object, str, int)  # (task, loại thành phần, chỉ số) cắt viền ảnh
     open_model_extractor = Signal()            # mở popup Model Extractor
+    stop_all = Signal()                        # dừng TẤT CẢ việc đang chờ / đang tạo
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
 
@@ -337,6 +338,11 @@ class JobsPage(QWidget):
         left.setMinimumWidth(300)
         left.setMaximumWidth(420)
         left.set_title("Công việc đang làm")
+        self.stop_all_btn = QPushButton("■ Dừng tất cả")
+        self.stop_all_btn.setProperty("class", "danger")
+        self.stop_all_btn.setToolTip("Dừng mọi việc đang chờ / đang tạo → chuyển thành \"chưa tạo\"")
+        self.stop_all_btn.clicked.connect(self.stop_all.emit)
+        left.add_header_widget(self.stop_all_btn)
         self.count_badge = QLabel("0")
         self.count_badge.setObjectName("chipBlue")
         left.add_header_widget(self.count_badge)
@@ -546,6 +552,8 @@ class JobsPage(QWidget):
     def refresh(self) -> None:
         tasks = self.store.tasks
         self.count_badge.setText(str(len(tasks)))
+        busy = any(t.status in (STATUS_QUEUED, STATUS_GENERATING) for t in tasks)
+        self.stop_all_btn.setEnabled(busy)
         self._ordered = list(reversed(tasks))
 
         while self.tasks_box.count() > 1:
@@ -668,11 +676,22 @@ class JobsPage(QWidget):
             self.stack.setCurrentWidget(self.page_empty)
             return
 
-        if task.status in (STATUS_QUEUED, STATUS_GENERATING):
+        if task.status == STATUS_QUEUED:
+            # đang chờ tới lượt: KHÔNG có nút nào
+            self.footer.hide()
+            self.loading_label.setText(f"đang chờ tới lượt · {task.site_name}")
+            self.loading_bar.setVisible(False)
+            self.stop_btn.setVisible(False)
+            self.stack.setCurrentWidget(self.page_loading)
+            return
+
+        if task.status == STATUS_GENERATING:
             self.footer.hide()
             self.loading_label.setText(
                 f"Đang tạo nội dung cho {task.site_name}…"
             )
+            self.loading_bar.setVisible(True)
+            self.stop_btn.setVisible(True)
             self.stack.setCurrentWidget(self.page_loading)
             return
 

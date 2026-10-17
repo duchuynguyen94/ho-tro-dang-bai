@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.export_images.connect(self._on_export_images)
         self.jobs_page.trim_component.connect(self._on_trim_component)
         self.jobs_page.open_model_extractor.connect(self._on_model_extractor)
+        self.jobs_page.stop_all.connect(self._on_stop_all)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.config_page.changed.connect(self._on_config_changed)
@@ -595,6 +596,35 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         show_toast(self, f"Đã xuất {len(paths)} ảnh — đã mở thư mục bài", 3000)
+
+    def _on_stop_all(self) -> None:
+        """Dừng TẤT CẢ: mọi việc đang chờ / đang tạo -> cancelled ("chưa tạo")."""
+        try:
+            n = 0
+            for t in self.store.tasks:
+                if t.status in (STATUS_QUEUED, STATUS_GENERATING):
+                    t.status = STATUS_CANCELLED
+                    t.message = ""
+                    t.progress = 0
+                    self.store.upsert_task(t)
+                    n += 1
+            self.store.save()
+            # dừng các worker đang chạy
+            for w in list(self._content_workers.values()):
+                try:
+                    if hasattr(w, "cancel"):
+                        w.cancel()
+                except Exception:
+                    pass
+            self.jobs_page.refresh()
+            self._refresh_count()
+            self._update_ai_busy()
+            if n:
+                show_toast(self, f"Đã dừng tất cả ({n} việc) → chưa tạo", 3000)
+            self.status("Đã dừng tất cả việc đang chờ / đang tạo.")
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Dừng tất cả", str(exc))
 
     def _on_model_extractor(self) -> None:
         """Mở popup Model Extractor (nhập list link nguồn -> trích xuất product models)."""
