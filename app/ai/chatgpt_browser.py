@@ -539,7 +539,7 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
     project_url = (pcfg or {}).get("project_url", "") or ""
 
     def _run(headless: bool) -> str:
-        br = WPBrowser(headless=headless, site_id="chatgpt")
+        br = WPBrowser(headless=headless, site_id="chatgpt", log=log)
         try:
             page = _open_page(br, project_url, log)
             if log:
@@ -566,7 +566,7 @@ def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,
                   log=None, timeout: int = 420, should_stop=None) -> str:
     from ..wp import WPBrowser
 
-    br = WPBrowser(headless=headless, site_id="chatgpt")
+    br = WPBrowser(headless=headless, site_id="chatgpt", log=log)
     try:
         page = _open_page(br, project_url, log, should_stop)
         if log:
@@ -621,7 +621,7 @@ def generate_two_step(pcfg: dict, content_prompt: str, seo_prompt: str,
     from ..wp import WPBrowser
 
     project_url = (pcfg or {}).get("project_url", "") or ""
-    br = WPBrowser(headless=False, site_id="chatgpt")
+    br = WPBrowser(headless=False, site_id="chatgpt", log=log)
     try:
         page = _open_page(br, project_url, log)
         if log:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import signal
 import subprocess
+import threading
 import time
 from pathlib import Path
 
@@ -35,6 +36,18 @@ def _user_data_dir(site_id: str) -> str:
 
 
 LOCK_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
+
+# --------------------------------------------------------------------------- #
+# Khoá theo PROFILE: mỗi website (và "chatgpt") chỉ cho 1 trình duyệt cùng lúc.
+# Việc thứ 2 sẽ CHỜ việc thứ nhất đóng trình duyệt rồi tự chạy tiếp.
+# --------------------------------------------------------------------------- #
+_PROFILE_LOCKS: dict[str, threading.Lock] = {}
+_PROFILE_LOCKS_GUARD = threading.Lock()
+
+
+def profile_lock(site_id: str) -> threading.Lock:
+    with _PROFILE_LOCKS_GUARD:
+        return _PROFILE_LOCKS.setdefault(site_id or "default", threading.Lock())
 
 
 def _pids_using_profile(user_data_dir: str) -> list[int]:
@@ -149,18 +162,47 @@ def _clear_profile_lock(user_data_dir: str) -> bool:
 class WPBrowser:
     """Bọc 1 phiên trình duyệt gắn với 1 website (giữ session đăng nhập)."""
 
-    def __init__(self, headless: bool = False, site_id: str = "default") -> None:
+    def __init__(self, headless: bool = False, site_id: str = "default",
+                 log=None) -> None:
         self.headless = headless
         self.site_id = site_id
+        self.log = log
         self._pw = None
         self.context = None
         self.page: Page | None = None
         self.channel_used = ""
+        self._lock = None
 
     # ------------------------------------------------------------------ #
     def open(self) -> Page:
         if self.page:
             return self.page
+        # mỗi profile chỉ 1 trình duyệt: chờ tới lượt (tối đa 30 phút)
+        lock = profile_lock(self.site_id)
+        if not lock.acquire(timeout=0.5):
+            if self.log:
+                self.log("Đang chờ trình duyệt của việc khác đóng lại…")
+            if not lock.acquire(timeout=1800):
+                raise RuntimeError(
+                    "Trình duyệt của việc khác đang mở quá lâu. "
+                    "Hãy đóng cửa sổ Chrome đó rồi thử lại."
+                )
+        self._lock = lock
+        try:
+            return self._open_locked()
+        except Exception:
+            self._release_lock()
+            raise
+
+    def _release_lock(self) -> None:
+        if self._lock is not None:
+            try:
+                self._lock.release()
+            except Exception:
+                pass
+            self._lock = None
+
+    def _open_locked(self) -> Page:
         self._pw = sync_playwright().start()
 
         attempts: list[tuple[str, dict]] = []
@@ -289,4 +331,5 @@ class WPBrowser:
             pass
         self.context = None
         self.page = None
+        self._release_lock()          # mở khoá cho việc kế tiếp
         self._pw = None

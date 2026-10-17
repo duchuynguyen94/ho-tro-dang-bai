@@ -524,7 +524,7 @@ class PostWorker(TrackedThread):
         page = None
         try:
             self.log.emit("Mở trình duyệt…")
-            br = WPBrowser(headless=False, site_id=site.id)
+            br = WPBrowser(headless=False, site_id=site.id, log=self.log.emit)
             page = br.open()
             self.log.emit(f"Trình duyệt: {br.channel_used}")
 
