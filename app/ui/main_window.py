@@ -64,6 +64,7 @@ class MainWindow(QMainWindow):
         self._content_workers: dict = {}
         self._img_workers: dict = {}
         self._img_queue: dict = {}        # việc ghép ảnh đang chờ (task_id -> [(opts, index, msg)])
+        self._content_only_ids: set = set()  # "Random lại" -> chỉ tạo lại NỘI DUNG, giữ nguyên ảnh
         self._build()
         try:                       # mở app là vào thẳng tab "Đăng bài"
             self._go(1)
@@ -247,13 +248,15 @@ class MainWindow(QMainWindow):
             self._log_err("Hàng đợi tạo nội dung", str(exc))
 
     def _spawn_content_worker(self, task, site) -> None:
-        worker = ContentWorker(self.store, task, site)
+        content_only = task.id in self._content_only_ids
+        worker = ContentWorker(self.store, task, site, content_only=content_only)
         self._content_workers[task.id] = worker
         worker.log.connect(self._on_worker_log)
         worker.ok.connect(lambda res: self._on_content_ok(task, res))
         worker.failed.connect(lambda err: self._on_content_failed(task, err))
         worker.cancelled.connect(lambda: self._on_content_cancelled(task))
         worker.finished.connect(lambda: (self._content_workers.pop(task.id, None),
+                                         self._content_only_ids.discard(task.id),
                                          self._cleanup(worker),
                                          self._start_next_content()))
         self._workers.append(worker)
@@ -287,8 +290,17 @@ class MainWindow(QMainWindow):
 
     def _on_content_ok(self, task, result: dict) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        content_only = task.id in self._content_only_ids
         try:
-            fresh.result = result
+            if content_only:
+                # chỉ thay NỘI DUNG, giữ nguyên ảnh + tuỳ chọn ảnh đang có
+                r = dict(fresh.result or {})
+                r.update({k: v for k, v in (result or {}).items()
+                          if k in ("title", "focus_keyword", "description",
+                                   "tags", "content_html")})
+                fresh.result = r
+            else:
+                fresh.result = result
             fresh.status = STATUS_FINISH
             fresh.progress = 100
             fresh.error_stage = ""
@@ -452,7 +464,11 @@ class MainWindow(QMainWindow):
         self.jobs_page._save()
 
         if field == "images" or not field:
-            # ảnh / toàn bộ -> chạy lại quy trình đầy đủ
+            if not field:
+                # "Random lại": CHỈ tạo lại NỘI DUNG — nếu job đã có ảnh thì GIỮ NGUYÊN ảnh
+                r = task.result or {}
+                if list(r.get("images") or []):
+                    self._content_only_ids.add(task.id)
             self._on_create_task(task)
             return
 

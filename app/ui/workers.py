@@ -297,11 +297,12 @@ class ContentWorker(TrackedThread):
     failed = Signal(str)
     cancelled = Signal()
 
-    def __init__(self, store, task, site) -> None:
+    def __init__(self, store, task, site, content_only: bool = False) -> None:
         super().__init__()
         self.store = store
         self.task = task
         self.site = site
+        self.content_only = bool(content_only)   # CHỈ tạo lại NỘI DUNG -> không đụng tới ảnh
         self._cancel = False
 
     def cancel(self) -> None:
@@ -357,6 +358,13 @@ class ContentWorker(TrackedThread):
             )
             data["content_html"] = html_out
             self.progress.emit(70)
+
+            if self.content_only:
+                # "Random lại" -> CHỈ tạo lại nội dung, GIỮ NGUYÊN ảnh đang có
+                self.progress.emit(100)
+                self.log.emit("Chỉ tạo lại nội dung — giữ nguyên ảnh đang có.")
+                self.ok.emit(dict(data))
+                return
 
             # Logo thương hiệu: ưu tiên file dự phòng, nếu trống thì thử tìm trên trang nguồn.
             brand_logo = t.brand_logo_fallback or ""
