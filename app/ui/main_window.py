@@ -144,6 +144,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.jobs_page.status_msg.connect(self.status)
         self.jobs_page.seo_json.connect(self._on_seo_json)
+        self.jobs_page.change_site.connect(self._on_change_site)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -454,6 +455,47 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.status("Đã tạo lại ảnh.")
+
+    def _on_change_site(self, task, site_id: str) -> None:
+        """Đổi website cho job THƯỜNG: giữ nội dung, hỏi có ghép lại ảnh theo site mới không."""
+        if getattr(self.jobs_page, "_busy", False):
+            show_toast(self, "Đang có tiến trình chạy — chờ xong đã", 2800, ok=False)
+            return
+        new_site = self.store.get_site(site_id)
+        if not new_site:
+            return
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        if (getattr(fresh, "kind", "") or "") == "blank":
+            show_toast(self, "Job trống không đổi được website", 2600, ok=False)
+            return
+        if fresh.site_id == site_id:
+            return
+        if not (getattr(new_site, "script", None) and getattr(new_site.script, "steps", None)):
+            show_toast(self, f"Website “{new_site.name}” chưa có kịch bản đăng bài", 3000, ok=False)
+            return
+        self.jobs_page._save()               # lưu nội dung đang gõ trước khi đổi
+        old = self.store.get_site(fresh.site_id)
+        fresh.site_id = new_site.id
+        fresh.site_name = new_site.name
+        self.store.upsert_task(fresh)
+        self.store.save()
+        self.jobs_page.current = fresh
+        try:
+            self._refresh_jobs_keep(fresh)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+        self.status(f"Đã đổi website: {old.name if old else '?'} → {new_site.name}")
+        ans = QMessageBox.question(
+            self, "Đổi website",
+            f"Đã đổi nơi đăng sang “{new_site.name}” (kịch bản + đăng nhập + link đăng bài).\n"
+            "Nội dung được GIỮ NGUYÊN.\n\nTạo lại ảnh theo website mới?",
+            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
+        )
+        if ans == QMessageBox.Yes:
+            self._start_images_worker(fresh, None, None, "Đang ghép lại ảnh theo website mới…")
+            show_toast(self, "Đang ghép lại ảnh theo website mới…", 2600)
+        else:
+            show_toast(self, "Đã đổi website — giữ nguyên ảnh cũ", 2600)
 
     def _on_seo_json(self, task) -> None:
         """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""

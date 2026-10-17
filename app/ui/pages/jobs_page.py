@@ -226,12 +226,16 @@ class TaskRow(QFrame):
     clicked = Signal(str)
     delete = Signal(str)
     copied = Signal(str)
+    site_pick = Signal(str, str)          # (task_id, site_id) — đổi website cho job
 
     def __init__(self, task, parent=None) -> None:
         super().__init__(parent)
         self.setObjectName("taskRow")
         self.task_id = task.id
         self.source_url = task.source_url or ""
+        self.kind = str(getattr(task, "kind", "") or "")
+        self.site_id = str(getattr(task, "site_id", "") or "")
+        self._sites: list[tuple[str, str, bool]] = []      # (id, tên, có kịch bản)
 
         h = QHBoxLayout(self)
         h.setContentsMargins(12, 10, 8, 10)
@@ -283,8 +287,28 @@ class TaskRow(QFrame):
         self.clicked.emit(self.task_id)
         super().mousePressEvent(event)
 
+    def set_sites(self, sites: list[tuple[str, str, bool]]) -> None:
+        """Danh sách website cho menu "Đổi website"."""
+        self._sites = list(sites or [])
+
     def contextMenuEvent(self, event) -> None:  # noqa: N802
         menu = QMenu(self)
+        sub = menu.addMenu("Đổi website")
+        if self.kind == "blank":
+            sub.setEnabled(False)
+            sub.setToolTip("Job trống không đổi được website")
+        else:
+            for sid, name, has_script in self._sites:
+                act = sub.addAction(("✔ " if sid == self.site_id else "") + name)
+                act.setEnabled(bool(has_script))
+                if not has_script:
+                    act.setToolTip("Website này chưa có kịch bản đăng bài")
+                if sid == self.site_id:
+                    act.setEnabled(False)      # đang dùng rồi
+                act.setData(sid)
+            if not self._sites:
+                sub.setEnabled(False)
+        menu.addSeparator()
         act_copy = menu.addAction("Sao chép link nguồn")
         act_copy.setEnabled(bool(self.source_url))
         act_open = menu.addAction("Mở link nguồn")
@@ -293,6 +317,11 @@ class TaskRow(QFrame):
         act_del = menu.addAction("Xoá công việc")
 
         chosen = menu.exec(event.globalPos())
+        if chosen is not None and chosen.parent() is sub:
+            sid = str(chosen.data() or "")
+            if sid:
+                self.site_pick.emit(self.task_id, sid)
+            return
         if chosen == act_copy and self.source_url:
             QApplication.clipboard().setText(self.source_url)
             self.copied.emit(self.source_url)
@@ -318,6 +347,7 @@ class JobsPage(QWidget):
     cancel_task = Signal(object)             # (task) dừng đang tạo
     status_msg = Signal(str)                 # báo trạng thái ra thanh dưới cùng của app
     seo_json = Signal(object)                # (task) tạo JSON SEO từ nội dung (job trống)
+    change_site = Signal(object, str)        # (task, site_id) đổi website cho job thường
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -594,6 +624,8 @@ class JobsPage(QWidget):
             row.clicked.connect(self.select_task)
             row.delete.connect(self._confirm_delete)
             row.copied.connect(lambda _u: show_toast(self, "Đã sao chép link nguồn"))
+            row.set_sites(self._site_choices())
+            row.site_pick.connect(self._on_row_site_pick)
             self._rows[t.id] = row
             self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
 
@@ -1173,6 +1205,23 @@ class JobsPage(QWidget):
         self.store.save()
         self._load(self.current)
         self.recompose_image.emit(self.current, index)
+
+    def _site_choices(self) -> list[tuple[str, str, bool]]:
+        """Danh sách website cho menu "Đổi website" (kèm cờ có kịch bản)."""
+        out: list[tuple[str, str, bool]] = []
+        try:
+            for s in self.store.sites:
+                steps = getattr(getattr(s, "script", None), "steps", None) or []
+                out.append((s.id, s.name, bool(steps)))
+        except Exception:
+            pass
+        return out
+
+    def _on_row_site_pick(self, task_id: str, site_id: str) -> None:
+        task = next((t for t in self.store.tasks if t.id == task_id), None)
+        if task is None or not site_id:
+            return
+        self.change_site.emit(task, site_id)
 
     def _sync_seo_btn(self) -> None:
         """Nút "Tạo JSON SEO": chỉ hiện khi job TRỐNG và ô Nội dung CÓ chữ."""
