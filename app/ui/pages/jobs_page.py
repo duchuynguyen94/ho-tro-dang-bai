@@ -677,9 +677,10 @@ class JobsPage(QWidget):
             return
 
         if task.status == STATUS_QUEUED:
-            # đang chờ tới lượt: KHÔNG có nút nào
+            # đang chờ tới lượt: KHÔNG có nút nào, KHÔNG hiện message của việc khác
             self.footer.hide()
             self.loading_label.setText(f"đang chờ tới lượt · {task.site_name}")
+            self.loading_note.setText("")
             self.loading_bar.setVisible(False)
             self.stop_btn.setVisible(False)
             self.stack.setCurrentWidget(self.page_loading)
