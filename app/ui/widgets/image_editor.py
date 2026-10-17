@@ -22,7 +22,7 @@ from PySide6.QtWidgets import (
 from ...images.composer import default_product_positions, product_box
 from ..style import polish_combos
 
-CANVAS = 420          # khung chỉnh sửa (ảnh đăng bài vẫn theo Cài đặt → AI ảnh)
+CANVAS = 400          # khung chỉnh sửa (ảnh đăng bài vẫn theo Cài đặt → AI ảnh)
 SRC = 1080
 
 
@@ -247,15 +247,15 @@ class ImageEditorPanel(QFrame):
         up = QPushButton("Tải lên")
         up.setProperty("class", "ghost")
         up.clicked.connect(self.request_upload.emit)
-        ai = QPushButton("AI sửa")
+        ai = QPushButton("Sửa bằng AI")
         ai.setProperty("class", "ghost")
         ai.clicked.connect(self.request_ai_edit.emit)
         self.ai_btn = ai
-        src_btn = QPushButton("Hình từ nguồn")
+        src_btn = QPushButton("Hình tự tìm")
         src_btn.setProperty("class", "ghost")
         src_btn.setToolTip("Hiện danh sách ảnh lấy từ link nguồn — chọn 1 ảnh để chèn vào canvas")
         src_btn.clicked.connect(self.request_source_picker.emit)
-        exp = QPushButton("⬇ Xuất hình")
+        exp = QPushButton("Xuất hình")
         exp.setProperty("class", "ghost")
         exp.setToolTip("Xuất ảnh vào thư mục bài (theo Rule ảnh) và MỞ THƯ MỤC đó")
         exp.clicked.connect(self.request_export.emit)
@@ -263,11 +263,11 @@ class ImageEditorPanel(QFrame):
         tools.addWidget(ai)
         tools.addWidget(src_btn)
         tools.addWidget(exp)
-        tools.addStretch(1)
         reset = QPushButton("Đặt lại")
         reset.setProperty("class", "ghost")
         reset.clicked.connect(self._reset)
-        tools.addWidget(reset)
+        tools.addWidget(reset)          # nằm ngay cạnh "Xuất hình"
+        tools.addStretch(1)
         right.addLayout(tools)
 
         grid = QGridLayout()

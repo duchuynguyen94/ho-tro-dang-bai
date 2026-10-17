@@ -444,10 +444,19 @@ class JobsPage(QWidget):
         ev2.addLayout(self._field("Nội dung (soạn thảo trực tiếp — chèn được link/ảnh & sửa HTML)",
                                   self.content_edit))
 
+        self.add_img_btn = QPushButton("+ Thêm hình")
+        self.add_img_btn.setProperty("class", "ghost")
+        self.add_img_btn.setToolTip(
+            "Thêm 1 ảnh TRỐNG (chỉ có logo site, logo brand, watermark, thanh thông tin).\n"
+            "Bạn tự tải ảnh sản phẩm lên cho ảnh đó."
+        )
+        self.add_img_btn.clicked.connect(self._add_image)
+
         img_head = QHBoxLayout()
         img_lab = QLabel("Ảnh")
         img_lab.setStyleSheet("font-weight:600;")
         img_head.addWidget(img_lab)
+        img_head.addWidget(self.add_img_btn)      # nằm ngay BÊN PHẢI chữ "Ảnh"
         img_head.addStretch(1)
         ev2.addLayout(img_head)
 
@@ -463,14 +472,6 @@ class JobsPage(QWidget):
         self.images_scroll.setWidget(self.images_box)
         ev2.addWidget(self.images_scroll)
         self.images_box.reordered.connect(self._reorder_images)
-
-        self.add_img_btn = QPushButton("+ Thêm hình")
-        self.add_img_btn.setProperty("class", "ghost")
-        self.add_img_btn.setToolTip(
-            "Thêm 1 ảnh TRỐNG (chỉ có logo site, logo brand, watermark, thanh thông tin).\n"
-            "Bạn tự tải ảnh sản phẩm lên cho ảnh đó."
-        )
-        self.add_img_btn.clicked.connect(self._add_image)
 
         self.img_editor = ImageEditorPanel()
         self.img_editor.apply_opts.connect(self._apply_image_opts)
@@ -789,7 +790,6 @@ class JobsPage(QWidget):
             self.images_row.addWidget(box, 0, Qt.AlignTop)
             self._thumbs.append(box)
         self.images_row.addStretch(1)
-        self.images_row.addWidget(self.add_img_btn, 0, Qt.AlignTop)
         self.add_img_btn.setEnabled(len(images) < MAX_IMAGES)
         # giữ ĐÚNG bề rộng nội dung -> ít ảnh thì khung nhỏ gọn, nhiều ảnh thì cuộn ngang
         need_w = len(images) * (THUMB_W + 8) + 150 + 16
@@ -1013,7 +1013,6 @@ class JobsPage(QWidget):
                 self.images_row.addWidget(box, 0, Qt.AlignTop)
                 self._thumbs.append(box)
             self.images_row.addStretch(1)
-            self.images_row.addWidget(self.add_img_btn, 0, Qt.AlignTop)
             self.add_img_btn.setEnabled(len(images) < MAX_IMAGES)
         except Exception:
             traceback.print_exc()
