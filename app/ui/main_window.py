@@ -4,7 +4,7 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QUrl
+from PySide6.QtCore import Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices
 from PySide6.QtWidgets import (
     QFrame,
@@ -66,6 +66,9 @@ class MainWindow(QMainWindow):
         self._img_queue: dict = {}        # việc ghép ảnh đang chờ (task_id -> [(opts, index, msg)])
         self._content_only_ids: set = set()  # "Random lại" -> chỉ tạo lại NỘI DUNG, giữ nguyên ảnh
         self._seo_worker = None              # luồng tạo JSON SEO (job trống)
+        self._post_workers: dict = {}        # task_id -> luồng đăng bài
+        self._post_started: dict = {}        # task_id -> thời điểm bắt đầu đăng (giây)
+        self._start_post_watchdog()          # lưới an toàn: Chrome tắt -> mở khoá nút
         self._build()
         try:                       # mở app là vào thẳng tab "Đăng bài"
             self._go(1)
@@ -640,14 +643,79 @@ class MainWindow(QMainWindow):
 
         self.jobs_page.set_posting_locked(True)      # khoá nút OK — Đăng bài của mọi job
         worker = PostWorker(site, task.result or {})
+        import time as _time
+
+        self._post_workers[task.id] = worker
+        self._post_started[task.id] = _time.time()
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda url: self._on_post_ok(task, url))
         worker.failed.connect(lambda err: self._on_post_failed(task, err))
         worker.closed.connect(lambda _u: (self.jobs_page.set_posting(task.id, False),
                                           self._on_post_closed(task)))
-        worker.finished.connect(lambda: self._cleanup(worker))
+        def _post_done() -> None:
+            self._post_workers.pop(task.id, None)
+            self._post_started.pop(task.id, None)
+            self._cleanup(worker)
+
+        worker.finished.connect(_post_done)
         self._workers.append(worker)
         worker.start()
+
+    # ---------------- lưới an toàn cho nút "OK — Đăng bài" ---------------- #
+    def _start_post_watchdog(self) -> None:
+        """Mỗi 3 giây: job đang đăng mà KHÔNG còn Chrome -> tự mở khoá nút."""
+        self._post_watchdog = QTimer(self)
+        self._post_watchdog.setInterval(3000)
+        self._post_watchdog.timeout.connect(self._check_posting_alive)
+        self._post_watchdog.start()
+
+    def _check_posting_alive(self) -> None:
+        try:
+            busy = dict(getattr(self.jobs_page, "_posting", {}) or {})
+            if not busy:
+                return
+            import time as _time
+
+            from ..wp.browser import _pids_using_profile, _user_data_dir
+
+            changed = False
+            for tid in list(busy.keys()):
+                started = float(self._post_started.get(tid, 0) or 0)
+                if started and (_time.time() - started) < 12:
+                    continue                 # đang mở trình duyệt -> chưa kiểm tra
+                task = next((t for t in self.store.tasks if t.id == tid), None)
+                site = self.store.get_site(task.site_id) if task is not None else None
+                if site is None:
+                    self.jobs_page.set_posting(tid, False)
+                    changed = True
+                    continue
+                try:
+                    alive = bool(_pids_using_profile(_user_data_dir(site.id)))
+                except Exception:      # noqa: BLE001
+                    alive = True
+                if alive:
+                    continue
+                # Chrome đã tắt mà nút chưa mở khoá -> mở khoá ngay + dừng luồng kẹt
+                self.jobs_page.set_posting(tid, False)
+                self._stop_post_worker(tid)
+                changed = True
+                self._log_err("Đăng bài", "Chrome đã tắt — app tự mở khoá nút “OK — Đăng bài”.")
+            if changed and not any(getattr(self.jobs_page, "_posting", {}).values()):
+                self.jobs_page.set_posting_locked(False)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+
+    def _stop_post_worker(self, task_id: str) -> None:
+        """Dừng luồng đăng bài đang kẹt (giải phóng profile cho lần sau)."""
+        w = self._post_workers.get(task_id)
+        if w is None:
+            return
+        try:
+            w.stop()
+        except Exception:      # noqa: BLE001
+            pass
+        self._post_workers.pop(task_id, None)
+        self._post_started.pop(task_id, None)
 
     def _on_post_closed(self, task) -> None:
         self.jobs_page.set_posting_locked(False)     # đã đóng Chrome -> mở khoá lại
