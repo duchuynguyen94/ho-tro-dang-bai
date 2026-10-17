@@ -14,7 +14,6 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QPushButton,
     QStackedWidget,
-    QStatusBar,
     QVBoxLayout,
     QWidget,
 )
@@ -125,7 +124,7 @@ class MainWindow(QMainWindow):
         v.addWidget(self.stack, 1)
 
         self.setCentralWidget(root)
-        self.setStatusBar(QStatusBar())
+        # KHÔNG dùng thanh dưới (status bar) nữa — mọi thông báo nằm ở item / Log lỗi / nút
 
         # signals
         self.post_page.create_task.connect(self._on_create_task)
@@ -156,8 +155,8 @@ class MainWindow(QMainWindow):
             self.status("Chưa có website — vào tab Cài đặt để thêm.")
 
     def status(self, text: str) -> None:
-        """Chỉ hiển thị việc ĐANG LÀM ở thanh dưới (không dùng cho báo lỗi)."""
-        self.statusBar().showMessage(text)
+        """Đã BỎ thanh dưới -> không hiện message nữa (giữ hàm để không phải sửa 38 chỗ gọi)."""
+        return
 
     def _go(self, index: int) -> None:
         self.stack.setCurrentIndex(index)

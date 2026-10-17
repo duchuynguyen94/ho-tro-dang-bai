@@ -261,7 +261,6 @@ QScrollArea#siteTabScroll > QWidget > QWidget {{ background: transparent; }}
 QTabBar::tab {{ background: transparent; color: #64748b; padding: 8px 14px; border-bottom: 2px solid transparent; font-weight: 600; }}
 QTabBar::tab:selected {{ color: {ACCENT}; border-bottom: 2px solid {ACCENT}; }}
 
-QStatusBar {{ background: #ffffff; color: {MUTED}; }}
 QLabel.badge {{ border-radius: 9px; padding: 2px 8px; font-size: 11px; font-weight: 700; }}
 QLabel.warn {{ color: {RED}; background: #fef2f2; border: 1px solid #fecaca; border-radius: 7px; padding: 8px 10px; }}
 QLabel.notice {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 7px; padding: 8px 10px; }}
