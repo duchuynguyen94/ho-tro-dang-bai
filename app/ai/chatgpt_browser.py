@@ -532,7 +532,8 @@ def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = Fals
 # API chính
 # --------------------------------------------------------------------------- #
 def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
-                          require_json: bool = False, show_browser: bool = True) -> str:
+                          require_json: bool = False, show_browser: bool = True,
+                          should_stop=None) -> str:
     """1 lượt: gửi prompt, chờ trả lời. show_browser=False -> chạy ẩn (có tự thử lại khi lỗi)."""
     from ..wp import WPBrowser
 
@@ -545,7 +546,8 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
             if log:
                 log("Đang gửi yêu cầu cho ChatGPT…")
             _send(page, prompt)
-            return _wait_reply(page, prompt, timeout, require_json, log=log)
+            return _wait_reply(page, prompt, timeout, require_json, log=log,
+                               should_stop=should_stop)
         finally:
             try:
                 br.close()

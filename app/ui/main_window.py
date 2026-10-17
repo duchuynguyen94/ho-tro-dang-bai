@@ -291,6 +291,17 @@ class MainWindow(QMainWindow):
         if worker and worker.isRunning():
             worker.cancel()
             self.status("Đang dừng…")
+            # provider ChatGPT -> đóng NGAY cửa sổ Chrome (khỏi chờ worker thoát)
+            try:
+                active = str(self.store.ai_content.get("active") or "")
+                if active == "chatgpt":
+                    from ..wp.browser import _kill_profile_browsers, _user_data_dir
+
+                    d = _user_data_dir("chatgpt")
+                    _kill_profile_browsers(d)
+                    self.status("Đã đóng Chrome ChatGPT — đang dừng…")
+            except Exception:
+                pass
         else:
             self.status("Sẵn sàng")
 

@@ -1148,7 +1148,8 @@ def extract_models(store, link: str, text: str, log=None, should_stop=None) -> s
                 from .chatgpt_browser import generate_with_chatgpt
 
                 show = bool(pcfg.get("show_browser", False))
-                return generate_with_chatgpt(pcfg, short, log, show_browser=show) or ""
+                return generate_with_chatgpt(pcfg, short, log, show_browser=show,
+                                             should_stop=should_stop) or ""
             if log:
                 log(f"Đang trích xuất bằng {provider}…")
             return providers.generate_text(provider, pcfg, full, api_key) or ""
