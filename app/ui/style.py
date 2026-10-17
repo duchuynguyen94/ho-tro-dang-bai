@@ -309,7 +309,7 @@ class Card(QFrame):
         body = QWidget()
         body.setObjectName("cardBody")
         self.body = QVBoxLayout(body)
-        self.body.setContentsMargins(14, 14, 14, 14)
+        self.body.setContentsMargins(14, 6, 14, 14)      # padding-top body = 6px
         self.body.setSpacing(10)
         self._outer.addWidget(body, 1)
         self._body_widget = body
