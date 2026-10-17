@@ -328,6 +328,7 @@ class JobsPage(QWidget):
         self._rows: dict[str, TaskRow] = {}
         self._thumbs: list = []
         self._sel_index = 0
+        self._edit_index = 0              # ảnh mà panel phải ĐANG hiển thị (để áp dụng đúng ảnh)
         self._build()
         self.refresh()
 
@@ -617,6 +618,8 @@ class JobsPage(QWidget):
         task = next((t for t in self.store.tasks if t.id == task_id), None)
         if not task:
             return
+        if getattr(self.current, "id", "") and self.current.id != task_id:
+            self._flush_editor()          # đổi JOB -> chốt ảnh đang mở của job CŨ trước
         self.current = task
         for tid, row in self._rows.items():
             row.set_selected(tid == task_id)
@@ -1016,9 +1019,18 @@ class JobsPage(QWidget):
             traceback.print_exc()
 
     def _select_image(self, index: int) -> None:
+        if index != getattr(self, "_sel_index", 0):
+            self._flush_editor()          # chốt ẢNH CŨ trước khi nạp ảnh mới
         self._sel_index = index
         if self.current:
             self._refresh_preview(self.current)
+
+    def _flush_editor(self) -> None:
+        """Ghép NGAY phần vừa sửa của ẢNH ĐANG MỞ (đúng ảnh đó, không lây sang ảnh khác)."""
+        try:
+            self.img_editor.flush()
+        except Exception:
+            pass
 
     def _build_preview(self, task, index: int, mode_override: str = "") -> dict:
         site = self.store.get_site(task.site_id)
@@ -1080,12 +1092,13 @@ class JobsPage(QWidget):
         # thanh thông tin: select phản ánh ĐÚNG thanh đang có trong ảnh
         # job trống: không chạy AI -> ẩn nút Random lại
         self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
+        self._edit_index = idx           # nhớ ĐÚNG ảnh đang mở -> mọi thay đổi áp cho ảnh này
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
 
     def _on_footer_changed(self, mode: str) -> None:
         """Đổi select "thanh thông tin": lưu lựa chọn + dựng lại NỀN canvas NGAY.
 
-        Thứ tự: canvas đổi TRƯỚC -> 0.2s sau preview trong danh sách -> 2s sau ghép file ảnh thật.
+        Thứ tự: canvas đổi TRƯỚC -> 0.2s sau preview trong danh sách -> 0.5s sau ghép file ảnh thật.
         """
         if not self.current:
             return
@@ -1125,7 +1138,9 @@ class JobsPage(QWidget):
 
     def _apply_image_opts(self, opts: dict) -> None:
         if self.current:
-            self.apply_image_opts.emit(self.current, getattr(self, "_sel_index", 0), opts)
+            # dùng ẢNH ĐANG MỞ (không dùng ảnh vừa click) -> không lây tuỳ chọn sang ảnh khác
+            idx = int(getattr(self, "_edit_index", getattr(self, "_sel_index", 0)) or 0)
+            self.apply_image_opts.emit(self.current, idx, opts)
 
     def _regen_images(self) -> None:
         if not self.current:

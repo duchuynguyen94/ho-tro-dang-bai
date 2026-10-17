@@ -63,6 +63,7 @@ class MainWindow(QMainWindow):
         self._workers: list = []
         self._content_workers: dict = {}
         self._img_workers: dict = {}
+        self._img_queue: dict = {}        # việc ghép ảnh đang chờ (task_id -> [(opts, index, msg)])
         self._build()
         try:                       # mở app là vào thẳng tab "Đăng bài"
             self._go(1)
@@ -384,15 +385,8 @@ class MainWindow(QMainWindow):
         task.footer_mode = footer_mode
         self.store.upsert_task(task)
         self.store.save()
-
-        worker = ImagesWorker(self.store, site, task, footer_mode)
-        worker.log.connect(lambda m: self.status(m))
-        worker.ok.connect(lambda images: self._on_images_ok(task, images))
-        worker.failed.connect(lambda err: (self._log_err("Tạo ảnh", err), self.status("Sẵn sàng")))
-        worker.finished.connect(lambda: self._cleanup(worker))
-        self._workers.append(worker)
-        worker.start()
-        self.status("Đang tạo lại ảnh…")
+        # đi qua cùng hàng đợi -> mỗi việc chỉ 1 luồng ghép ảnh (không ghi đè lẫn nhau)
+        self._start_images_worker(task, None, None, "Đang tạo lại ảnh…")
 
     def _on_images_ok(self, task, images: list) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
@@ -570,15 +564,22 @@ class MainWindow(QMainWindow):
 
     def _start_images_worker(self, task, opts: dict | None, only_index: int | None,
                              status_msg: str) -> None:
-        """Chỉ chạy 1 luồng ghép ảnh cho mỗi công việc (tránh dồn luồng → crash khi thoát)."""
+        """Chỉ chạy 1 luồng ghép ảnh cho mỗi công việc (tránh dồn luồng → crash khi thoát).
+
+        Nếu việc đó ĐANG ghép ảnh -> xếp hàng chờ (KHÔNG giết việc đang chạy) để
+        không mất ảnh vừa yêu cầu ghép lại.
+        """
         site = self.store.get_site(task.site_id)
         if not site:
             return
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         old = self._img_workers.get(fresh.id)
         if old is not None and old.isRunning():
-            old.stop()
-            old.wait(5000)
+            q = self._img_queue.setdefault(fresh.id, [])
+            q[:] = [x for x in q if x[1] != only_index]     # mỗi ảnh giữ yêu cầu MỚI NHẤT
+            q.append((dict(opts or {}), only_index, status_msg))
+            self.status("Đang ghép ảnh — yêu cầu mới sẽ ghép ngay sau khi xong…")
+            return
         worker = ImagesWorker(self.store, site, fresh, fresh.footer_mode, opts,
                               only_index=only_index)
         self._img_workers[fresh.id] = worker
@@ -591,6 +592,14 @@ class MainWindow(QMainWindow):
             if self._img_workers.get(fresh.id) is worker:
                 self._img_workers.pop(fresh.id, None)
             self._cleanup(worker)
+            # còn yêu cầu đang chờ -> ghép tiếp cho ĐÚNG ảnh đó
+            rest = self._img_queue.get(fresh.id) or []
+            if rest:
+                o, idx, msg = rest.pop(0)
+                if not rest:
+                    self._img_queue.pop(fresh.id, None)
+                t2 = next((t for t in self.store.tasks if t.id == fresh.id), fresh)
+                self._start_images_worker(t2, o, idx, msg)
 
         worker.finished.connect(_done)
         self._workers.append(worker)

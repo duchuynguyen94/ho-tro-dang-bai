@@ -293,7 +293,7 @@ class ImageEditorPanel(QFrame):
         # tự động lưu sau khi ngừng thao tác
         self._autosave = QTimer(self)
         self._autosave.setSingleShot(True)
-        self._autosave.setInterval(2000)      # chờ người dùng NGỪNG chỉnh 2s mới ghép lại
+        self._autosave.setInterval(500)       # chờ người dùng NGỪNG chỉnh 0.5s mới ghép lại
         self._quick = QTimer(self)            # cập nhật preview trong list sau 0.2s
         self._quick.setSingleShot(True)
         self._quick.setInterval(200)
@@ -311,8 +311,22 @@ class ImageEditorPanel(QFrame):
         """Đổi select "thanh thông tin": dựng lại NỀN canvas NGAY, rồi mới tới preview."""
         if getattr(self, "_loading", False):
             return
-        self._schedule_save()          # 0.2s -> preview trong list · 2s -> ghép file thật
+        self._schedule_save()          # 0.2s -> preview trong list · 0.5s -> ghép file thật
         self.footer_changed.emit(["bar1", "bar2"][max(0, min(1, self.footer_combo.currentIndex()))])
+
+    def flush(self) -> None:
+        """CHỐT NGAY phần vừa sửa (dùng trước khi đổi ảnh / đổi job).
+
+        Trả về True nếu có thay đổi chưa ghép -> phát tín hiệu để ghép cho ĐÚNG ảnh đó.
+        """
+        if getattr(self, "_loading", False):
+            return False
+        pending = self._autosave.isActive() or self._quick.isActive()
+        self._autosave.stop()
+        self._quick.stop()
+        if pending:
+            self._emit_opts()
+        return pending
 
     # ------------------------------------------------------------------ #
     def set_ai_enabled(self, on: bool) -> None:
