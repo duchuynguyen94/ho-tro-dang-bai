@@ -47,6 +47,7 @@ jobs:
       - name: Build .exe (PyInstaller)
         run: >
           pyinstaller --noconfirm --clean --windowed
+          --add-data "app/assets;app/assets"
           --name HoTroDangBai
           --collect-all playwright
           --hidden-import app

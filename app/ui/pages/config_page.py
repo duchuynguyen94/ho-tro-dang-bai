@@ -5,7 +5,7 @@ import json
 from pathlib import Path
 
 from PySide6.QtCore import QMimeData, Qt, Signal
-from PySide6.QtGui import QDrag
+from PySide6.QtGui import QDrag, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
@@ -332,45 +332,138 @@ class SitePanel(QWidget):
         return w
 
     # ---------------- Logo / Khung / Watermark ---------------- #
+    MEDIA_FIELDS = {
+        "logo": ("Logo website (trên-trái)", "logo.png", "Chọn logo website"),
+        "bar1": ("Thanh thông tin dưới — hình 1", "bar1.png", "Thanh thông tin — hình 1"),
+        "bar2": ("Thanh thông tin dưới — hình 2", "bar2.png", "Thanh thông tin — hình 2"),
+    }
+
     def _media_tab(self) -> QWidget:
+        """Logo + 2 thanh thông tin: xem trước ảnh, dùng mặc định nếu chưa chọn file."""
         w = QWidget()
-        grid = QGridLayout(w)
-        self.logo_edit = QLineEdit()
-        self.logo_edit.setReadOnly(True)
-        b1 = QPushButton("Chọn logo")
-        b1.setProperty("class", "ghost")
-        b1.clicked.connect(lambda: self._pick_into(self.logo_edit, "Chọn logo website (trên-trái)"))
-        grid.addWidget(QLabel("Logo website (trên-trái)"), 0, 0)
-        grid.addWidget(self.logo_edit, 0, 1)
-        grid.addWidget(b1, 0, 2)
+        v = QVBoxLayout(w)
+        v.setSpacing(12)
+        self._media_rows: dict[str, dict] = {}
 
-        self.bar1_edit = QLineEdit()
-        self.bar1_edit.setReadOnly(True)
-        c1 = QPushButton("Chọn hình 1")
-        c1.setProperty("class", "ghost")
-        c1.clicked.connect(lambda: self._pick_into(self.bar1_edit, "Thanh thông tin — hình 1"))
-        grid.addWidget(QLabel("Thanh thông tin dưới — hình 1"), 1, 0)
-        grid.addWidget(self.bar1_edit, 1, 1)
-        grid.addWidget(c1, 1, 2)
+        note = QLabel(
+            "Website <b>chưa chọn file</b> thì phần mềm dùng <b>bộ mặc định</b> (logo + 2 thanh thông tin). "
+            "Chọn file riêng thì dùng file của bạn; bấm <b>Xoá</b> để quay về mặc định."
+        )
+        note.setProperty("class", "sub")
+        note.setWordWrap(True)
+        v.addWidget(note)
 
-        self.bar2_edit = QLineEdit()
-        self.bar2_edit.setReadOnly(True)
-        c2 = QPushButton("Chọn hình 2")
-        c2.setProperty("class", "ghost")
-        c2.clicked.connect(lambda: self._pick_into(self.bar2_edit, "Thanh thông tin — hình 2"))
-        grid.addWidget(QLabel("Thanh thông tin dưới — hình 2"), 2, 0)
-        grid.addWidget(self.bar2_edit, 2, 1)
-        grid.addWidget(c2, 2, 2)
-
-        self.frame_edit = QLineEdit()
-        self.frame_edit.setReadOnly(True)
-        c3 = QPushButton("Chọn khung")
-        c3.setProperty("class", "ghost")
-        c3.clicked.connect(lambda: self._pick_into(self.frame_edit, "Khung viền (PNG trong suốt, phủ lên ảnh)"))
-        grid.addWidget(QLabel("Khung viền (frame)"), 3, 0)
-        grid.addWidget(self.frame_edit, 3, 1)
-        grid.addWidget(c3, 3, 2)
+        for kind in ("logo", "bar1", "bar2"):
+            v.addWidget(self._media_row(kind))
+        v.addStretch(1)
         return w
+
+    def _media_row(self, kind: str) -> QWidget:
+        title, _dflt, _cap = self.MEDIA_FIELDS[kind]
+        box = QWidget()
+        h = QHBoxLayout(box)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(12)
+
+        thumb = QLabel()
+        thumb.setObjectName("imgThumb")
+        thumb.setFixedSize(96, 96)
+        thumb.setAlignment(Qt.AlignCenter)
+        h.addWidget(thumb)
+
+        right = QVBoxLayout()
+        right.setSpacing(4)
+        lab = QLabel(title)
+        lab.setStyleSheet("font-weight:600;")
+        right.addWidget(lab)
+        status = QLabel("")
+        status.setProperty("class", "sub")
+        status.setWordWrap(True)
+        right.addWidget(status)
+
+        row = QHBoxLayout()
+        pick = QPushButton("Chọn file riêng…")
+        pick.setProperty("class", "ghost")
+        pick.clicked.connect(lambda _=False, k=kind: self._pick_media(k))
+        clear = QPushButton("Xoá")
+        clear.setProperty("class", "danger")
+        clear.setToolTip("Bỏ file riêng — quay về bộ mặc định của phần mềm")
+        clear.clicked.connect(lambda _=False, k=kind: self._clear_media(k))
+        row.addWidget(pick)
+        row.addWidget(clear)
+        row.addStretch(1)
+        right.addLayout(row)
+        h.addLayout(right, 1)
+
+        self._media_rows[kind] = {"thumb": thumb, "status": status, "clear": clear}
+        return box
+
+    # ---------------- logo / thanh thông tin ---------------- #
+    def _media_path(self, kind: str) -> str:
+        s = self.site
+        if kind == "logo":
+            return s.logo_path or ""
+        bars = list(s.footer_bars or [])
+        i = 0 if kind == "bar1" else 1
+        return bars[i] if len(bars) > i else ""
+
+    def _set_media_path(self, kind: str, path: str) -> None:
+        s = self.site
+        if kind == "logo":
+            s.logo_path = path
+            return
+        bars = list(s.footer_bars or [])
+        i = 0 if kind == "bar1" else 1
+        while len(bars) <= i:
+            bars.append("")
+        bars[i] = path
+        s.footer_bars = bars
+
+    def _pick_media(self, kind: str) -> None:
+        _title, _dflt, caption = self.MEDIA_FIELDS[kind]
+        path, _ = QFileDialog.getOpenFileName(self, caption, "", IMAGE_FILTER)
+        if not path:
+            return
+        try:
+            new_path = Store.import_file(path, media_dir())
+        except Exception as exc:      # noqa: BLE001
+            show_toast(self, f"Không chọn được ảnh: {exc}", 3200, ok=False)
+            return
+        if not new_path:
+            show_toast(self, "Không chọn được ảnh", 3200, ok=False)
+            return
+        self._set_media_path(kind, new_path)
+        self._save(silent=True)
+        self._refresh_media()
+
+    def _clear_media(self, kind: str) -> None:
+        self._set_media_path(kind, "")
+        self._save(silent=True)
+        self._refresh_media()
+
+    def _refresh_media(self) -> None:
+        from ...config import default_asset
+
+        for kind, (_title, dflt, _cap) in self.MEDIA_FIELDS.items():
+            ref = self._media_rows.get(kind)
+            if not ref:
+                continue
+            own = self._media_path(kind)
+            shown = own or default_asset(dflt)
+            if shown and Path(shown).exists():
+                pix = QPixmap(shown)
+                ref["thumb"].setText("")
+                ref["thumb"].setPixmap(
+                    pix.scaled(92, 92, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                )
+            else:
+                ref["thumb"].setPixmap(QPixmap())
+                ref["thumb"].setText("—")
+            if own:
+                ref["status"].setText(f"File riêng: <b>{Path(own).name}</b>")
+            else:
+                ref["status"].setText("Đang dùng <b>mặc định của phần mềm</b>")
+            ref["clear"].setVisible(bool(own))
 
     # ------------------------------------------------------------------ #
     def _load(self) -> None:
@@ -380,10 +473,7 @@ class SitePanel(QWidget):
         self.newpost_edit.setText(s.new_post_url)
         self.user_edit.setText(s.username)
         self.pass_edit.setText(s.get_password())
-        self.logo_edit.setText(s.logo_path)
-        self.frame_edit.setText(s.frame_path)
-        self.bar1_edit.setText(s.footer_bars[0] if len(s.footer_bars) > 0 else "")
-        self.bar2_edit.setText(s.footer_bars[1] if len(s.footer_bars) > 1 else "")
+        self._refresh_media()
         self._refresh_steps()
 
     def _refresh_steps(self) -> None:
@@ -528,9 +618,7 @@ class SitePanel(QWidget):
             s.username = self.user_edit.text().strip()
             if self.pass_edit.text():
                 s.set_password(self.pass_edit.text())
-            s.logo_path = self.logo_edit.text()
-            s.frame_path = self.frame_edit.text()
-            s.footer_bars = [self.bar1_edit.text(), self.bar2_edit.text()]
+            # logo / thanh thông tin: đã lưu ngay khi chọn hoặc xoá (xem _pick_media/_clear_media)
             if self._steps:
                 s.script = Script(steps=[ScriptStep.from_dict(st) for st in self._steps])
             self.store.upsert_site(s)

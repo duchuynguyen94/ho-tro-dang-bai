@@ -13,6 +13,7 @@ fi
 .venv/bin/pip install pyinstaller >/dev/null
 
 .venv/bin/pyinstaller --noconfirm --clean --windowed \
+  --add-data "app/assets:app/assets" \
   --name "$APP_NAME" \
   --collect-all playwright \
   --hidden-import app \

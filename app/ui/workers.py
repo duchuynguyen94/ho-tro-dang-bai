@@ -137,8 +137,18 @@ def _remove_bg_opts(store) -> tuple[bool, int]:
     return False, 42
 
 
-def pick_footer(site, mode: str = "") -> str:
+def _site_bars(site) -> list[str]:
+    """Thanh thông tin: file riêng của website -> nếu trống thì dùng MẶC ĐỊNH của phần mềm."""
+    from ..config import default_asset
+
     bars = [b for b in (site.footer_bars or []) if b]
+    if bars:
+        return bars
+    return [x for x in (default_asset("bar1.png"), default_asset("bar2.png")) if x]
+
+
+def pick_footer(site, mode: str = "") -> str:
+    bars = _site_bars(site)
     if not bars:
         return ""
     mode = mode or site.footer_mode or "bar1"
@@ -151,7 +161,7 @@ def pick_footer(site, mode: str = "") -> str:
 
 def pick_footer_by_index(site, index: int, mode: str = "") -> str:
     """Luân phiên 1 -> 2 -> 1 -> 2 (trừ khi người dùng chọn cứng)."""
-    bars = [b for b in (site.footer_bars or []) if b]
+    bars = _site_bars(site)
     if not bars:
         return ""
     mode = mode or site.footer_mode or ""
@@ -237,13 +247,15 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
                                  if k < len(product_positions)]
         if product_nobg:
             product_nobg = [product_nobg[k] for k in keep if k < len(product_nobg)]
+        from ..config import default_asset
+
         img = compose(
             size=1080,
-            site_logo=site.logo_path,
+            site_logo=site.logo_path or default_asset("logo.png"),
             brand_logo=brand_logo,
             products=prods[:3],
             footer_bar=footer,
-            frame=site.frame_path,
+            frame="",                      # khung viền: đã bỏ, không dùng nữa
             watermark=site.watermark_text,
             watermark_opacity=wm_opacity,
             watermark_size=wm_size,

@@ -39,6 +39,21 @@ def _sub(name: str) -> Path:
     return d
 
 
+def app_assets_dir() -> Path:
+    """Thư mục asset đóng gói KÈM app (mặc định của phần mềm)."""
+    if getattr(sys, "frozen", False):          # khi chạy .app / .exe
+        base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
+    else:
+        base = Path(__file__).resolve().parent
+    return base / "assets"
+
+
+def default_asset(name: str) -> str:
+    """Đường dẫn asset mặc định của phần mềm (rỗng nếu chưa có file)."""
+    p = app_assets_dir() / "default" / name
+    return str(p) if p.exists() else ""
+
+
 def config_path() -> Path:
     return app_data_dir() / "config.json"
 
