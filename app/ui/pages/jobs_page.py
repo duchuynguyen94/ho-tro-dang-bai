@@ -251,9 +251,7 @@ class TaskRow(QFrame):
         v.addWidget(url)
 
         if not is_blank:                     # job trống: ẩn phần trạng thái
-            label = STATUS_LABELS.get(task.status, task.status)
-            if task.status == STATUS_ERROR and (task.message or "").strip():
-                label = f"lỗi: {str(task.message).splitlines()[0][:70]}"   # hiện nội dung lỗi để soi
+            label = STATUS_LABELS.get(task.status, task.status)     # lỗi -> chỉ báo "lỗi"
             meta = QLabel(f"{label}  ·  {task.site_name}")
             meta.setObjectName("taskMeta")
             v.addWidget(meta)
