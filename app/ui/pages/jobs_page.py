@@ -1296,7 +1296,8 @@ class JobsPage(QWidget):
         Ở ô nhập liệu (Tiêu đề / Nội dung…) thì để widget tự dán text như bình thường.
         """
         try:
-            if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Delete:
+            # macOS: phím "delete" trên bàn phím = Backspace; Windows: Delete
+            if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
                 fw = QApplication.focusWidget()
                 if self._is_text_widget(fw):
                     return False
