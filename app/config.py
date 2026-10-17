@@ -40,12 +40,18 @@ def _sub(name: str) -> Path:
 
 
 def app_assets_dir() -> Path:
-    """Thư mục asset đóng gói KÈM app (mặc định của phần mềm)."""
-    if getattr(sys, "frozen", False):          # khi chạy .app / .exe
+    """Thư mục asset đóng gói KÈM app (mặc định của phần mềm).
+
+    - Chạy từ mã nguồn: `app/assets`
+    - Chạy .app/.exe (PyInstaller): `<_MEIPASS>/app/assets` (do --add-data "app/assets")
+    """
+    if getattr(sys, "frozen", False):
         base = Path(getattr(sys, "_MEIPASS", Path(sys.executable).parent))
-    else:
-        base = Path(__file__).resolve().parent
-    return base / "assets"
+        for cand in (base / "app" / "assets", base / "assets"):
+            if cand.exists():
+                return cand
+        return base / "app" / "assets"
+    return Path(__file__).resolve().parent / "assets"
 
 
 def default_asset(name: str) -> str:
