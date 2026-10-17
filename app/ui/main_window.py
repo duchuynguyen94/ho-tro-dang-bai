@@ -201,6 +201,21 @@ class MainWindow(QMainWindow):
         self.status(f"Đang tạo nội dung cho {site.name}…")
 
     def _on_worker_log(self, msg: str) -> None:
+        # việc phải CHỜ trình duyệt của việc khác -> hiện rõ trên dòng công việc đó
+        if "Đang chờ trình duyệt" in str(msg):
+            try:
+                w = self.sender()
+                tid = next((k for k, v in self._content_workers.items() if v is w), "")
+                if tid:
+                    fresh = next((x for x in self.store.tasks if x.id == tid), None)
+                    if fresh:
+                        fresh.message = "Đang chờ việc khác đóng trình duyệt…"
+                        self.store.upsert_task(fresh)
+                        self.store.save()
+                        self.jobs_page.refresh()
+            except Exception:
+                pass
+
         self.status(msg)
         self.jobs_page.set_loading_message(msg)
 
@@ -313,6 +328,10 @@ class MainWindow(QMainWindow):
         self.status("Đã tạo lại ảnh.")
 
     def _on_regenerate(self, task, field: str) -> None:
+        # việc ĐANG CHẠY thì không cho tạo lại (tránh chồng nhiều lượt chạy)
+        if task.id in self._content_workers:
+            self.status("Việc này đang chạy — chờ xong rồi hãy tạo lại.")
+            return
         site = self.store.get_site(task.site_id)
         if not site:
             return
