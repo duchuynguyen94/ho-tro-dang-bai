@@ -971,12 +971,14 @@ class JobsPage(QWidget):
         lst = r.get("image_opts_list") or []
         opts = dict(lst[index]) if index < len(lst) else (r.get("image_opts") or {})
         remove_bg, th = _remove_bg_opts(self.store)
+        from ...config import default_asset
+
         base = compose(
             size=1080,
             site_logo="", brand_logo="",
             products=[],
             footer_bar=footer,
-            frame=site.frame_path if site else "",
+            frame="",
             watermark="",     # watermark vẽ riêng để luôn nằm trên thành phần
             watermark_opacity=0,
             remove_bg=remove_bg,
@@ -987,7 +989,7 @@ class JobsPage(QWidget):
         save_composed(base, str(out))
         return {
             "background": str(out),
-            "logo": site.logo_path if site else "",
+            "logo": (site.logo_path or default_asset("logo.png")) if site else "",
             "brand": r.get("brand_logo", ""),
             "products": [] if opts.get("no_products") else
                         [p for p in (r.get("product_images") or []) if p],

@@ -559,9 +559,12 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
     except AIError as exc:
         if show_browser or "Đã dừng" in str(exc):
             raise
-        if log:
-            log("Chế độ ẩn không chạy được — mở cửa sổ Chrome và thử lại…")
-        return _run(False)
+        # KHÔNG tự mở cửa sổ Chrome khi người dùng đã bỏ tick
+        raise AIError(
+            "Không chạy ẩn được (ChatGPT có thể đang chặn trình duyệt ẩn). "
+                "Hãy tick “Hiện cửa sổ Chrome khi tạo nội dung” trong "
+                "Cài đặt → AI nội dung → ChatGPT rồi thử lại."
+        ) from exc
 
 
 def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,
@@ -594,9 +597,12 @@ def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
     except AIError as exc:
         if show or "Đã dừng" in str(exc):
             raise
-        if log:
-            log("Chế độ ẩn không chạy được — mở cửa sổ Chrome và thử lại…")
-        return _run_combined(pcfg, prompt, project_url, False, log, timeout, should_stop)
+        # KHÔNG tự mở cửa sổ Chrome khi người dùng đã bỏ tick
+        raise AIError(
+            "Không chạy ẩn được (ChatGPT có thể đang chặn trình duyệt ẩn). "
+                "Hãy tick “Hiện cửa sổ Chrome khi tạo nội dung” trong "
+                "Cài đặt → AI nội dung → ChatGPT rồi thử lại."
+        ) from exc
 
 
 def _unused_generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
