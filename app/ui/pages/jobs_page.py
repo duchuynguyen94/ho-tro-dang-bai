@@ -241,7 +241,7 @@ class TaskRow(QFrame):
         v.setSpacing(3)
 
         url = QLabel(task.source_url or "(chưa có link)")
-        url.setObjectName("taskTitle")
+        url.setObjectName("taskTitleDone" if task.status == STATUS_FINISH else "taskTitle")
         url.setWordWrap(True)
         v.addWidget(url)
 
