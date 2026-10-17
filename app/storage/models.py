@@ -191,6 +191,14 @@ STATUS_QUEUED = "queued"
 STATUS_GENERATING = "generating"
 DEFAULT_WATERMARK = "https://ngochuyduong.com"   # watermark mặc định khi website để trống
 
+# Website tạo sẵn khi MÁY MỚI CÀI phần mềm (kịch bản kèm theo nếu có trong app/assets)
+DEFAULT_SITES = (
+    "ngochuyduong.com",
+    "thietbi-congnghiep.com",
+    "thietbi-tudonghoa.com",
+    "enda-vietnam.com",
+)   # watermark mặc định khi website để trống
+
 STATUS_REVIEW = "review"
 STATUS_POSTING = "posting"
 STATUS_DONE = "done"
@@ -253,9 +261,9 @@ class Task:
 # --------------------------------------------------------------------------- #
 DEFAULT_CONFIG: dict[str, Any] = {
     "ai_content": {
-        "active": "gemini",
+        "active": "chatgpt",
         "fallback": True,
-        "order": ["gemini", "groq", "deepseek", "chatgpt", "openai"],
+        "order": ["chatgpt", "gemini", "groq", "deepseek", "openai"],
         "providers": {
             "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash"},
             "groq": {"api_key_enc": "", "model": "llama-3.3-70b-versatile"},
@@ -266,8 +274,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
     },
     "ai_image": {
-        "pillow": {"enabled": True, "output_format": "PNG", "jpg_quality": 90, "size": 1080},
-        "active": "gemini",
+        "pillow": {"enabled": True, "output_format": "JPG", "jpg_quality": 90, "size": 1200},
+        "active": "off",
         "providers": {
             "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash-image"},
             "fal": {"api_key_enc": "", "model": "flux-kontext/dev"},
@@ -286,7 +294,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "col_result": "B",
         "mode": "append",
     },
-    "title_links": [],      # link chèn vào các tiêu đề mục (từ tiêu đề thứ 2 trở đi)
+    # link chèn vào các tiêu đề mục (từ tiêu đề thứ 2 trở đi)
+    "title_links": ["https://samoapumps.com", "https://enda-vietnam.com"],
     "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)
     "sites": [],
     "tasks": [],
@@ -294,6 +303,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "content": "",     # Rule Content  – quy tắc viết bài
         "seo": "",         # Rule SEO      – yêu cầu đầu ra (title, keyword, mô tả, tags)
         "extractor": "",   # Rule Model Extractor – trích xuất Product Models
-        "image_rules": ["", "", ""],   # rule đặt tên cho ảnh 1..6, vd: "Hello world {title}"
+        "image_rules": ["{title}", "Tổng kho hàng sẵn {title}", "Đại lý giá tốt {title}"],
     },
 }

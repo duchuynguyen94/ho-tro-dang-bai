@@ -239,7 +239,7 @@ class WPBrowser:
         base = (site.url or "").rstrip("/")
         if not base:
             return False
-        target = (site.new_post_url or "").strip() or f"{base}/wp-admin/"
+        target = (site.new_post_url or "").strip() or f"{base}/wp-admin/post-new.php?post_type=product"
         page.goto(target, wait_until="domcontentloaded")
         time.sleep(1.2)
         if "/wp-login.php" not in page.url:

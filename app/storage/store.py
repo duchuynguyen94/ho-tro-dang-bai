@@ -8,7 +8,7 @@ import uuid
 from pathlib import Path
 
 from .. import config
-from .models import DEFAULT_CONFIG, Site, Task
+from .models import DEFAULT_CONFIG, DEFAULT_SITES, Script, ScriptStep, Site, Task
 
 
 def _deep_merge(base: dict, override: dict) -> dict:
@@ -33,6 +33,12 @@ class Store:
     # ------------------------------------------------------------------ #
     def load(self) -> None:
         p = config.config_path()
+        if not p.exists():
+            # MÁY MỚI CÀI: tạo sẵn các website mặc định (+ kịch bản kèm theo nếu có)
+            try:
+                self._seed_default_sites()
+            except Exception:
+                pass
         if p.exists():
             try:
                 raw = json.loads(p.read_text(encoding="utf-8"))
@@ -97,6 +103,31 @@ class Store:
         gi = img_providers.get("gemini") or {}
         if gi.get("model") in ("gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation", ""):
             gi["model"] = "gemini-3.8-flash-image"
+
+    def _seed_default_sites(self) -> None:
+        """Tạo sẵn các website mặc định cho máy mới cài + gắn kịch bản đóng gói kèm app."""
+        from ..config import app_assets_dir
+
+        sites: list[Site] = []
+        for name in DEFAULT_SITES:
+            base = f"https://{name}"
+            site = Site(
+                name=name,
+                url=base,
+                new_post_url=f"{base}/wp-admin/post-new.php?post_type=product",
+            )
+            f = app_assets_dir() / "default_scripts" / f"{name}.json"
+            if f.exists():
+                try:
+                    data = json.loads(f.read_text(encoding="utf-8"))
+                    steps = [ScriptStep.from_dict(st) for st in (data.get("steps") or [])]
+                    if steps:
+                        site.script = Script(steps=steps)
+                except Exception:
+                    pass
+            sites.append(site)
+        self.data["sites"] = [s.to_dict() for s in sites]
+        self.save()
 
     def save(self) -> None:
         p = config.config_path()
