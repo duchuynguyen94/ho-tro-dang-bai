@@ -246,7 +246,8 @@ class TaskRow(QFrame):
 
         is_blank = (getattr(task, "kind", "") or "") == "blank"
         url = QLabel(task.site_name if is_blank else (task.source_url or "(chưa có link)"))
-        url.setObjectName("taskTitle")        # tiêu đề luôn màu đen (mọi trạng thái)
+        # job trống -> tiêu đề (tên website) màu TÍM; job thường -> màu đen
+        url.setObjectName("taskTitleBlank" if is_blank else "taskTitle")
         url.setWordWrap(True)
         v.addWidget(url)
 

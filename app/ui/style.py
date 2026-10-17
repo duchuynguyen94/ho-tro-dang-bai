@@ -211,6 +211,7 @@ QFrame#taskRow {{ background: transparent; border: none; border-bottom: 1px soli
 QFrame#taskRow:hover {{ background: #f8fafc; }}
 QFrame#taskRow[selected="true"] {{ background: #eff6ff; }}
 QLabel#taskTitle {{ font-weight: 600; font-size: 12.5px; }}
+QLabel#taskTitleBlank {{ font-weight: 600; font-size: 12.5px; color: #7c3aed; }}
 QLabel#taskMeta {{ color: {MUTED}; font-size: 11px; }}
 QLabel#taskDone {{ color: {GREEN}; font-size: 11px; font-weight: 700; }}
 QLabel#taskUrl {{ color: #94a3b8; font-size: 10.5px; }}
