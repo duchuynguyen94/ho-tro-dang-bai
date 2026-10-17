@@ -1007,7 +1007,11 @@ class JobsPage(QWidget):
         opts_i = dict(lst[idx]) if idx < len(lst) else (r.get("image_opts") or {})
         preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
         self.img_editor.set_ai_enabled((self.store.ai_image or {}).get("active") != "off")
-        self.img_editor.load(preview, opts_i, task.footer_mode, title)
+        # thanh thông tin: hình nào thì select đúng hình đó (quy tắc 1,2,2,2,2)
+        mode_default = str(opts_i.get("footer_mode") or "")
+        if mode_default not in ("bar1", "bar2"):
+            mode_default = "bar1" if idx == 0 else "bar2"
+        self.img_editor.load(preview, opts_i, mode_default, title)
 
     def _apply_image_opts(self, opts: dict) -> None:
         if self.current:
