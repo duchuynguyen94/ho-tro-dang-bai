@@ -25,6 +25,24 @@ MUTED = "#6b7280"
 TEXT = "#111827"
 
 
+def register_bundled_fonts() -> list[str]:
+    """Nạp font đóng gói kèm app (Canva Sans) vào Qt. Trả về tên font đã nạp."""
+    names: list[str] = []
+    try:
+        from ..config import app_assets_dir
+
+        d = app_assets_dir() / "fonts"
+        if not d.exists():
+            return names
+        for f in sorted(d.glob("*.ttf")) + sorted(d.glob("*.otf")):
+            fid = QFontDatabase.addApplicationFont(str(f))
+            if fid >= 0:
+                names += QFontDatabase.applicationFontFamilies(fid)
+    except Exception:
+        pass
+    return names
+
+
 def app_font() -> QFont:
     for name in ("Segoe UI", "Helvetica Neue", "Helvetica", "Arial"):
         if name in QFontDatabase.families():

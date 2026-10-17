@@ -15,7 +15,17 @@ PRODUCT_BOX = 0.30      # tỉ lệ cạnh hộp sản phẩm so với khổ ả
 # Tiện ích
 # --------------------------------------------------------------------------- #
 def _font_dirs() -> list[Path]:
-    return [
+    """Font đóng gói kèm app (Canva Sans) được ưu tiên trước font hệ thống."""
+    bundled: list[Path] = []
+    try:
+        from ..config import app_assets_dir
+
+        d = app_assets_dir() / "fonts"
+        if d.exists():
+            bundled.append(d)
+    except Exception:
+        pass
+    return bundled + [
         Path("/Library/Fonts"),
         Path.home() / "Library/Fonts",
         Path("/System/Library/Fonts"),

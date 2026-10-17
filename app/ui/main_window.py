@@ -32,7 +32,7 @@ from .pages.config_page import ConfigPage
 from .pages.error_log_page import ErrorLogPage
 from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
-from .style import app_font
+from .style import app_font, register_bundled_fonts
 from .toast import show_toast
 from .workers import (
     ContentWorker,
@@ -56,6 +56,10 @@ class MainWindow(QMainWindow):
         self.store.reset_stale_tasks()
         self.setWindowTitle("Hỗ Trợ Đăng Bài — WordPress")
         self.resize(1240, 820)
+        try:                      # nạp font đóng gói kèm app (Canva Sans) — dùng cho watermark
+            register_bundled_fonts()
+        except Exception:
+            pass
         self.setFont(app_font())
         self._workers: list = []
         self._content_workers: dict = {}

@@ -1295,7 +1295,6 @@ class FormatPanel(QScrollArea):
             ("seo", "Rule SEO"),
             ("extractor", "Rule Model Extractor"),
         ]
-        self._rule_status: dict[str, QLabel] = {}
         self._rule_clear: dict[str, QPushButton] = {}
         for key, label in rows:
             box = QWidget()
@@ -1317,12 +1316,8 @@ class FormatPanel(QScrollArea):
             h.addWidget(pick)
             h.addWidget(clear)
             rv.addLayout(h)
-            status = QLabel("")
-            status.setProperty("class", "sub")
-            rv.addWidget(status)
             f.addRow(label, box)
             self._edits[key] = edit
-            self._rule_status[key] = status
             self._rule_clear[key] = clear
         card.body.addLayout(f)
         v.addWidget(card)
@@ -1396,17 +1391,11 @@ class FormatPanel(QScrollArea):
         self._save(silent=True)
 
     def _refresh_rules(self) -> None:
+        """Chỉ còn: ẩn/hiện nút Xoá theo việc có file riêng hay không."""
         for key, edit in self._edits.items():
-            own = edit.text().strip()
-            status = self._rule_status.get(key)
             clear = self._rule_clear.get(key)
-            if status is not None:
-                status.setText(
-                    f"File riêng: <b>{Path(own).name}</b>" if own
-                    else "Đang dùng <b>mặc định của phần mềm</b>"
-                )
             if clear is not None:
-                clear.setVisible(bool(own))
+                clear.setVisible(bool(edit.text().strip()))
 
     def _save(self, silent: bool = False) -> None:
         try:
