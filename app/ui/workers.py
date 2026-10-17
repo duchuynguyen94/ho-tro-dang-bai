@@ -510,15 +510,28 @@ class PostWorker(TrackedThread):
     def _wait_closed(self, page, br, timeout: int = 7200) -> None:
         """Chờ người dùng đóng cửa sổ Chrome (tối đa 2 giờ).
 
-        KHÔNG điều khiển trang: chờ bằng đồng hồ nội bộ, chỉ kiểm tra nhẹ mỗi 2 giây
-        xem Chrome đã đóng chưa (không gọi Playwright liên tục).
+        Kiểm tra bằng DANH SÁCH TIẾN TRÌNH của profile (không hỏi Playwright — Playwright
+        vẫn báo "chưa đóng" sau khi người dùng tắt Chrome, phải chờ ~1 phút mới biết).
         """
         import time
 
+        from ..wp.browser import _pids_using_profile, _user_data_dir
+
+        try:
+            profile = _user_data_dir(getattr(self.site, "id", "") or "default")
+        except Exception:      # noqa: BLE001
+            profile = ""
         deadline = time.time() + timeout
         while self._running and time.time() < deadline:
             time.sleep(2)
-            try:
+            if profile:
+                try:
+                    if not _pids_using_profile(profile):
+                        break                    # Chrome đã tắt hẳn -> mở khoá ngay
+                except Exception:      # noqa: BLE001
+                    pass
+                continue
+            try:                                 # dự phòng khi không lấy được profile
                 if page.is_closed():
                     break
             except Exception:      # noqa: BLE001
