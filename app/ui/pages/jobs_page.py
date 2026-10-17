@@ -676,16 +676,41 @@ class JobsPage(QWidget):
 
 
     # ------------------------------------------------------------------ #
+    @staticmethod
+    def _has_result(task) -> bool:
+        """Job đã có kết quả (nội dung hoặc ảnh) -> LUÔN giữ panel kết quả khi tạo lại."""
+        r = task.result or {}
+        return bool(str(r.get("title") or "").strip()
+                    or str(r.get("content_html") or "").strip()
+                    or list(r.get("images") or []))
+
+    def _keep_panel(self, task, note: str) -> None:
+        """Giữ nguyên panel kết quả (không đổi sang màn hình chờ / lỗi) — chỉ báo ở dòng dưới."""
+        self.footer.show()
+        self.check_label.setText(note)
+        same = (getattr(self, "_loaded_task_id", "") == getattr(task, "id", "")
+                and self.stack.currentWidget() is self.editor_scroll)
+        if not same:
+            self._load(task)
+
     def _show_state(self) -> None:
         task = self.current
         # mỗi lần hiển thị 1 job: xoá sạch message cũ (không để lẫn của job khác)
         self.loading_note.setText("")
+        if hasattr(self, "check_label"):
+            self.check_label.setText("")
         if task is None:
             self.footer.hide()
             self.stack.setCurrentWidget(self.page_empty)
             return
 
+        # Job ĐÃ CÓ kết quả -> giữ panel kết quả (các ô input + ảnh) khi tạo lại
+        keep = self._has_result(task)
+
         if task.status == STATUS_QUEUED:
+            if keep:
+                self._keep_panel(task, "đang chờ tới lượt…")
+                return
             # đang chờ tới lượt: KHÔNG có nút nào, KHÔNG hiện message của việc khác
             self.footer.hide()
             self.loading_label.setText(f"đang chờ tới lượt · {task.site_name}")
@@ -696,6 +721,9 @@ class JobsPage(QWidget):
             return
 
         if task.status == STATUS_GENERATING:
+            if keep:
+                self._keep_panel(task, "Đang tạo lại nội dung…")
+                return
             self.footer.hide()
             self.loading_label.setText(
                 f"Đang tạo nội dung cho {task.site_name}…"
@@ -706,6 +734,9 @@ class JobsPage(QWidget):
             return
 
         if task.status == STATUS_CANCELLED:
+            if keep:
+                self._keep_panel(task, "Đã dừng tạo nội dung — giữ nguyên kết quả cũ.")
+                return
             self.footer.hide()
             self.error_label.setText(
                 "<b>Đã dừng tạo nội dung.</b><br><br>"
@@ -715,6 +746,10 @@ class JobsPage(QWidget):
             return
 
         if task.status == STATUS_ERROR:
+            if keep:
+                # tạo lại lỗi -> BỎ QUA, không làm gì ảnh hưởng tới nội dung/ảnh đang có
+                self._keep_panel(task, "Tạo lại lỗi — giữ nguyên kết quả cũ.")
+                return
             self.footer.hide()
             msg = task.message or "Lỗi không xác định."
             r = task.result or {}
@@ -763,6 +798,7 @@ class JobsPage(QWidget):
             self.footer.show()
 
     def _load_inner(self, task) -> None:
+        self._loaded_task_id = getattr(task, "id", "")
         r = task.result or {}
         self.title_edit.setText(r.get("title", ""))
         self.kw_edit.setText(r.get("focus_keyword", ""))

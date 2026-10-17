@@ -357,6 +357,27 @@ class MainWindow(QMainWindow):
 
     def _on_content_failed(self, task, err: str) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        r = fresh.result or {}
+        has_result = bool(str(r.get("title") or "").strip()
+                          or str(r.get("content_html") or "").strip()
+                          or list(r.get("images") or []))
+        if has_result:
+            # Job ĐÃ CÓ kết quả -> tạo lại lỗi thì BỎ QUA: giữ nguyên nội dung + ảnh cũ,
+            # không đổi trạng thái, không hiện màn hình lỗi (chỉ ghi vào Log lỗi).
+            fresh.status = STATUS_FINISH
+            fresh.message = ""
+            fresh.error_stage = ""
+            self.store.upsert_task(fresh)
+            self.store.save()
+            self._log_err("Tạo lại nội dung (bỏ qua — giữ kết quả cũ)", err)
+            try:
+                self._refresh_jobs_keep(fresh)
+            except Exception as exc:      # noqa: BLE001
+                traceback.print_exc()
+                self._log_err("Hiển thị lỗi", str(exc))
+            self._refresh_count()
+            self.status("Tạo lại lỗi — đã bỏ qua, giữ nguyên nội dung cũ.")
+            return
         fresh.status = STATUS_ERROR
         fresh.message = err
         fresh.error_stage = "content"
