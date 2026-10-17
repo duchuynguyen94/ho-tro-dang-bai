@@ -193,7 +193,10 @@ class MainWindow(QMainWindow):
             self.jobs_page.refresh()
             self.jobs_page.select_task(task.id)
             self._refresh_count()
-            self.status(f"Đã tạo job trống cho {site.name} — bạn tự điền nội dung.")
+            self.status(f"Đã tạo job trống cho {site.name} — đang ghép ảnh…")
+            # TỰ GHÉP ẢNH ngay (logo site + thanh thông tin + watermark + logo thương hiệu nếu có;
+            # KHÔNG có ảnh sản phẩm — người dùng tự thêm sau)
+            self._start_images_worker(task, None, None, "Đang ghép ảnh…")
             return
         task.status = STATUS_QUEUED
         task.progress = 0
