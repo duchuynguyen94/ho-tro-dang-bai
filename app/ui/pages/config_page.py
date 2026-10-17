@@ -306,23 +306,16 @@ class SitePanel(QWidget):
         v = QVBoxLayout(w)
         v.setContentsMargins(12, 12, 12, 12)
 
-        bar = QHBoxLayout()
-        for label, slot in [
-            ("⬇ Export", self._export),
-            ("⬆ Import (thay kịch bản cũ)", self._import),
-        ]:
-            b = QPushButton(label)
-            b.setProperty("class", "ghost")
-            b.clicked.connect(slot)
-            bar.addWidget(b)
-        bar.addStretch(1)
-        save = QPushButton("Lưu thay đổi")
-        save.setProperty("class", "primary")
-        save.clicked.connect(self._save_steps)
-        bar.addWidget(save)
-        v.addLayout(bar)
+        note = QLabel(
+            "Kịch bản được <b>lấy tự động từ bản phát hành của phần mềm</b> (cập nhật kèm khi cập nhật app) "
+            "— không cần Import/Export, không sửa tay. Muốn đổi kịch bản, báo để cập nhật bản phát hành mới."
+        )
+        note.setProperty("class", "sub")
+        note.setWordWrap(True)
+        v.addWidget(note)
 
         self.script_table = QTableWidget(0, 4)
+        self.script_table.setEditTriggers(QTableWidget.NoEditTriggers)   # chỉ xem
         self.script_table.setHorizontalHeaderLabels(
             ["#", "Hành động", "Selector ưu tiên (HTML)", "Nguồn"]
         )

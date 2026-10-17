@@ -44,6 +44,12 @@ class Store:
                 raw = json.loads(p.read_text(encoding="utf-8"))
                 self.data = _deep_merge(DEFAULT_CONFIG, raw)
                 self._migrate()
+                # kịch bản lấy từ gói phát hành -> áp vào đúng website theo tên
+                try:
+                    if self.sync_default_scripts():
+                        self.save()
+                except Exception:
+                    pass
                 return
             except (json.JSONDecodeError, OSError):
                 pass
@@ -103,6 +109,33 @@ class Store:
         gi = img_providers.get("gemini") or {}
         if gi.get("model") in ("gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation", ""):
             gi["model"] = "gemini-3.8-flash-image"
+
+    def sync_default_scripts(self) -> bool:
+        """Kịch bản lấy từ GÓI PHÁT HÀNH: gắn kịch bản kèm app vào đúng website theo tên.
+
+        Gọi mỗi lần mở app -> khi cập nhật phần mềm, kịch bản mới cũng được áp luôn.
+        """
+        from ..config import app_assets_dir
+
+        changed = False
+        for site in self.sites:
+            f = app_assets_dir() / "default_scripts" / f"{site.name}.json"
+            if not f.exists():
+                continue
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                steps = [ScriptStep.from_dict(st) for st in (data.get("steps") or [])]
+            except Exception:
+                continue
+            if not steps:
+                continue
+            cur = [x.to_dict() for x in (site.script.steps if site.script else [])]
+            if cur == [x.to_dict() for x in steps]:
+                continue                      # đã giống -> khỏi ghi lại
+            site.script = Script(steps=steps)
+            self.upsert_site(site)
+            changed = True
+        return changed
 
     def _seed_default_sites(self) -> None:
         """Tạo sẵn các website mặc định cho máy mới cài + gắn kịch bản đóng gói kèm app."""
