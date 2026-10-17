@@ -1230,6 +1230,7 @@ class TitleLinksPanel(QWidget):
         del_btn.setObjectName("imgDel")
         del_btn.setFixedSize(22, 22)
         del_btn.setToolTip("Xoá link này")
+        row.setContentsMargins(0, 0, 0, 0)      # bỏ lề mặc định của Qt -> các dòng sát nhau
         holder = QWidget()
         holder.setLayout(row)
         del_btn.clicked.connect(lambda _=False, h=holder, e=edit: self._remove_row(h, e))
