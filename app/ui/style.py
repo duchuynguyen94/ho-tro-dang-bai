@@ -171,13 +171,13 @@ QLabel#chipAmber {{ color: #b45309; background: #fff7ed; border: 1px solid #fed7
 QLabel#chipGray  {{ color: #475569; background: #f1f5f9; border: 1px solid #e2e8f0; }}
 QLabel#chipBlue  {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #bfdbfe; }}
 QLabel#metaText  {{ color: {MUTED}; font-size: 11px; }}
-QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 9px; }}
+QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 0; }}
 QFrame#imgBox[selected="true"] {{ border: 2px solid {ACCENT}; background: #eff6ff; }}
 QFrame#srcTile {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 8px; }}
 QFrame#srcTile[selected="true"] {{ border: 2px solid {ACCENT}; background: #eff6ff; }}
 QFrame#srcTile:disabled {{ background: #f8fafc; }}
 QFrame#imgEditor {{ background: #f8fafc; border: 1px solid {LINE}; border-radius: 9px; }}
-QLabel#imgCanvas {{ background: #ffffff; border: 1px dashed #b6c2d1; border-radius: 8px; color: #94a3b8; }}
+QLabel#imgCanvas {{ background: #ffffff; border: 1px dashed #b6c2d1; border-radius: 0; color: #94a3b8; }}
 #rteBar {{ background: #f8fafc; border: 1px solid #cbd5e1; border-bottom: none;
     border-top-left-radius: 8px; border-top-right-radius: 8px; }}
 QPushButton#tbBtn {{ background: transparent; border: 1px solid transparent; border-radius: 6px;
@@ -194,7 +194,7 @@ QLabel#rteStatus {{ background: #f8fafc; border: 1px solid #cbd5e1; border-top: 
 QTextEdit#rteEdit, QPlainTextEdit#rteSource {{ border: 1px solid #cbd5e1; border-top: none;
     border-bottom: none; border-radius: 0; }}
 QPlainTextEdit#rteSource {{ font-family: Menlo, Consolas, monospace; font-size: 12px; }}
-QLabel#imgThumb {{ background: #f1f5f9; border-radius: 6px; color: #94a3b8; }}
+QLabel#imgThumb {{ background: #ffffff; border-radius: 0; color: #94a3b8; }}
 QPushButton#imgDel {{ background: transparent; border: none; color: #94a3b8; font-weight: 700;
     font-size: 12px; }}
 QPushButton#imgDel:hover {{ color: {RED}; background: #fef2f2; border-radius: 5px; }}
