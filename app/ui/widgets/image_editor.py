@@ -184,6 +184,7 @@ class ImageEditorPanel(QFrame):
 
     apply_opts = Signal(dict)
     changed = Signal()            # báo "canvas vừa đổi" -> cập nhật preview trong list ngay (0.2s)
+    footer_changed = Signal(str)  # người dùng đổi select "thanh thông tin" -> dựng lại nền canvas NGAY
     request_upload = Signal()
     request_ai_edit = Signal()
     request_refetch = Signal()
@@ -303,8 +304,15 @@ class ImageEditorPanel(QFrame):
         # vẽ lại canvas NGAY khi kéo 3 thanh watermark (độ mờ / kích thước / góc xoay)
         for w in (self.s_wm, self.s_wm_size, self.s_wm_rot):
             w.valueChanged.connect(lambda _v: self._layout_watermark())
-        self.footer_combo.currentIndexChanged.connect(self._schedule_save)
+        self.footer_combo.currentIndexChanged.connect(self._on_footer_changed)
         polish_combos(self)
+
+    def _on_footer_changed(self, _index: int) -> None:
+        """Đổi select "thanh thông tin": dựng lại NỀN canvas NGAY, rồi mới tới preview."""
+        if getattr(self, "_loading", False):
+            return
+        self._schedule_save()          # 0.2s -> preview trong list · 2s -> ghép file thật
+        self.footer_changed.emit(["bar1", "bar2"][max(0, min(1, self.footer_combo.currentIndex()))])
 
     # ------------------------------------------------------------------ #
     def set_ai_enabled(self, on: bool) -> None:

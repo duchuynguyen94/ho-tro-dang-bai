@@ -474,6 +474,7 @@ class JobsPage(QWidget):
         self.img_editor = ImageEditorPanel()
         self.img_editor.apply_opts.connect(self._apply_image_opts)
         self.img_editor.changed.connect(self._sync_thumb_from_canvas)
+        self.img_editor.footer_changed.connect(self._on_footer_changed)
         self.img_editor.request_upload.connect(
             lambda: self._upload_image(getattr(self, "_sel_index", 0)))
         self.img_editor.request_ai_edit.connect(
@@ -858,26 +859,32 @@ class JobsPage(QWidget):
     def _footer_mode_of(self, task, index: int) -> str:
         """Thanh thông tin (bar1/bar2) ảnh ở vị trí `index` đang dùng.
 
-        - Ảnh ĐÃ ghép -> lấy ĐÚNG thanh đang có trong ảnh (khớp với preview).
-        - Ảnh CHƯA ghép -> theo lựa chọn cứng của ảnh, không thì theo quy tắc 1,2,2,2,2.
+        Thứ tự ưu tiên:
+        1. Ảnh CÓ CHỌN THANH ở panel phải -> dùng ĐÚNG lựa chọn đó (cao nhất).
+        2. Ảnh ĐÃ ghép -> theo thanh thật đang có trong ảnh (khớp với preview).
+        3. Ảnh mới "+ Thêm hình" -> mặc định thanh 2.
+        4. Còn lại -> quy tắc 1, 2, 2, 2, 2 (ảnh đầu thanh 1, các ảnh sau thanh 2).
         """
         from ..workers import _site_bars
 
         r = task.result or {}
-        site = self.store.get_site(task.site_id)
-        bars = _site_bars(site) if site else []
-        images = r.get("images") or []
-        cur = str(images[index].get("footer", "") or "") if 0 <= index < len(images) else ""
-        if cur:                                  # ảnh đã ghép -> theo ảnh thật
-            if len(bars) > 1 and cur == bars[1]:
-                return "bar2"
-            if bars and cur == bars[0]:
-                return "bar1"
+        # 1) LỰA CHỌN Ở PANEL PHẢI = ưu tiên CAO NHẤT
         lst = r.get("image_opts_list") or []
         if 0 <= index < len(lst) and isinstance(lst[index], dict):
             m = lst[index].get("footer_mode")
             if m in ("bar1", "bar2"):
                 return m
+        # 2) ảnh đã ghép -> theo thanh thật trong ảnh
+        site = self.store.get_site(task.site_id)
+        bars = _site_bars(site) if site else []
+        images = r.get("images") or []
+        cur = str(images[index].get("footer", "") or "") if 0 <= index < len(images) else ""
+        if cur:
+            if len(bars) > 1 and cur == bars[1]:
+                return "bar2"
+            if bars and cur == bars[0]:
+                return "bar1"
+        # 3+4) mặc định: ảnh đầu thanh 1, các ảnh sau thanh 2
         return "bar1" if index == 0 else "bar2"
 
     def _add_image(self) -> None:
@@ -1013,18 +1020,23 @@ class JobsPage(QWidget):
         if self.current:
             self._refresh_preview(self.current)
 
-    def _build_preview(self, task, index: int) -> dict:
+    def _build_preview(self, task, index: int, mode_override: str = "") -> dict:
         site = self.store.get_site(task.site_id)
         r = task.result or {}
         images = r.get("images") or []
         footer = str(images[index].get("footer", "") or "") if index < len(images) else ""
         lst = r.get("image_opts_list") or []
         opts = dict(lst[index]) if index < len(lst) else (r.get("image_opts") or {})
+        # Lựa chọn ở PANEL PHẢI (hoặc vừa đổi) = ưu tiên CAO NHẤT -> dựng nền theo lựa chọn đó
+        explicit = mode_override or (opts.get("footer_mode")
+                                     if opts.get("footer_mode") in ("bar1", "bar2") else "")
+        if explicit:
+            footer = ""
         if not footer and site:
             # ảnh chưa có thanh thông tin -> dùng thanh theo QUY TẮC (ảnh 1 -> thanh 1, sau -> thanh 2)
             from ..workers import _site_bars
             bars = _site_bars(site)
-            mode = self._footer_mode_of(task, index)
+            mode = explicit or self._footer_mode_of(task, index)
             if bars:
                 footer = bars[1] if (mode == "bar2" and len(bars) > 1) else bars[0]
         remove_bg, th = _remove_bg_opts(self.store)
@@ -1069,6 +1081,33 @@ class JobsPage(QWidget):
         # job trống: không chạy AI -> ẩn nút Random lại
         self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
+
+    def _on_footer_changed(self, mode: str) -> None:
+        """Đổi select "thanh thông tin": lưu lựa chọn + dựng lại NỀN canvas NGAY.
+
+        Thứ tự: canvas đổi TRƯỚC -> 0.2s sau preview trong danh sách -> 2s sau ghép file ảnh thật.
+        """
+        if not self.current:
+            return
+        idx = getattr(self, "_sel_index", 0)
+        r = self.current.result if isinstance(self.current.result, dict) else {}
+        lst = list(r.get("image_opts_list") or [])
+        while len(lst) <= idx:
+            lst.append({})
+        if isinstance(lst[idx], dict):
+            lst[idx] = {**lst[idx], "footer_mode": mode}
+        r["image_opts_list"] = lst
+        try:
+            self.store.upsert_task(self.current)   # lưu ngay -> nạp lại panel vẫn giữ lựa chọn
+            self.store.save()
+        except Exception:
+            pass
+        try:
+            prev = self._build_preview(self.current, idx, mode)
+            if prev.get("background"):
+                self.img_editor.set_background(prev["background"])
+        except Exception:
+            pass
 
     def _sync_thumb_from_canvas(self) -> None:
         """Chụp canvas -> cập nhật preview trong danh sách ảnh (nhanh, không cần worker)."""
