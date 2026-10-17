@@ -192,9 +192,12 @@ class ConfigPage(QWidget):
             return
 
         base = name if name.startswith(("http://", "https://")) else f"https://{name}"
+        from ...storage.models import DEFAULT_LOGIN
+
         site = Site(
             name=name,
             url=base,
+            username=DEFAULT_LOGIN,          # điền sẵn tài khoản đăng nhập (mật khẩu nhập sau)
             new_post_url=f"{base.rstrip('/')}/wp-admin/post-new.php?post_type=product",
             # watermark: để trống -> dùng mặc định của phần mềm
         )

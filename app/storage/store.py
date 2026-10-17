@@ -140,6 +140,7 @@ class Store:
     def _seed_default_sites(self) -> None:
         """Tạo sẵn các website mặc định cho máy mới cài + gắn kịch bản đóng gói kèm app."""
         from ..config import app_assets_dir
+        from .models import DEFAULT_LOGIN
 
         sites: list[Site] = []
         for name in DEFAULT_SITES:
@@ -147,6 +148,7 @@ class Store:
             site = Site(
                 name=name,
                 url=base,
+                username=DEFAULT_LOGIN,
                 new_post_url=f"{base}/wp-admin/post-new.php?post_type=product",
             )
             f = app_assets_dir() / "default_scripts" / f"{name}.json"

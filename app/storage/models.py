@@ -189,6 +189,7 @@ class Site:
 # --------------------------------------------------------------------------- #
 STATUS_QUEUED = "queued"
 STATUS_GENERATING = "generating"
+DEFAULT_LOGIN = "ngochuyduong2022@gmail.com"     # tài khoản đăng nhập điền sẵn (mật khẩu KHÔNG lưu)
 DEFAULT_WATERMARK = "https://ngochuyduong.com"   # watermark mặc định khi website để trống
 
 # Website tạo sẵn khi MÁY MỚI CÀI phần mềm (kịch bản kèm theo nếu có trong app/assets)
