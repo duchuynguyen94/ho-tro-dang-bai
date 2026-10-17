@@ -311,8 +311,8 @@ class ImageEditorPanel(QFrame):
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
         self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 300, 180)
-        self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 20)
-        self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 85)
+        self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 50)
+        self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
         self.s_wm_rot = self._slider(grid, 3, "Watermark — góc xoay", 0, 90, 50, suffix="°")
         right.addLayout(grid)
 
@@ -487,8 +487,8 @@ class ImageEditorPanel(QFrame):
         self._loading = True
         try:
             self.s_logo.setValue(int(float(self._opts.get("logo_scale", 1.8) or 1.8) * 100))
-            self.s_wm.setValue(int(self._opts.get("watermark_opacity", 20) or 0))
-            self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 0.85) or 0.85) * 100))
+            self.s_wm.setValue(int(self._opts.get("watermark_opacity", 50) or 0))
+            self.s_wm_size.setValue(int(float(self._opts.get("watermark_size", 1.0) or 1.0) * 100))
             self.s_wm_rot.setValue(int(float(self._opts.get("watermark_rotate", 50) or 50)))
             mode = self._opts.get("footer_mode") or footer_mode or "bar1"
             self.footer_combo.setCurrentIndex({"bar1": 0, "bar2": 1}.get(mode, 0))
@@ -744,7 +744,7 @@ class ImageEditorPanel(QFrame):
         font.setPixelSize(max(6, int(60 * (self.s_wm_size.value() / 100) * CANVAS / SRC)))
         painter.setFont(font)
         alpha = max(0, min(255, int(self.s_wm.value() * 255 / 100)))
-        painter.setPen(QColor(217, 217, 217, alpha))       # #d9d9d9
+        painter.setPen(QColor(198, 193, 193, alpha))       # #c6c1c1
         font.setPixelSize(max(6, int(60 * (self.s_wm_size.value() / 100) * CANVAS / SRC)))
         painter.setFont(font)
         painter.translate(CANVAS / 2, CANVAS / 2)
@@ -887,8 +887,8 @@ class ImageEditorPanel(QFrame):
     def _reset(self) -> None:
         self._opts = {}
         self.s_logo.setValue(180)
-        self.s_wm.setValue(20)
-        self.s_wm_size.setValue(85)
+        self.s_wm.setValue(50)
+        self.s_wm_size.setValue(100)
         self.s_wm_rot.setValue(50)
         self._layout_items()
         self._layout_products()
