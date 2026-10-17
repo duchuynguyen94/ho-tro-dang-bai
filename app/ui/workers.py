@@ -508,15 +508,19 @@ class PostWorker(TrackedThread):
         self._running = False
 
     def _wait_closed(self, page, br, timeout: int = 7200) -> None:
-        """Chờ người dùng đóng cửa sổ Chrome (tối đa 2 giờ) rồi dọn dẹp."""
+        """Chờ người dùng đóng cửa sổ Chrome (tối đa 2 giờ).
+
+        KHÔNG điều khiển trang: chờ bằng đồng hồ nội bộ, chỉ kiểm tra nhẹ mỗi 2 giây
+        xem Chrome đã đóng chưa (không gọi Playwright liên tục).
+        """
         import time
 
         deadline = time.time() + timeout
         while self._running and time.time() < deadline:
+            time.sleep(2)
             try:
                 if page.is_closed():
                     break
-                page.wait_for_timeout(500)
             except Exception:      # noqa: BLE001
                 break
         try:
@@ -532,6 +536,7 @@ class PostWorker(TrackedThread):
         site = self.site
         br = None
         page = None
+        _on_dialog = None
         try:
             self.log.emit("Mở trình duyệt…")
             br = WPBrowser(headless=False, site_id=site.id, log=self.log.emit)
@@ -550,13 +555,17 @@ class PostWorker(TrackedThread):
                     page.goto(site.new_post_url, wait_until="domcontentloaded")
                 wait_editor_ready(page, log=self.log.emit)
                 # Hộp thoại (alert/confirm) của web: ghi log + chọn "Hủy bỏ" để KHÔNG xoá gì
+                def _on_dialog(d) -> None:      # noqa: ANN001
+                    try:
+                        self.log.emit(f"  (web hỏi: {str(d.message)[:80]}…)")
+                        d.dismiss()
+                    except Exception:
+                        pass
+
                 try:
-                    page.on("dialog", lambda d: (
-                        self.log.emit(f"  (web hỏi: {str(d.message)[:80]}…)"),
-                        d.dismiss(),
-                    ))
+                    page.on("dialog", _on_dialog)
                 except Exception:
-                    pass
+                    _on_dialog = None
                 # chỉ tắt cảnh báo "rời trang" của web (KHÔNG chặn các hộp thoại khác)
                 try:
                     page.evaluate(
@@ -614,6 +623,14 @@ class PostWorker(TrackedThread):
             traceback.print_exc()
             self.failed.emit(str(exc))
         finally:
+            # Kịch bản XONG hoặc LỖI -> DỪNG ĐIỀU KHIỂN CHROME: gỡ bộ bắt hộp thoại,
+            # từ đây app không can thiệp vào trang nữa (bạn tự do bấm/kiểm tra).
+            if _on_dialog is not None and page is not None:
+                try:
+                    page.remove_listener("dialog", _on_dialog)
+                    self.log.emit("Đã dừng điều khiển Chrome — bạn tự do thao tác trên trang.")
+                except Exception:      # noqa: BLE001
+                    pass
             # Nút "Đăng bài" chỉ mở lại khi NGƯỜI DÙNG đóng trình duyệt
             if page is not None:
                 try:
