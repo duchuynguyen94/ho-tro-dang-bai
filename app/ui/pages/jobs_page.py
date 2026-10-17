@@ -734,16 +734,10 @@ class JobsPage(QWidget):
         self._load(task)
 
     def _on_retry(self) -> None:
-        """Nút thử lại: lỗi ở bước ĐĂNG -> đăng lại; lỗi ở bước TẠO NỘI DUNG -> tạo lại."""
+        """Nút "Tạo lại": CHỈ tạo lại nội dung (không liên quan đăng bài)."""
         if not self.current:
             return
-        r = self.current.result or {}
-        has_content = bool(r.get("content_html") or r.get("title"))
-        stage = getattr(self.current, "error_stage", "") or ("post" if has_content else "content")
-        if stage == "post":
-            self.post.emit(self.current)
-        else:
-            self.regenerate.emit(self.current, "")
+        self.regenerate.emit(self.current, "")
 
     def _load(self, task) -> None:
         """Hiển thị kết quả — có chốt an toàn: lỗi thì báo rõ, KHÔNG kẹt ở màn hình chờ."""
