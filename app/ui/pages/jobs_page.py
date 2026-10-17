@@ -620,19 +620,33 @@ class JobsPage(QWidget):
         self._show_state()
         self._sync_post_btn()
 
+    # chữ gốc / chữ khi ChatGPT đang bận
+    _BUSY_TEXT = {
+        "retry_btn": ("↻ Tạo lại", "có 1 công việc khác đang làm"),
+        "regen_all_btn": ("↻ Random lại", "Random - có 1 công việc khác đang làm"),
+    }
+
     def set_ai_busy(self, busy: bool) -> None:
-        """ChatGPT đang chạy 1 việc -> khoá mọi nút gọi AI (tạo lại / random)."""
+        """ChatGPT đang chạy 1 việc -> khoá + đổi chữ các nút gọi AI (tạo lại / random)."""
         busy = bool(busy)
         self._ai_busy = busy
         tip = "Đang chạy 1 việc bằng ChatGPT — chờ việc đó xong đã" if busy else ""
-        btns = [getattr(self, "retry_btn", None), getattr(self, "regen_all_btn", None)]
-        btns += list(getattr(self, "_field_btns", []))
-        for b in btns:
+        names = list(self._BUSY_TEXT.keys()) + ["_field_btns"]
+        for name in names:
+            if name == "_field_btns":
+                btns = list(getattr(self, "_field_btns", []))
+                for b in btns:
+                    b.setEnabled(not busy)
+                    if busy:
+                        b.setToolTip(tip)
+                continue
+            b = getattr(self, name, None)
             if b is None:
                 continue
+            normal, busy_text = self._BUSY_TEXT[name]
+            b.setText(busy_text if busy else normal)
             b.setEnabled(not busy)
-            if busy:
-                b.setToolTip(tip)
+            b.setToolTip(tip if busy else "")
         # nút "Đăng bài" không liên quan AI -> không đụng
 
     def set_loading_message(self, text: str) -> None:
