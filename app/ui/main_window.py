@@ -135,7 +135,6 @@ class MainWindow(QMainWindow):
         self.jobs_page.recompose_all.connect(self._on_recompose_all)
         self.jobs_page.export_images.connect(self._on_export_images)
         self.jobs_page.trim_component.connect(self._on_trim_component)
-        self.jobs_page.open_model_extractor.connect(self._on_model_extractor)
         self.jobs_page.stop_all.connect(self._on_stop_all)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
@@ -182,9 +181,12 @@ class MainWindow(QMainWindow):
             task.progress = 100
             task.message = ""
             task.error_stage = ""
+            # tạo sẵn ĐÚNG số ô ảnh đã chọn (để trống, chờ tải ảnh lên)
+            slots = [{"path": "", "footer": ""} for _ in range(max(1, int(task.image_count or 3)))]
             task.result = {"title": "", "focus_keyword": "", "description": "",
                            "tags": "", "content_html": "",
-                           "images": [], "product_images": []}
+                           "images": slots, "image_opts_list": [{} for _ in slots],
+                           "product_images": []}
             self.store.upsert_task(task)
             self.store.save()
             self._go(2)
@@ -671,13 +673,6 @@ class MainWindow(QMainWindow):
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self._log_err("Dừng tất cả", str(exc))
-
-    def _on_model_extractor(self) -> None:
-        """Mở popup Model Extractor (nhập list link nguồn -> trích xuất product models)."""
-        from .widgets.model_extractor import ModelExtractorDialog
-
-        dlg = ModelExtractorDialog(self.store, self)
-        dlg.exec()
 
     def _on_trim_component(self, task, kind: str, index: int) -> None:
         """Cắt viền thừa (trim) cho ảnh sản phẩm / logo brand rồi ghép lại ảnh."""

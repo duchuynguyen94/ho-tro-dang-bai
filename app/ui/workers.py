@@ -822,67 +822,6 @@ class UpdateWorker(TrackedThread):
             self.failed.emit(str(exc))
 
 
-class ModelExtractorWorker(TrackedThread):
-    """Trích xuất product models từ danh sách link nguồn (theo Rule Model Extractor)."""
-
-    log = Signal(str)
-    partial = Signal(str)      # kết quả tích luỹ sau mỗi link
-    ok = Signal(str)           # kết quả cuối
-    failed = Signal(str)
-
-    def __init__(self, store, links: list[str], show_browser: bool = True) -> None:
-        super().__init__()
-        self.store = store
-        self.links = [l.strip() for l in links if l.strip()]
-        self.show_browser = show_browser
-        self._cancel = False
-
-    def stop(self) -> None:
-        self._cancel = True
-
-    def run(self) -> None:
-        from .. import source as src
-        from ..ai.manager import clean_model_lines, extract_models
-
-        try:
-            if not self.links:
-                raise RuntimeError("Chưa nhập link nguồn nào.")
-            # áp tuỳ chọn "hiện Chrome" cho ChatGPT
-            pcfg = self.store.ai_content["providers"].setdefault("chatgpt", {})
-            pcfg["show_browser"] = bool(self.show_browser)
-
-            out: list[str] = []
-            total = len(self.links)
-            for i, link in enumerate(self.links, 1):
-                if self._cancel:
-                    raise RuntimeError("Đã dừng theo yêu cầu.")
-                self.log.emit(f"[{i}/{total}] Đọc link: {link}")
-                try:
-                    page = src.fetch_source(link)
-                    text = (page.get("text") or "").strip()
-                except Exception as exc:      # noqa: BLE001
-                    self.log.emit(f"  bỏ qua link (không đọc được): {exc}")
-                    continue
-                if not text:
-                    self.log.emit("  bỏ qua link (không có nội dung).")
-                    continue
-                res = extract_models(self.store, link, text, log=self.log.emit,
-                                     should_stop=lambda: self._cancel)
-                block = clean_model_lines(res)
-                if block:
-                    out.append(block)
-                    self.partial.emit("\n".join(out))
-            if not out:
-                raise RuntimeError("Không trích xuất được model nào.")
-            self.ok.emit("\n".join(out))
-        except Exception as exc:      # noqa: BLE001
-            if "Đã dừng" in str(exc):
-                self.log.emit("Đã dừng theo yêu cầu.")
-                return
-            traceback.print_exc()
-            self.failed.emit(str(exc))
-
-
 class ImageEditWorker(TrackedThread):
     """Sửa 1 ảnh bằng AI theo yêu cầu người dùng."""
 

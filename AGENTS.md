@@ -61,7 +61,8 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
   người dùng ĐÓNG trình duyệt** (không cần biết đã đăng hay chưa).
 - **Lỗi ở bước đăng bài:** không hiện cảnh báo, vẫn hiện panel kết quả (giữ nguyên nội dung).
 - **Lỗi tạo nội dung:** hiện panel lỗi + nút `↻ Tạo lại`.
-- Footer panel kết quả: `[↻ Random lại]` sát **trái**, `[Model Extractor] [OK — Đăng bài]` sát **phải**.
+- Footer panel kết quả: `[↻ Random lại]` sát **trái**, `[OK — Đăng bài]` sát **phải**.
+- **Model Extractor: đã bỏ** (giữ lại ô "Rule Model Extractor" trong Format Rule).
 - **Icon trong nội dung**: chỉ đặt ở thẻ `<h2>` + các dòng liên hệ (`🌐` website, `☎️` hotline,
   `✉️` email; `📞` các dòng hotline khác, `📧`, `📩`). Không đặt icon ở `h1/h3/h4`.
 - **SEO theo `rule_seo.pdf`**: title 55–60 ký tự `[Keyword] [Brand] [Model] + [USP]` (11 USP),
