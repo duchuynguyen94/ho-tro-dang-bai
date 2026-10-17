@@ -330,7 +330,7 @@ class JobsPage(QWidget):
         self._thumbs: list = []
         self._sel_index = 0
         self._edit_index = 0              # ảnh mà panel phải ĐANG hiển thị (để áp dụng đúng ảnh)
-        self._img_cache: dict = {}        # cache ảnh "Hình tự tìm" của JOB ĐANG MỞ (url -> bytes)
+        self._img_cache: dict = {}        # cache ảnh "Hình tự tìm" RIÊNG từng job (task_id -> {url: bytes})
         self._build()
         self.refresh()
 
@@ -623,7 +623,6 @@ class JobsPage(QWidget):
             return
         if getattr(self.current, "id", "") and self.current.id != task_id:
             self._flush_editor()          # đổi JOB -> chốt ảnh đang mở của job CŨ trước
-            self._img_cache.clear()       # đổi JOB -> XOÁ cache ảnh "Hình tự tìm"
         self.current = task
         for tid, row in self._rows.items():
             row.set_selected(tid == task_id)
@@ -1257,7 +1256,8 @@ class JobsPage(QWidget):
         # 3) Mở popup (giữ danh sách cũ, có ô keyword để làm list khác)
         from ..widgets.source_images import SourceImageDialog
 
-        dlg = SourceImageDialog(urls, self, keyword=keyword, cache=self._img_cache)
+        dlg = SourceImageDialog(urls, self, keyword=keyword,
+                                cache=self._img_cache.setdefault(str(task.id), {}))
         accepted = dlg.exec() == QDialog.Accepted
         # nhớ lại keyword + danh sách mới của RIÊNG job này
         try:
