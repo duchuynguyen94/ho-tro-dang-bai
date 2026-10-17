@@ -807,6 +807,29 @@ class SourceImageDownloadWorker(TrackedThread):
         self.progress.emit("")
 
 
+class SeoJsonWorker(TrackedThread):
+    """Tạo JSON SEO (title / description / focus_keyword / tags) từ NỘI DUNG đã có."""
+
+    log = Signal(str)
+    ok = Signal(dict)
+    failed = Signal(str)
+
+    def __init__(self, store, content_html: str) -> None:
+        super().__init__()
+        self.store = store
+        self.content_html = str(content_html or "")
+
+    def run(self) -> None:
+        try:
+            from ..ai.manager import generate_seo_json
+
+            seo = generate_seo_json(self.store, self.content_html, log=self.log.emit)
+            self.ok.emit(dict(seo or {}))
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
 class SourceImageSearchWorker(TrackedThread):
     """Tìm ảnh trên internet theo keyword (dùng trong popup "Hình tự tìm")."""
 

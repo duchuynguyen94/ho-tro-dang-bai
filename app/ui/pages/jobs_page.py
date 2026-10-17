@@ -317,6 +317,7 @@ class JobsPage(QWidget):
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
     status_msg = Signal(str)                 # báo trạng thái ra thanh dưới cùng của app
+    seo_json = Signal(object)                # (task) tạo JSON SEO từ nội dung (job trống)
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -332,6 +333,7 @@ class JobsPage(QWidget):
         self._edit_index = 0              # ảnh mà panel phải ĐANG hiển thị (để áp dụng đúng ảnh)
         self._img_cache: dict = {}        # cache ảnh "Hình tự tìm" RIÊNG từng job (task_id -> {url: bytes})
         self._copied_component: dict | None = None   # thành phần đã Ctrl+C (dán sang ảnh khác)
+        self._seo_busy = False                       # đang tạo JSON SEO
         self._build()
         self.refresh()
 
@@ -444,6 +446,7 @@ class JobsPage(QWidget):
         self.tags_edit = QLineEdit()
         ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit))
         self.content_edit = RichEditor()
+        self.content_edit.changed.connect(self._sync_seo_btn)
         ev2.addLayout(self._field("Nội dung (soạn thảo trực tiếp — chèn được link/ảnh & sửa HTML)",
                                   self.content_edit))
 
@@ -526,7 +529,18 @@ class JobsPage(QWidget):
         self.check_label = QLabel("")
         self.check_label.setObjectName("taskMeta")
         f.addWidget(self.check_label)
-        f.addStretch(1)                          # đẩy 2 nút kia sang PHẢI (right = 0)
+        f.addStretch(1)                          # đẩy các nút kia sang PHẢI (right = 0)
+        self.seo_btn = QPushButton("Tạo JSON SEO")
+        self.seo_btn.setProperty("class", "ghost")
+        self.seo_btn.setToolTip(
+            "Đọc NỘI DUNG đang soạn -> gọi AI tạo JSON SEO (Title / Description / "
+            "Focus keyword / Tags) rồi điền vào các ô."
+        )
+        self.seo_btn.clicked.connect(
+            lambda: self.current and self.seo_json.emit(self.current)
+        )
+        self.seo_btn.hide()
+        f.addWidget(self.seo_btn)                # ngay BÊN TRÁI nút "OK — Đăng bài"
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
         self.post_btn.clicked.connect(self._emit_post)
@@ -1141,6 +1155,29 @@ class JobsPage(QWidget):
         self._load(self.current)
         self.recompose_image.emit(self.current, index)
 
+    def _sync_seo_btn(self) -> None:
+        """Nút "Tạo JSON SEO": chỉ hiện khi job TRỐNG và ô Nội dung CÓ chữ."""
+        try:
+            task = self.current
+            kind = str(getattr(task, "kind", "") or "") if task is not None else ""
+            has_text = bool(self.content_edit.get_text().strip())
+            show = (kind == "blank") and has_text
+            self.seo_btn.setVisible(show)
+            self.seo_btn.setEnabled(show and not self._seo_busy)
+        except Exception:
+            pass
+
+    def set_seo_busy(self, on: bool) -> None:
+        """Đang tạo JSON SEO -> khoá nút + báo ở dòng dưới."""
+        self._seo_busy = bool(on)
+        try:
+            self.seo_btn.setText("Đang tạo JSON SEO…" if on else "Tạo JSON SEO")
+            if on:
+                self.check_label.setText("Đang tạo JSON SEO từ nội dung…")
+        except Exception:
+            pass
+        self._sync_seo_btn()
+
     def _flush_editor(self) -> None:
         """Ghép NGAY phần vừa sửa của ẢNH ĐANG MỞ (đúng ảnh đó, không lây sang ảnh khác)."""
         try:
@@ -1210,6 +1247,7 @@ class JobsPage(QWidget):
         self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
         self._edit_index = idx           # nhớ ĐÚNG ảnh đang mở -> mọi thay đổi áp cho ảnh này
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
+        self._sync_seo_btn()
 
     def _on_footer_changed(self, mode: str) -> None:
         """Đổi select "thanh thông tin": lưu lựa chọn + dựng lại NỀN canvas NGAY.

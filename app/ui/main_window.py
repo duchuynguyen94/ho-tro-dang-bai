@@ -42,6 +42,7 @@ from .workers import (
     ImageEditWorker,
     ImagesWorker,
     PostWorker,
+    SeoJsonWorker,
     shutdown_all_threads,
 )
 
@@ -65,6 +66,7 @@ class MainWindow(QMainWindow):
         self._img_workers: dict = {}
         self._img_queue: dict = {}        # việc ghép ảnh đang chờ (task_id -> [(opts, index, msg)])
         self._content_only_ids: set = set()  # "Random lại" -> chỉ tạo lại NỘI DUNG, giữ nguyên ảnh
+        self._seo_worker = None              # luồng tạo JSON SEO (job trống)
         self._build()
         try:                       # mở app là vào thẳng tab "Đăng bài"
             self._go(1)
@@ -141,6 +143,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.jobs_page.status_msg.connect(self.status)
+        self.jobs_page.seo_json.connect(self._on_seo_json)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -451,6 +454,58 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.status("Đã tạo lại ảnh.")
+
+    def _on_seo_json(self, task) -> None:
+        """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""
+        site = self.store.get_site(task.site_id)
+        if not site:
+            return
+        if self._seo_worker is not None and self._seo_worker.isRunning():
+            return
+        self.jobs_page._save()              # lưu nội dung đang gõ
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        content = str((fresh.result or {}).get("content_html") or "")
+        if not content.strip():
+            show_toast(self, "Ô Nội dung đang trống", 2600, ok=False)
+            return
+        self.jobs_page.set_seo_busy(True)
+        worker = SeoJsonWorker(self.store, content)
+        worker.log.connect(self._on_worker_log)
+        worker.ok.connect(lambda seo: self._on_seo_json_ok(fresh, seo))
+        worker.failed.connect(self._on_seo_json_failed)
+
+        def _done() -> None:
+            if self._seo_worker is worker:
+                self._seo_worker = None
+            self._cleanup(worker)
+
+        worker.finished.connect(_done)
+        self._seo_worker = worker
+        self._workers.append(worker)
+        worker.start()
+        self.status("Đang tạo JSON SEO từ nội dung…")
+
+    def _on_seo_json_ok(self, task, seo: dict) -> None:
+        """Có JSON SEO -> điền vào Title / Description / Focus keyword / Tags."""
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        r = fresh.result = dict(fresh.result or {})
+        for k in ("title", "description", "focus_keyword", "tags"):
+            v = str((seo or {}).get(k, "") or "").strip()
+            if v:
+                r[k] = v
+        self.store.upsert_task(fresh)
+        self.store.save()
+        self.jobs_page.set_seo_busy(False)
+        self.jobs_page.current = fresh
+        self.jobs_page._load(fresh)         # điền vào các ô
+        self._refresh_count()
+        self.status("Đã tạo JSON SEO — đã điền Title / Description / Focus keyword / Tags.")
+
+    def _on_seo_json_failed(self, err: str) -> None:
+        """Lỗi -> GIỮ NGUYÊN các ô đang có, chỉ ghi Log lỗi."""
+        self.jobs_page.set_seo_busy(False)
+        self._log_err("Tạo JSON SEO", err)
+        self.status("Tạo JSON SEO lỗi — giữ nguyên các ô đang có (xem tab Log lỗi).")
 
     def _on_regenerate(self, task, field: str) -> None:
         # đang có việc tạo nội dung -> không cho tạo lại (chạy tuần tự)

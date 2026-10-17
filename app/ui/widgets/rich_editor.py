@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import re
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QTextCharFormat, QTextListFormat
 from PySide6.QtWidgets import (
     QComboBox,
@@ -48,6 +48,8 @@ def _clean_qt_html(html: str) -> str:
 
 class RichEditor(QWidget):
     """Soạn thảo HTML trực quan + chế độ xem/sửa HTML nguồn."""
+
+    changed = Signal()          # nội dung đổi (để hiện/ẩn nút "Tạo JSON SEO")
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -118,11 +120,13 @@ class RichEditor(QWidget):
         self.edit.setAcceptRichText(True)
         self.edit.setMinimumHeight(220)
         self.edit.textChanged.connect(self._update_status)
+        self.edit.textChanged.connect(self.changed.emit)
 
         self.source = QPlainTextEdit()
         self.source.setObjectName("rteSource")
         self.source.setMinimumHeight(220)
         self.source.textChanged.connect(self._update_status)
+        self.source.textChanged.connect(self.changed.emit)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self.edit)

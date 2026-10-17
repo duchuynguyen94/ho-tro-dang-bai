@@ -961,6 +961,37 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
 # --------------------------------------------------------------------------- #
 # Luồng chính: 1 lần gọi (JSON SEO trước, nội dung sau)
 # --------------------------------------------------------------------------- #
+def build_seo_only_prompt(rules, content_html: str) -> str:
+    """Prompt CHỈ tạo JSON SEO từ NỘI DUNG đã có (nút "Tạo JSON SEO")."""
+    seo_rule = read_rule(rule_path(rules, "seo"))
+    body = re.sub(r"<[^>]+>", " ", content_html or "")
+    body = re.sub(r"\s+", " ", body).strip()[:6000]
+    return (
+        "Bạn là chuyên gia SEO. Dựa vào NỘI DUNG BÀI VIẾT dưới đây, hãy tạo JSON SEO "
+        "theo đúng RULE SEO và đúng ĐỊNH DẠNG JSON. CHỈ trả về khối JSON, không giải thích gì thêm.\n\n"
+        f"=== RULE SEO ===\n{seo_rule}\n\n"
+        f"=== ĐỊNH DẠNG JSON ===\n{SEO_JSON_SPEC}\n\n"
+        f"=== NỘI DUNG BÀI VIẾT ===\n{body}\n"
+    )
+
+
+def generate_seo_json(store, content_html: str, log=None, should_stop=None) -> dict:
+    """Tạo JSON SEO (title / description / focus_keyword / tags) từ NỘI DUNG đã có."""
+    rules = store.formats
+    prompt = build_seo_only_prompt(rules, content_html)
+    raw = _call_ai(store, prompt, prompt, log)
+    from .chatgpt_browser import split_reply
+
+    seo, _content = split_reply(raw)
+    if seo is None:
+        raise providers.AIError("AI không trả về khối JSON SEO.")
+    missing = [k for k in REQUIRED_KEYS if not str(seo.get(k, "")).strip()]
+    if missing:
+        raise providers.AIError(f"thiếu trường {missing}")
+    seo["description"] = normalize_description(str(seo.get("description", "")))
+    return {k: str(seo.get(k, "")).strip() for k in REQUIRED_KEYS}
+
+
 def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
     """1 lần gọi: AI trả JSON SEO TRƯỚC, rồi tới nội dung bài viết."""
     rules = store.formats
