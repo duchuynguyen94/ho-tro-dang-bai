@@ -361,7 +361,10 @@ class SitePanel(QWidget):
             "Để trống thì dùng mặc định https://ngochuyduong.com cho mọi website"
         )
         self.watermark_edit.editingFinished.connect(lambda: self._save(silent=True))
-        wm_card.body.setContentsMargins(14, 4, 14, 12)     # tiêu đề sát ô nhập hơn
+        # tiêu đề SÁT ô nhập: giảm padding dưới header + margin trên body + spacing
+        wm_card.header_layout.setContentsMargins(14, 11, 14, 4)
+        wm_card.body.setContentsMargins(14, 0, 14, 12)
+        wm_card.body.setSpacing(6)
         wm_card.body.addWidget(self.watermark_edit)
         wm_note = QLabel("Để trống → mặc định <b>https://ngochuyduong.com</b>")
         wm_note.setProperty("class", "sub")
