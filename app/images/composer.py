@@ -163,7 +163,7 @@ def prepare_product(path: str, remove_bg: bool = False, thresh: int = 42) -> Ima
     return img
 
 
-def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 15,
+def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 20,
                              scale: float = 1.0, rotate: float = 50) -> None:
     if not text:
         return
@@ -177,7 +177,7 @@ def _draw_diagonal_watermark(base: Image.Image, text: str, opacity: int = 15,
     tw = draw.textlength(text, font=font)
     text_img = Image.new("RGBA", (int(tw) + 20, int(font.size * 1.6)), (0, 0, 0, 0))
     td = ImageDraw.Draw(text_img)
-    td.text((10, 10), text, font=font, fill=(15, 23, 42, alpha))
+    td.text((10, 10), text, font=font, fill=(217, 217, 217, alpha))      # #d9d9d9
     text_img = text_img.rotate(float(rotate or 0), expand=True, resample=Image.BICUBIC)
     x = (base.size[0] - text_img.size[0]) // 2
     y = (base.size[1] - text_img.size[1]) // 2
@@ -212,7 +212,7 @@ def compose(
     footer_bar: str = "",
     frame: str = "",
     watermark: str = "",
-    watermark_opacity: int = 15,
+    watermark_opacity: int = 20,
     watermark_size: float = 0.85,
     watermark_rotate: float = 50,
     transparent_bg: bool = False,
