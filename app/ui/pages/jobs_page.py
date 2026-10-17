@@ -1172,8 +1172,8 @@ class JobsPage(QWidget):
         self._seo_busy = bool(on)
         try:
             self.seo_btn.setText("Đang tạo JSON SEO…" if on else "Tạo JSON SEO")
-            if on:
-                self.check_label.setText("Đang tạo JSON SEO từ nội dung…")
+            # xong / lỗi -> XOÁ dòng trạng thái
+            self.check_label.setText("Đang tạo JSON SEO từ nội dung…" if on else "")
         except Exception:
             pass
         self._sync_seo_btn()
