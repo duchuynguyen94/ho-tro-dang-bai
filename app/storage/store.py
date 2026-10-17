@@ -234,7 +234,11 @@ class Store:
         self.data["formats"] = fmt.to_dict()
 
     def has_format_content(self) -> bool:
-        return bool((self.data.get("formats") or {}).get("content"))
+        """Có rule nội dung để chạy? (file riêng HOẶC file mặc định của phần mềm)."""
+        try:
+            return bool(self.formats.rule("content"))
+        except Exception:
+            return bool((self.data.get("formats") or {}).get("content"))
 
     def reset_stale_tasks(self) -> None:
         """Khi mở app: việc đang chạy dở (do tắt app) -> đánh dấu đã dừng."""

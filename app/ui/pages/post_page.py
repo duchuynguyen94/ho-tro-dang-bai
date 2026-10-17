@@ -209,11 +209,7 @@ class PostPage(QWidget):
         problems: list[str] = []
         if not site:
             problems.append("chưa chọn website")
-        if not has_rule:
-            problems.append(
-                "chưa có file quy định nội dung "
-                "(vào <b>Cài đặt → Format &amp; rule bài viết</b> để thêm)"
-            )
+        # rule nội dung: luôn có (file riêng hoặc file mặc định của phần mềm) -> không cảnh báo
         if not has_link:
             problems.append("chưa nhập link bài viết nguồn")
 
