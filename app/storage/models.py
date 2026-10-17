@@ -142,8 +142,8 @@ class Site:
 
     @property
     def watermark_text(self) -> str:
-        """Watermark chéo: dùng URL website (không cần nhập riêng)."""
-        return (self.watermark or self.url or self.name or "").strip()
+        """Watermark chéo: dùng ô nhập riêng; để trống thì lấy mặc định của phần mềm."""
+        return (self.watermark or DEFAULT_WATERMARK).strip()
 
     # --- serialize ---
     def to_dict(self) -> dict:
@@ -189,6 +189,8 @@ class Site:
 # --------------------------------------------------------------------------- #
 STATUS_QUEUED = "queued"
 STATUS_GENERATING = "generating"
+DEFAULT_WATERMARK = "https://ngochuyduong.com"   # watermark mặc định khi website để trống
+
 STATUS_REVIEW = "review"
 STATUS_POSTING = "posting"
 STATUS_DONE = "done"

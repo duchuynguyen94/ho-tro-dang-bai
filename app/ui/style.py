@@ -73,7 +73,7 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 #cardHeader QLabel {{ font-weight: 700; font-size: 13px; }}
 #cardBody {{ background: #ffffff; border-radius: 10px; }}
 /* Panel Cài đặt (AI nội dung, AI ảnh, Format Rule, Link tiêu đề, Cập nhật): nền #f1f5f9 */
-QWidget#cfgPanel, QScrollArea#cfgPanel {{ background: #f1f5f9; }}
+QWidget#cfgPanel, QScrollArea#cfgPanel {{ background: #e8edf3; }}
 QScrollArea#cfgPanel > QWidget {{ background: transparent; }}
 /* vùng cuộn con bên trong: trong suốt (bỏ màu xám mặc định của Qt) */
 QScrollArea#cfgScroll, QScrollArea#cfgScroll > QWidget,
@@ -86,6 +86,20 @@ QScrollArea#resultScroll > QWidget > QWidget {{ background: transparent; }}
 QLabel.hint {{ color: {MUTED}; font-size: 11px; }}
 QLabel.h2 {{ font-size: 18px; font-weight: 700; }}
 QLabel.sub {{ color: {MUTED}; }}
+/* Thanh cuộn: dễ nhận thấy (rãnh xám + con trượt đậm) */
+QScrollBar:vertical {{ background: #e2e8f0; width: 10px; margin: 0; border: none; border-radius: 5px; }}
+QScrollBar::handle:vertical {{ background: #94a3b8; min-height: 32px; border-radius: 5px; }}
+QScrollBar::handle:vertical:hover {{ background: #64748b; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; border: none; background: none; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: none; }}
+QScrollBar:horizontal {{ background: #e2e8f0; height: 10px; margin: 0; border: none; border-radius: 5px; }}
+QScrollBar::handle:horizontal {{ background: #94a3b8; min-width: 32px; border-radius: 5px; }}
+QScrollBar::handle:horizontal:hover {{ background: #64748b; }}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {{ width: 0; border: none; background: none; }}
+QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {{ background: none; }}
+
+/* ô tick cách chữ 8px (trước đây dính sát) */
+QCheckBox {{ spacing: 8px; }}
 
 QLineEdit, QPlainTextEdit, QTextEdit, QComboBox, QSpinBox {{
     background: #ffffff; border: 1px solid #cbd5e1; border-radius: 7px; padding: 7px 9px;
@@ -210,9 +224,9 @@ QListWidget::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; }}
 #sideBar QLabel.section {{ color: #94a3b8; font-size: 10px; font-weight: 700; padding: 10px 8px 4px 8px; }}
 
 /* Trang Cài đặt → website: nền panel nhạt, vùng nội dung tab là khối TRẮNG bo 15px */
-QWidget#sitePanel {{ background: #f1f5f9; }}
-QTabWidget::pane {{ border: none; background: #f1f5f9; }}
-QTabWidget > QStackedWidget {{ background: #f1f5f9; }}
+QWidget#sitePanel {{ background: #e8edf3; }}
+QTabWidget::pane {{ border: none; background: #e8edf3; }}
+QTabWidget > QStackedWidget {{ background: #e8edf3; }}
 QScrollArea#siteTabScroll {{
     background: #ffffff; border: 1px solid {LINE}; border-radius: 15px;
 }}

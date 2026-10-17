@@ -57,10 +57,13 @@ class Store:
                     break
         if not isinstance(fmt.get("image_rules"), list) or not fmt.get("image_rules"):
             fmt["image_rules"] = ["", "", ""]
-        # watermark chéo lấy theo URL website
+        # watermark: bỏ cơ chế tự điền URL website.
+        # Xoá các giá trị TỰ ĐIỀN cũ (chỉ khi nó đúng bằng URL website) -> về mặc định.
         for s in self.data.get("sites", []):
-            if not s.get("watermark"):
-                s["watermark"] = s.get("url", "")
+            wm = str(s.get("watermark") or "").strip().rstrip("/")
+            url = str(s.get("url") or "").strip().rstrip("/")
+            if wm and url and wm == url:
+                s["watermark"] = ""
 
         # cập nhật model Gemini cũ đã bị Google bỏ
         old_models = {"gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash"}

@@ -196,7 +196,7 @@ class ConfigPage(QWidget):
             name=name,
             url=base,
             new_post_url=f"{base.rstrip('/')}/wp-admin/post-new.php?post_type=product",
-            watermark=base.rstrip("/"),
+            # watermark: để trống -> dùng mặc định của phần mềm
         )
         self.store.upsert_site(site)
         self.store.save()
@@ -353,6 +353,20 @@ class SitePanel(QWidget):
         note.setWordWrap(True)
         v.addWidget(note)
 
+        # ---- URL watermark (chữ chéo trên ảnh) ----
+        wm_card = Card("URL watermark (chữ chéo trên ảnh)")
+        self.watermark_edit = QLineEdit(self.site.watermark or "")
+        self.watermark_edit.setPlaceholderText("https://ngochuyduong.com")
+        self.watermark_edit.setToolTip(
+            "Để trống thì dùng mặc định https://ngochuyduong.com cho mọi website"
+        )
+        self.watermark_edit.editingFinished.connect(lambda: self._save(silent=True))
+        wm_card.body.addWidget(self.watermark_edit)
+        wm_note = QLabel("Để trống → mặc định <b>https://ngochuyduong.com</b>")
+        wm_note.setProperty("class", "sub")
+        wm_card.body.addWidget(wm_note)
+        v.addWidget(wm_card)
+
         for kind in ("logo", "bar1", "bar2"):
             v.addWidget(self._media_row(kind))
         v.addStretch(1)
@@ -473,6 +487,7 @@ class SitePanel(QWidget):
         self.newpost_edit.setText(s.new_post_url)
         self.user_edit.setText(s.username)
         self.pass_edit.setText(s.get_password())
+        self.watermark_edit.setText(s.watermark or "")
         self._refresh_media()
         self._refresh_steps()
 
@@ -614,7 +629,7 @@ class SitePanel(QWidget):
             s.name = self.name_edit.text().strip()
             s.url = self.url_edit.text().strip()
             s.new_post_url = self.newpost_edit.text().strip()
-            s.watermark = s.url
+            s.watermark = self.watermark_edit.text().strip()   # để trống -> mặc định
             s.username = self.user_edit.text().strip()
             if self.pass_edit.text():
                 s.set_password(self.pass_edit.text())
