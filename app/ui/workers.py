@@ -547,6 +547,15 @@ class PostWorker(TrackedThread):
                     ))
                 except Exception:
                     pass
+                # chỉ tắt cảnh báo "rời trang" của web (KHÔNG chặn các hộp thoại khác)
+                try:
+                    page.evaluate(
+                        "() => { window.onbeforeunload = null;"
+                        " window.addEventListener('beforeunload',"
+                        " (e) => { e.stopImmediatePropagation(); }, true); }"
+                    )
+                except Exception:
+                    pass
                 self.log.emit("Phát lại kịch bản…")
                 uploads = (self.result.get("post_images")
                            or [im["path"] for im in self.result.get("images", [])])

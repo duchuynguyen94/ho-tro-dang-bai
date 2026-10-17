@@ -823,6 +823,9 @@ def _strip_leading_junk(t: str) -> str:
 
 def _strip_trailing_junk(t: str) -> str:
     """Bỏ khối JSON / nhãn ở CUỐI nội dung (vd "Thông tin SEO", "2) JSON SEO:")."""
+    # rác của giao diện ChatGPT: "Writing", thẻ <escape>…</escape>
+    t = re.sub(r"(?:\s*</?escape>\s*)+$", "", t, flags=re.I)
+    t = re.sub(r"\s*Writing\s*$", "", t)
     for _ in range(6):
         new = re.sub(r"\s*```\s*json\s*[\s\S]*$", "", t, flags=re.I)
         new = re.sub(r"\s*\{\s*[\"']?(?:title|focus_keyword|description|tags)[\s\S]*$",

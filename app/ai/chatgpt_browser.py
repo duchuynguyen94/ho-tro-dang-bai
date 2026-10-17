@@ -236,6 +236,15 @@ def _same_as_prompt(text: str, prompt: str) -> bool:
     return head > 20 and a[:head] == b[:head]
 
 
+_UI_JUNK_RE = re.compile(r"^\s*(?:writing|đang viết|</?escape>)\s*$", re.I)
+
+
+def _clean_reply(txt: str) -> str:
+    """Bỏ các dòng rác của giao diện ChatGPT (Writing, <escape>…</escape>)."""
+    lines = [ln for ln in str(txt or "").splitlines() if not _UI_JUNK_RE.match(ln)]
+    return "\n".join(lines).strip()
+
+
 def _reply_text(page, prompt: str = "") -> str:
     txt = ""
     try:
@@ -271,7 +280,7 @@ def _reply_text(page, prompt: str = "") -> str:
             txt = ""
     if txt and _same_as_prompt(txt, prompt):
         return ""
-    return txt
+    return _clean_reply(txt)
 
 
 _LIMIT_UI_JS = r"""() => {
