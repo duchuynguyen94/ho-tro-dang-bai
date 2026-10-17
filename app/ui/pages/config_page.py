@@ -362,7 +362,7 @@ class SitePanel(QWidget):
         )
         self.watermark_edit.editingFinished.connect(lambda: self._save(silent=True))
         # tiêu đề SÁT ô nhập: giảm padding dưới header + margin trên body + spacing
-        wm_card.header_layout.setContentsMargins(14, 11, 14, 4)
+        wm_card.header_layout.setContentsMargins(14, 11, 14, 8)   # tiêu đề <-> ô nhập = 8px
         wm_card.body.setContentsMargins(14, 0, 14, 12)
         wm_card.body.setSpacing(8)      # ô nhập ↔ dòng ghi chú
         wm_card.body.addWidget(self.watermark_edit)
