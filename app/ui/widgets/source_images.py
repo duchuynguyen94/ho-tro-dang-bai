@@ -72,7 +72,7 @@ class SourceImageDialog(QDialog):
     """
 
     def __init__(self, urls: list[str], parent=None, keyword: str = "",
-                 allow_search: bool = True) -> None:
+                 allow_search: bool = True, cache: dict | None = None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Hình tự tìm")
         self.setMinimumSize(700, 560)
@@ -80,6 +80,7 @@ class SourceImageDialog(QDialog):
         self.urls: list[str] = list(urls or [])
         self.keyword: str = str(keyword or "")
         self._allow_search = bool(allow_search)   # có cho tìm ảnh trên internet không
+        self._cache: dict = cache if cache is not None else {}   # url -> bytes (giữ ảnh đã tải)
         self._picked: list[str] = []
         self._tiles: list[_Tile] = []
         self._worker = None
@@ -177,8 +178,19 @@ class SourceImageDialog(QDialog):
                 self._worker.stop()
         except Exception:
             pass
-        self.status.setText("Đang tải ảnh…")
-        self._worker = SourceImageDownloadWorker(self.urls[:60])
+        # Ảnh ĐÃ TẢI TRƯỚC ĐÓ -> hiện NGAY (không tải lại); chỉ tải ảnh còn thiếu
+        todo: list[str] = []
+        for t in self._tiles:
+            data = self._cache.get(t.url)
+            if data:
+                t.set_image(data)
+            else:
+                todo.append(t.url)
+        if not todo:
+            self.status.setText(f"Đã có sẵn {len(self._tiles)} ảnh — chọn ảnh rồi bấm “Chèn vào canvas”.")
+            return
+        self.status.setText(f"Đang tải {len(todo)} ảnh…")
+        self._worker = SourceImageDownloadWorker(todo)
         self._worker.done.connect(self._on_one)
         self._worker.progress.connect(self.status.setText)
         self._worker.finished.connect(self._on_finished)
@@ -193,6 +205,7 @@ class SourceImageDialog(QDialog):
         if not self._allow_search:
             return
         self.keyword = q
+        self._cache.clear()          # bấm "Tìm ảnh" -> XOÁ cache ảnh cũ
         self.search_btn.setEnabled(False)
         self.status.setText("Đang tìm ảnh trên internet…")
         try:
@@ -219,6 +232,11 @@ class SourceImageDialog(QDialog):
         self.status.setText(f"Tìm ảnh lỗi: {err}")
 
     def _on_one(self, url: str, data) -> None:
+        if data:
+            try:
+                self._cache[url] = bytes(data)     # nhớ ảnh đã tải -> mở lại popup là hiện ngay
+            except Exception:
+                pass
         for t in self._tiles:
             if t.url == url:
                 if data:
