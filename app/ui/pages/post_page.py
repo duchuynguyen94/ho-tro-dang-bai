@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...storage.models import Task
-from ..style import Card, polish_combos
+from ..style import dim_when_disabled, Card, polish_combos
 
 
 class SiteRow(QFrame):
@@ -180,9 +180,13 @@ class PostPage(QWidget):
             row = SiteRow(site)
             self._group.addButton(row.radio, idx)
             has_script = bool(site.script and site.script.steps)
-            row.radio.setEnabled(has_script)          # chưa có kịch bản -> không chọn được
             if not has_script:
+                # chưa có kịch bản -> MỜ CẢ KHUNG, không chọn được
                 row.setToolTip("Website này chưa có kịch bản đăng bài")
+                row.setEnabled(False)
+                dim_when_disabled(row, 0.45)
+            else:
+                row.radio.setEnabled(True)
             row.radio.toggled.connect(self._validate)
             self._radios[site.id] = row.radio
             self._rows[site.id] = row
