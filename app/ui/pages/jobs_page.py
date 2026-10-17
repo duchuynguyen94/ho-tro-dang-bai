@@ -848,20 +848,29 @@ class JobsPage(QWidget):
         task.image_count = max(1, len(images))
 
     def _footer_mode_of(self, task, index: int) -> str:
-        """Thanh thông tin (bar1/bar2) ảnh ở vị trí `index` đang dùng."""
+        """Thanh thông tin (bar1/bar2) ảnh ở vị trí `index` đang dùng.
+
+        - Ảnh ĐÃ ghép -> lấy ĐÚNG thanh đang có trong ảnh (khớp với preview).
+        - Ảnh CHƯA ghép -> theo lựa chọn cứng của ảnh, không thì theo quy tắc 1,2,2,2,2.
+        """
+        from ..workers import _site_bars
+
         r = task.result or {}
+        site = self.store.get_site(task.site_id)
+        bars = _site_bars(site) if site else []
+        images = r.get("images") or []
+        cur = str(images[index].get("footer", "") or "") if 0 <= index < len(images) else ""
+        if cur:                                  # ảnh đã ghép -> theo ảnh thật
+            if len(bars) > 1 and cur == bars[1]:
+                return "bar2"
+            if bars and cur == bars[0]:
+                return "bar1"
         lst = r.get("image_opts_list") or []
         if 0 <= index < len(lst) and isinstance(lst[index], dict):
             m = lst[index].get("footer_mode")
             if m in ("bar1", "bar2"):
                 return m
-        site = self.store.get_site(task.site_id)
-        bars = [b for b in ((site.footer_bars if site else []) or []) if b]
-        images = r.get("images") or []
-        cur = images[index].get("footer", "") if 0 <= index < len(images) else ""
-        if len(bars) > 1 and cur and cur == bars[1]:
-            return "bar2"
-        return "bar1"
+        return "bar1" if index == 0 else "bar2"
 
     def _add_image(self) -> None:
         if not self.current:
@@ -1007,11 +1016,8 @@ class JobsPage(QWidget):
         opts_i = dict(lst[idx]) if idx < len(lst) else (r.get("image_opts") or {})
         preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
         self.img_editor.set_ai_enabled((self.store.ai_image or {}).get("active") != "off")
-        # thanh thông tin: hình nào thì select đúng hình đó (quy tắc 1,2,2,2,2)
-        mode_default = str(opts_i.get("footer_mode") or "")
-        if mode_default not in ("bar1", "bar2"):
-            mode_default = "bar1" if idx == 0 else "bar2"
-        self.img_editor.load(preview, opts_i, mode_default, title)
+        # thanh thông tin: select phản ánh ĐÚNG thanh đang có trong ảnh
+        self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
 
     def _apply_image_opts(self, opts: dict) -> None:
         if self.current:
