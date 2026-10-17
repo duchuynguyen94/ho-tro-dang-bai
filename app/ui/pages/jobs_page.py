@@ -5,7 +5,7 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, QUrl, Signal
-from PySide6.QtGui import QDesktopServices, QDrag, QKeySequence, QPixmap
+from PySide6.QtGui import QPixmapCache, QDesktopServices, QDrag, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -774,6 +774,12 @@ class JobsPage(QWidget):
             if w:
                 w.deleteLater()
 
+        # xoá cache pixmap -> thumbnail đọc lại file ảnh MỚI từ đĩa (tránh ảnh cũ bị cache)
+        try:
+            QPixmapCache.clear()
+        except Exception:
+            pass
+
         images = r.get("images", [])
         self._thumbs = []
         for i, im in enumerate(images, 1):
@@ -807,7 +813,12 @@ class JobsPage(QWidget):
         box.pic = pic
         p = Path(im.get("path", ""))
         if p.exists():
-            pic.set_source(QPixmap(str(p)))
+            pm = QPixmap()
+            try:                     # đọc lại bytes -> chắc chắn là ảnh MỚI
+                pm.loadFromData(p.read_bytes())
+            except Exception:
+                pm = QPixmap(str(p))
+            pic.set_source(pm)
         else:
             pic.setText("(chưa có ảnh)")
         bl.addWidget(pic)
