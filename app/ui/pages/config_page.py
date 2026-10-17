@@ -1294,17 +1294,35 @@ class FormatPanel(QScrollArea):
             ("seo", "Rule SEO"),
             ("extractor", "Rule Model Extractor"),
         ]
+        self._rule_status: dict[str, QLabel] = {}
+        self._rule_clear: dict[str, QPushButton] = {}
         for key, label in rows:
+            box = QWidget()
+            rv = QVBoxLayout(box)
+            rv.setContentsMargins(0, 0, 0, 0)
+            rv.setSpacing(2)
             edit = QLineEdit()
             edit.setReadOnly(True)
+            edit.setPlaceholderText("(đang dùng mặc định của phần mềm)")
             h = QHBoxLayout()
             h.addWidget(edit, 1)
-            b = QPushButton("Chọn file")
-            b.setProperty("class", "ghost")
-            b.clicked.connect(lambda _=False, k=key, e=edit, l=label: self._pick(k, e, l))
-            h.addWidget(b)
-            f.addRow(label, h)
+            pick = QPushButton("Chọn file riêng…")
+            pick.setProperty("class", "ghost")
+            pick.clicked.connect(lambda _=False, k=key, e=edit, l=label: self._pick(k, e, l))
+            clear = QPushButton("Xoá")
+            clear.setProperty("class", "danger")
+            clear.setToolTip("Bỏ file riêng — quay về file mặc định của phần mềm")
+            clear.clicked.connect(lambda _=False, k=key, e=edit: self._clear_rule(k, e))
+            h.addWidget(pick)
+            h.addWidget(clear)
+            rv.addLayout(h)
+            status = QLabel("")
+            status.setProperty("class", "sub")
+            rv.addWidget(status)
+            f.addRow(label, box)
             self._edits[key] = edit
+            self._rule_status[key] = status
+            self._rule_clear[key] = clear
         card.body.addLayout(f)
         v.addWidget(card)
 
@@ -1359,6 +1377,7 @@ class FormatPanel(QScrollArea):
         fmt = self.store.formats
         for key, edit in self._edits.items():
             edit.setText(getattr(fmt, key, ""))
+        self._refresh_rules()
         for value in self.store.image_rules:
             self._add_rule_row(value)
 
@@ -1368,8 +1387,27 @@ class FormatPanel(QScrollArea):
         if not path:
             return
         edit.setText(Store.import_file(path, formats_dir()))
+        self._save(silent=True)
 
-    def _save(self) -> None:
+    def _clear_rule(self, key: str, edit: QLineEdit) -> None:
+        """Bỏ file riêng -> quay về file mặc định của phần mềm."""
+        edit.setText("")
+        self._save(silent=True)
+
+    def _refresh_rules(self) -> None:
+        for key, edit in self._edits.items():
+            own = edit.text().strip()
+            status = self._rule_status.get(key)
+            clear = self._rule_clear.get(key)
+            if status is not None:
+                status.setText(
+                    f"File riêng: <b>{Path(own).name}</b>" if own
+                    else "Đang dùng <b>mặc định của phần mềm</b>"
+                )
+            if clear is not None:
+                clear.setVisible(bool(own))
+
+    def _save(self, silent: bool = False) -> None:
         try:
             fmt = self.store.formats
             for key, edit in self._edits.items():
@@ -1380,6 +1418,8 @@ class FormatPanel(QScrollArea):
         except Exception as exc:      # noqa: BLE001
             show_toast(self, f"Lưu Format Rule THẤT BẠI: {exc}", 3400, ok=False)
             return
-        show_toast(self, "Đã lưu Format Rule")
+        self._refresh_rules()
+        if not silent:
+            show_toast(self, "Đã lưu Format Rule")
         if self.on_saved:
             self.on_saved()

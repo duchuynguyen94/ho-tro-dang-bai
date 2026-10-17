@@ -54,6 +54,12 @@ def app_assets_dir() -> Path:
     return Path(__file__).resolve().parent / "assets"
 
 
+def default_asset_path(rel: str) -> str:
+    """Đường dẫn asset mặc định theo đường dẫn con (vd "default_rules/rule_content.pdf")."""
+    p = app_assets_dir() / rel
+    return str(p) if p.exists() else ""
+
+
 def default_asset(name: str) -> str:
     """Đường dẫn asset mặc định của phần mềm (rỗng nếu chưa có file)."""
     p = app_assets_dir() / "default" / name

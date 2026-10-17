@@ -117,6 +117,14 @@ SEO_JSON_SPEC = """{
 # --------------------------------------------------------------------------- #
 # Đọc file rule
 # --------------------------------------------------------------------------- #
+def rule_path(rules, kind: str) -> str:
+    """Đường dẫn file rule hiệu dụng: file riêng -> file mặc định kèm app."""
+    try:
+        return rules.rule(kind)
+    except AttributeError:
+        return str(getattr(rules, kind, "") or "")
+
+
 def read_rule(path: str, limit: int = 12000) -> str:
     """Đọc file rule: .txt/.html/.md/.doc/.docx đọc thẳng, .pdf trích text."""
     if not path:
@@ -144,8 +152,8 @@ def read_rule(path: str, limit: int = 12000) -> str:
 # --------------------------------------------------------------------------- #
 def build_combined_prompt(rules, source: dict) -> str:
     """1 prompt cho provider API: yêu cầu JSON SEO trước, nội dung sau."""
-    rule_content = read_rule(getattr(rules, "content", ""))
-    rule_seo = read_rule(getattr(rules, "seo", ""))
+    rule_content = read_rule(rule_path(rules, "content"))
+    rule_seo = read_rule(rule_path(rules, "seo"))
     images_hint = "\n".join(f"- {u}" for u in source.get("images", [])[:6])
     return f"""Bạn là chuyên gia viết nội dung kỹ thuật & SEO tiếng Việt.
 Hãy làm theo ĐÚNG 2 file quy định dưới đây.
@@ -1024,7 +1032,7 @@ FIELD_RULES = {
 
 def build_field_prompt(rules, source: dict, field: str, current: str = "") -> str:
     label, rule_key = FIELD_RULES.get(field, ("Nội dung", "content"))
-    rule = read_rule(getattr(rules, rule_key, ""))
+    rule = read_rule(rule_path(rules, rule_key))
     return f"""Bạn là chuyên gia SEO tiếng Việt. Hãy tạo lại DUY NHẤT trường "{label}".
 
 === QUY ĐỊNH ({rule_key.upper()}) ===
@@ -1076,7 +1084,7 @@ def parse_json_response(text: str) -> dict:  # tương thích ngược
 # --------------------------------------------------------------------------- #
 def build_extractor_prompt(rules, url: str, text: str) -> str:
     """Prompt cho provider API: nhúng nội dung file Rule Model Extractor."""
-    rule = read_rule(getattr(rules, "extractor", ""))
+    rule = read_rule(rule_path(rules, "extractor"))
     return f"""Bạn là chuyên gia trích xuất dữ liệu sản phẩm.
 Hãy làm theo ĐÚNG file quy định dưới đây.
 

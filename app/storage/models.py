@@ -4,6 +4,7 @@ from __future__ import annotations
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
+from pathlib import Path
 from typing import Any
 
 from . import crypto
@@ -31,6 +32,19 @@ class Formats:
     title: str = ""
     description: str = ""
     tags: str = ""
+
+    RULE_FILES = {"content": "rule_content.pdf", "seo": "rule_seo.pdf",
+                  "extractor": "rule_model_extractor.pdf"}
+
+    def rule(self, kind: str) -> str:
+        """Đường dẫn file rule HIỆU DỤNG: file riêng của người dùng -> nếu trống thì file mặc định."""
+        from ..config import default_asset_path
+
+        own = str(getattr(self, kind, "") or "").strip()
+        if own and Path(own).exists():
+            return own
+        name = self.RULE_FILES.get(kind, "")
+        return default_asset_path(f"default_rules/{name}") or own
 
     def to_dict(self) -> dict:
         return {
