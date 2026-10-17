@@ -1016,9 +1016,16 @@ class JobsPage(QWidget):
         site = self.store.get_site(task.site_id)
         r = task.result or {}
         images = r.get("images") or []
-        footer = images[index].get("footer", "") if index < len(images) else ""
+        footer = str(images[index].get("footer", "") or "") if index < len(images) else ""
         lst = r.get("image_opts_list") or []
         opts = dict(lst[index]) if index < len(lst) else (r.get("image_opts") or {})
+        if not footer and site:
+            # ảnh chưa có thanh thông tin -> dùng thanh theo QUY TẮC (ảnh 1 -> thanh 1, sau -> thanh 2)
+            from ..workers import _site_bars
+            bars = _site_bars(site)
+            mode = self._footer_mode_of(task, index)
+            if bars:
+                footer = bars[1] if (mode == "bar2" and len(bars) > 1) else bars[0]
         remove_bg, th = _remove_bg_opts(self.store)
         from ...config import default_asset
 
