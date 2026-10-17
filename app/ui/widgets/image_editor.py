@@ -40,6 +40,7 @@ class DraggableImage(QLabel):
         self.on_remove_bg = None   # callback
         self.on_remove = None      # callback
         self.on_trim = None        # callback
+        self.on_pick = None        # callback: bấm vào thành phần -> báo "đang chọn"
         self.setCursor(Qt.OpenHandCursor)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         if dashed:
@@ -70,7 +71,7 @@ class DraggableImage(QLabel):
         self._update_grips()
 
     def _update_grips(self) -> None:
-        show = self._grips_on and (self._hover or bool(self._mode))
+        show = self._grips_on and (bool(getattr(self, "_selected", False)) or bool(self._mode))
         for g in self.grips:
             g.setVisible(show)
 
@@ -88,13 +89,17 @@ class DraggableImage(QLabel):
         self._src = pm
 
     def set_selected(self, on: bool) -> None:
-        """Viền nét đứt để biết thành phần ĐANG CHỌN (để Ctrl+C)."""
+        """Viền LIỀN MẠCH màu xanh = thành phần ĐANG CHỌN (để Ctrl+C / resize)."""
         self._selected = bool(on)
         base = getattr(self, "_base_style", "")
         if on:
-            self.setStyleSheet("border:2px dashed #1d4ed8;")
+            self.setStyleSheet("border:2px solid #1d4ed8;")
         else:
             self.setStyleSheet(base)
+        try:
+            self._update_grips()
+        except Exception:
+            pass
 
     def resizeEvent(self, event) -> None:  # noqa: N802
         w, h = self.width(), self.height()
@@ -109,6 +114,15 @@ class DraggableImage(QLabel):
             self._start = None
             super().mousePressEvent(event)   # để Qt hiện menu ngữ cảnh
             return
+        if self.on_pick is not None:
+            try:
+                self.on_pick(self)              # báo "đang chọn thành phần này"
+            except Exception:
+                pass
+        try:
+            self.parentWidget().setFocus(Qt.MouseFocusReason)   # rời ô nhập liệu -> Ctrl+C ăn
+        except Exception:
+            pass
         pos = event.position().toPoint()
         w, h, z = self.width(), self.height(), self.RESIZE_ZONE
         corner = ""
@@ -434,6 +448,7 @@ class ImageEditorPanel(QFrame):
     def load(self, preview: dict, opts: dict | None = None,
              footer_mode: str = "random", title: str = "") -> None:
         self._preview = dict(preview or {})
+        self._sel_item = None          # nạp lại panel -> bỏ chọn thành phần cũ
         self._opts = dict(opts or {})
         if title:
             self.title.setText(f"Trình sửa ảnh trực tiếp — {title}")
@@ -524,6 +539,7 @@ class ImageEditorPanel(QFrame):
             item.on_remove_bg = self._ctx_remove_bg
             item.on_remove = self._ctx_remove_component
             item.on_trim = self._ctx_trim
+            item.on_pick = self._set_sel_item
 
         lp = self._opts.get("logo_pos") or [0.025, 0.018]
         bp = self._opts.get("brand_pos") or [0.955, 0.032]
@@ -608,6 +624,7 @@ class ImageEditorPanel(QFrame):
             it.on_remove_bg = self._ctx_remove_bg
             it.on_remove = self._ctx_remove_component
             it.on_trim = self._ctx_trim
+            it.on_pick = self._set_sel_item
             it.show()
             it.enable_grips(True)
             it.moved.connect(self._on_product_moved)
@@ -649,6 +666,7 @@ class ImageEditorPanel(QFrame):
             it.on_remove_bg = self._ctx_remove_bg
             it.on_remove = self._ctx_remove_component
             it.on_trim = self._ctx_trim
+            it.on_pick = self._set_sel_item
             it.show()
             it.enable_grips(True)
             it.moved.connect(self._on_upload_moved)
