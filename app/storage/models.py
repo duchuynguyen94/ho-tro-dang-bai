@@ -277,14 +277,14 @@ class Task:
 DEFAULT_CONFIG: dict[str, Any] = {
     "ai_content": {
         "active": "chatgpt",
-        "fallback": True,
+        "fallback": False,
         "order": ["chatgpt", "gemini", "groq", "deepseek", "openai"],
         "providers": {
             "gemini": {"api_key_enc": "", "model": "gemini-3.8-flash"},
             "groq": {"api_key_enc": "", "model": "llama-3.3-70b-versatile"},
             "deepseek": {"api_key_enc": "", "model": "deepseek-chat"},
             "chatgpt": {"session_file": "", "project": "", "project_url": "",
-                        "show_browser": False},
+                        "show_browser": True},
             "openai": {"api_key_enc": "", "model": "gpt-4o-mini"},
         },
     },
