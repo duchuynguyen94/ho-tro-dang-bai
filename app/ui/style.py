@@ -84,6 +84,10 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 #titleBar {{ background: #111827; }}
 #titleBar QLabel {{ color: #e5e7eb; font-weight: 600; }}
 
+/* nút Cài đặt (răng cửa) ở góc phải trên thanh tiêu đề */
+#gearBtn {{ background: transparent; border: none; border-radius: 8px; padding: 4px 6px; }}
+#gearBtn:hover {{ background: rgba(255,255,255,0.12); }}
+#gearBtn:checked {{ background: rgba(37,99,235,0.35); }}
 #navBar {{ background: {PANEL}; }}
 #navBar QPushButton {{
     background: transparent; color: #9ca3af; border: none;

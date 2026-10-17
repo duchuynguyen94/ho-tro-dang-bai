@@ -4,8 +4,8 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices
+from PySide6.QtCore import QSize, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
     QFrame,
     QHBoxLayout,
@@ -45,7 +45,9 @@ from .workers import (
     shutdown_all_threads,
 )
 
-NAV = ["Cài đặt", "Đăng bài", "Công việc đang làm", "Log lỗi"]
+# (chữ trên tab, chỉ số trang trong stack) — "Cài đặt" đã chuyển thành nút ⚙ góc phải trên
+NAV = [("Đăng bài", 1), ("Công việc đang làm", 2), ("Log lỗi", 3)]
+GEAR_PAGE = 0      # trang "Cài đặt"
 
 
 class MainWindow(QMainWindow):
@@ -96,6 +98,23 @@ class MainWindow(QMainWindow):
         name = QLabel("WP Multi Poster")
         tl.addWidget(name)
         tl.addStretch(1)
+        # nút CÀI ĐẶT (icon răng cửa) ở GÓC PHẢI TRÊN
+        self.gear_btn = QPushButton()
+        self.gear_btn.setObjectName("gearBtn")
+        self.gear_btn.setCheckable(True)
+        self.gear_btn.setToolTip("Cài đặt")
+        self.gear_btn.setCursor(Qt.PointingHandCursor)
+        try:
+            from ..config import default_asset_path
+
+            icon_path = default_asset_path("icons/gear.svg")
+            if icon_path:
+                self.gear_btn.setIcon(QIcon(icon_path))
+                self.gear_btn.setIconSize(QSize(20, 20))
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+        self.gear_btn.clicked.connect(lambda: self._go(GEAR_PAGE))
+        tl.addWidget(self.gear_btn)
         v.addWidget(titlebar)
 
         # thanh điều hướng
@@ -105,11 +124,12 @@ class MainWindow(QMainWindow):
         nl.setContentsMargins(10, 0, 10, 0)
         nl.setSpacing(0)
         self.nav_buttons: list[QPushButton] = []
-        for i, text in enumerate(NAV):
+        for text, page_idx in NAV:
             b = QPushButton(text)
             b.setCheckable(True)
-            b.setChecked(i == 1)          # mặc định mở tab "Đăng bài"
-            b.clicked.connect(lambda _=False, idx=i: self._go(idx))
+            b.setProperty("pageIndex", page_idx)
+            b.setChecked(page_idx == 1)   # mặc định mở tab "Đăng bài"
+            b.clicked.connect(lambda _=False, idx=page_idx: self._go(idx))
             nl.addWidget(b)
             self.nav_buttons.append(b)
         nl.addStretch(1)
@@ -163,8 +183,15 @@ class MainWindow(QMainWindow):
 
     def _go(self, index: int) -> None:
         self.stack.setCurrentIndex(index)
-        for i, b in enumerate(self.nav_buttons):
-            b.setChecked(i == index)
+        for b in self.nav_buttons:
+            try:
+                b.setChecked(int(b.property("pageIndex") or -1) == index)
+            except Exception:      # noqa: BLE001
+                pass
+        try:
+            self.gear_btn.setChecked(index == GEAR_PAGE)
+        except Exception:      # noqa: BLE001
+            pass
         if index == 2:
             self.jobs_page.refresh()
         elif index == 3:
@@ -173,7 +200,10 @@ class MainWindow(QMainWindow):
             self.post_page.reload_sites()      # tab "Đăng bài"
 
     def _refresh_count(self) -> None:
-        self.nav_buttons[2].setText(f"Công việc đang làm ({len(self.store.tasks)})")
+        for b in self.nav_buttons:
+            if int(b.property("pageIndex") or -1) == 2:
+                b.setText(f"Công việc đang làm ({len(self.store.tasks)})")
+                break
 
     def _on_config_changed(self) -> None:
         self.post_page.reload_sites()
