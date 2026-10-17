@@ -172,7 +172,7 @@ QLabel#chipGray  {{ color: #475569; background: #f1f5f9; border: 1px solid #e2e8
 QLabel#chipBlue  {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #bfdbfe; }}
 QLabel#metaText  {{ color: {MUTED}; font-size: 11px; }}
 QFrame#imgBox {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 0; }}
-QFrame#imgBox[selected="true"] {{ border: 2px solid {ACCENT}; background: #eff6ff; }}
+QFrame#imgBox[selected="true"] {{ border: 3px solid {ACCENT_DARK}; background: #dbeafe; }}
 QFrame#srcTile {{ background: #ffffff; border: 1px solid {LINE}; border-radius: 8px; }}
 QFrame#srcTile[selected="true"] {{ border: 2px solid {ACCENT}; background: #eff6ff; }}
 QFrame#srcTile:disabled {{ background: #f8fafc; }}

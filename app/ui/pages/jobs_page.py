@@ -1014,6 +1014,10 @@ class JobsPage(QWidget):
                 self._thumbs.append(box)
             self.images_row.addStretch(1)
             self.add_img_btn.setEnabled(len(images) < MAX_IMAGES)
+            # GIỮ viền "đang sửa" đúng ảnh đang mở (dựng lại danh sách không làm mất viền)
+            idx = getattr(self, "_sel_index", 0)
+            for box in self._thumbs:
+                box.set_selected(box.index == idx)
         except Exception:
             traceback.print_exc()
 
