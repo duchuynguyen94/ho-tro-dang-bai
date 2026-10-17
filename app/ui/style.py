@@ -73,6 +73,12 @@ ARROW = _ensure_arrow()
 
 QSS = f"""
 QWidget {{ color: {TEXT}; font-size: 13px; }}
+/* Menu chuột phải: mục KHÔNG chọn được -> xám mờ */
+QMenu {{ background: #ffffff; border: 1px solid {LINE}; padding: 4px; }}
+QMenu::item {{ padding: 6px 26px 6px 14px; border-radius: 6px; color: {TEXT}; }}
+QMenu::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; }}
+QMenu::item:disabled {{ color: #b8c0cc; }}
+QMenu::separator {{ height: 1px; background: {LINE}; margin: 4px 8px; }}
 QMainWindow, #contentRoot {{ background: {BG}; }}
 
 #titleBar {{ background: #111827; }}

@@ -485,17 +485,9 @@ class MainWindow(QMainWindow):
         except Exception:      # noqa: BLE001
             traceback.print_exc()
         self.status(f"Đã đổi website: {old.name if old else '?'} → {new_site.name}")
-        ans = QMessageBox.question(
-            self, "Đổi website",
-            f"Đã đổi nơi đăng sang “{new_site.name}” (kịch bản + đăng nhập + link đăng bài).\n"
-            "Nội dung được GIỮ NGUYÊN.\n\nTạo lại ảnh theo website mới?",
-            QMessageBox.Yes | QMessageBox.No, QMessageBox.No,
-        )
-        if ans == QMessageBox.Yes:
-            self._start_images_worker(fresh, None, None, "Đang ghép lại ảnh theo website mới…")
-            show_toast(self, "Đang ghép lại ảnh theo website mới…", 2600)
-        else:
-            show_toast(self, "Đã đổi website — giữ nguyên ảnh cũ", 2600)
+        # luôn GHÉP LẠI ẢNH theo website mới (logo site / watermark / thanh thông tin của site mới)
+        self._start_images_worker(fresh, None, None, "Đang ghép lại ảnh theo website mới…")
+        show_toast(self, f"Đã đổi sang “{new_site.name}” — đang ghép lại ảnh theo website mới…", 2800)
 
     def _on_seo_json(self, task) -> None:
         """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""

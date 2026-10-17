@@ -295,8 +295,9 @@ class TaskRow(QFrame):
         menu = QMenu(self)
         sub = menu.addMenu("Đổi website")
         if self.kind == "blank":
-            sub.setEnabled(False)
-            sub.setToolTip("Job trống không đổi được website")
+            # job trống: hiện 1 dòng MỜ để biết lý do không đổi được
+            act_no = sub.addAction("Không đổi được (job trống)")
+            act_no.setEnabled(False)
         else:
             for sid, name, has_script in self._sites:
                 act = sub.addAction(("✔ " if sid == self.site_id else "") + name)
