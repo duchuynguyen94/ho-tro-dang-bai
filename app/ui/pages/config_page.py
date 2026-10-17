@@ -1021,9 +1021,7 @@ class AIImagePanel(QWidget):
         self.ai_on.setChecked(cfg.get("active") != "off")     # tick = ĐANG BẬT
         self._last_active = (cfg.get("active") if cfg.get("active") != "off" else "") or ""
         self.ai_on.toggled.connect(self._toggle_providers)
-        c3.add_header_widget(self.ai_on)
-        # lùi ô tick vào thẳng hàng với border card provider bên dưới
-        c3.header_layout.setContentsMargins(14, 11, 24, 11)
+        c3.add_header_widget(self.ai_on)      # lề phải đã chung trong Card
         grid = QGridLayout()
         self._img_rows: dict[str, dict] = {}
         self._img_group = QButtonGroup(self)

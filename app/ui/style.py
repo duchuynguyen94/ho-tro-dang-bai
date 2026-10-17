@@ -298,7 +298,7 @@ class Card(QFrame):
         self.header.setObjectName("cardHeader")
         self.header.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Fixed)
         hl = QHBoxLayout(self.header)
-        hl.setContentsMargins(14, 11, 14, 11)
+        hl.setContentsMargins(14, 11, 24, 11)      # lề phải: widget ở header thẳng hàng nội dung
         self.header_label = QLabel(title)
         hl.addWidget(self.header_label)
         hl.addStretch(1)
