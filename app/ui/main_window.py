@@ -276,8 +276,7 @@ class MainWindow(QMainWindow):
             self.status("Lỗi khi lưu kết quả — xem tab Log lỗi.")
             return
         try:
-            self.jobs_page.refresh()
-            self.jobs_page.select_task(fresh.id)
+            self._refresh_jobs_keep(fresh)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self._log_err("Hiển thị kết quả AI", str(exc))
@@ -305,6 +304,20 @@ class MainWindow(QMainWindow):
         else:
             self.status("Sẵn sàng")
 
+    def _refresh_jobs_keep(self, task) -> None:
+        """Refresh danh sách nhưng GIỮ đúng việc người dùng đang xem."""
+        try:
+            cur = getattr(self.jobs_page, "current", None)
+            keep = getattr(cur, "id", "") or ""
+            self.jobs_page.refresh()
+            if keep:
+                self.jobs_page.select_task(keep)
+            else:
+                self.jobs_page.select_task(getattr(task, "id", ""))
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Hiển thị kết quả", str(exc))
+
     def _on_content_cancelled(self, task) -> None:
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.status = STATUS_CANCELLED
@@ -312,8 +325,7 @@ class MainWindow(QMainWindow):
         self.store.upsert_task(fresh)
         self.store.save()
         try:
-            self.jobs_page.refresh()
-            self.jobs_page.select_task(fresh.id)
+            self._refresh_jobs_keep(fresh)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self._log_err("Hiển thị kết quả", str(exc))
@@ -328,8 +340,7 @@ class MainWindow(QMainWindow):
         self.store.save()
         self._log_err("Tạo nội dung", err)
         try:
-            self.jobs_page.refresh()
-            self.jobs_page.select_task(fresh.id)
+            self._refresh_jobs_keep(fresh)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self._log_err("Hiển thị lỗi", str(exc))
@@ -511,8 +522,7 @@ class MainWindow(QMainWindow):
         self.store.save()
         self._log_err("Đăng bài", err)
         try:
-            self.jobs_page.refresh()
-            self.jobs_page.select_task(fresh.id)
+            self._refresh_jobs_keep(fresh)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self._log_err("Hiển thị kết quả", str(exc))

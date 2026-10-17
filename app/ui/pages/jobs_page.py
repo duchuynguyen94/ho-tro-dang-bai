@@ -245,7 +245,10 @@ class TaskRow(QFrame):
         url.setWordWrap(True)
         v.addWidget(url)
 
-        meta = QLabel(f"{STATUS_LABELS.get(task.status, task.status)}  ·  {task.site_name}")
+        label = STATUS_LABELS.get(task.status, task.status)
+        if task.status == STATUS_ERROR and (task.message or "").strip():
+            label = f"lỗi: {str(task.message).splitlines()[0][:70]}"   # hiện nội dung lỗi để soi
+        meta = QLabel(f"{label}  ·  {task.site_name}")
         meta.setObjectName("taskMeta")
         v.addWidget(meta)
 

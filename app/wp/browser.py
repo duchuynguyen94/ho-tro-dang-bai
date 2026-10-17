@@ -182,9 +182,9 @@ class WPBrowser:
         if not lock.acquire(timeout=0.5):
             if self.log:
                 self.log("Đang chờ trình duyệt của việc khác đóng lại…")
-            if not lock.acquire(timeout=1800):
+            if not lock.acquire(timeout=180):
                 raise RuntimeError(
-                    "Trình duyệt của việc khác đang mở quá lâu. "
+                    "Trình duyệt của việc khác đang mở quá lâu (quá 3 phút). "
                     "Hãy đóng cửa sổ Chrome đó rồi thử lại."
                 )
         self._lock = lock
@@ -319,6 +319,7 @@ class WPBrowser:
         page.goto(url, wait_until="domcontentloaded")
 
     def close(self) -> None:
+        self._release_lock()          # NHẢ KHOÁ TRƯỚC (đóng Chrome có thể treo lâu)
         try:
             if self.context:
                 self.context.close()
@@ -331,5 +332,5 @@ class WPBrowser:
             pass
         self.context = None
         self.page = None
-        self._release_lock()          # mở khoá cho việc kế tiếp
+        self._release_lock()
         self._pw = None
