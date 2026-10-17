@@ -179,12 +179,18 @@ class PostPage(QWidget):
         for idx, site in enumerate(sites):
             row = SiteRow(site)
             self._group.addButton(row.radio, idx)
+            has_script = bool(site.script and site.script.steps)
+            row.radio.setEnabled(has_script)          # chưa có kịch bản -> không chọn được
+            if not has_script:
+                row.setToolTip("Website này chưa có kịch bản đăng bài")
             row.radio.toggled.connect(self._validate)
             self._radios[site.id] = row.radio
             self._rows[site.id] = row
             self.sites_box.addWidget(row)
 
-        first = next(iter(self._radios.values()), None)
+        # chọn site ĐẦU TIÊN có kịch bản (bỏ qua site chưa có)
+        first = next((r for s2, r in self._radios.items()
+                      if r.isEnabled()), None)
         if first:
             first.setChecked(True)
         self._validate()
