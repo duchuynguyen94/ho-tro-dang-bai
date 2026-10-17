@@ -902,13 +902,9 @@ class AIContentPanel(QWidget):
             key_edit.setPlaceholderText("API Key")
             key_edit.setText(crypto.decrypt(pcfg.get("api_key_enc", "")))
             body.addWidget(key_edit)
-            # nhãn "Model" ↔ ô nhập: 9px (các cặp khác trong card vẫn 10px)
-            mbox = QVBoxLayout()
-            mbox.setSpacing(9)
-            mbox.addWidget(QLabel("Model"))
             model_edit = QLineEdit(pcfg.get("model", ""))
-            mbox.addWidget(model_edit)
-            body.addLayout(mbox)
+            model_edit.setPlaceholderText("Model")     # bỏ nhãn chữ "Model"
+            body.addWidget(model_edit)
 
         self._rows[key] = {"key": key_edit, "model": model_edit,
                            "project": project_edit, "radio": radio}
