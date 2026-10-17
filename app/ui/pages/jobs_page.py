@@ -660,11 +660,12 @@ class JobsPage(QWidget):
     def set_posting_locked(self, locked: bool) -> None:
         """Có 1 việc đang đăng bài -> khoá nút "OK — Đăng bài" của mọi job."""
         self._posting_locked = bool(locked)
-        self.post_btn.setEnabled(not locked)
         if locked:
             self.post_btn.setToolTip("Đang có 1 việc đăng bài — chờ việc đó xong đã")
         else:
             self.post_btn.setToolTip("")
+        # CẬP NHẬT LẠI NÚT (chữ + bật/tắt) -> mở khoá xong là về đúng "OK — Đăng bài"
+        self._sync_post_btn()
 
     def set_ai_busy(self, busy: bool) -> None:
         """ChatGPT đang chạy 1 việc -> khoá + đổi chữ các nút gọi AI (tạo lại / random)."""
