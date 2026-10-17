@@ -674,6 +674,8 @@ class JobsPage(QWidget):
     # ------------------------------------------------------------------ #
     def _show_state(self) -> None:
         task = self.current
+        # mỗi lần hiển thị 1 job: xoá sạch message cũ (không để lẫn của job khác)
+        self.loading_note.setText("")
         if task is None:
             self.footer.hide()
             self.stack.setCurrentWidget(self.page_empty)
