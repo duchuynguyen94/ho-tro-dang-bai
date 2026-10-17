@@ -390,7 +390,7 @@ class SitePanel(QWidget):
         h.addWidget(thumb)
 
         right = QVBoxLayout()
-        right.setSpacing(4)
+        right.setSpacing(2)                    # tiêu đề ↔ mô tả
         lab = QLabel(title)
         lab.setStyleSheet("font-weight:600;")
         right.addWidget(lab)
