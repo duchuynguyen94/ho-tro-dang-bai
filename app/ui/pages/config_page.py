@@ -393,6 +393,7 @@ class SitePanel(QWidget):
         right.setSpacing(2)                    # tiêu đề ↔ mô tả
         lab = QLabel(title)
         lab.setStyleSheet("font-weight:600;")
+        lab.setFixedHeight(lab.fontMetrics().height() + 6)   # giảm ~1 nửa leading
         right.addWidget(lab)
         status = QLabel("")
         status.setProperty("class", "sub")
