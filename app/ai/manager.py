@@ -961,25 +961,53 @@ def autolink_html(html_text: str, site_url: str = "", site_name: str = "",
 # --------------------------------------------------------------------------- #
 # Luồng chính: 1 lần gọi (JSON SEO trước, nội dung sau)
 # --------------------------------------------------------------------------- #
-def build_seo_only_prompt(rules, content_html: str) -> str:
-    """Prompt CHỈ tạo JSON SEO từ NỘI DUNG đã có (nút "Tạo JSON SEO")."""
-    seo_rule = read_rule(rule_path(rules, "seo"))
+def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> str:
+    """Prompt CHỈ tạo JSON SEO từ NỘI DUNG đã có (nút "Tạo JSON SEO").
+
+    - with_rule=False: dùng cho ChatGPT (rule_seo.pdf đã đính kèm trong Project).
+    - with_rule=True : chèn thêm nội dung rule (cho provider API — không có Project).
+    """
     body = re.sub(r"<[^>]+>", " ", content_html or "")
     body = re.sub(r"\s+", " ", body).strip()[:6000]
-    return (
-        "Bạn là chuyên gia SEO. Dựa vào NỘI DUNG BÀI VIẾT dưới đây, hãy tạo JSON SEO "
-        "theo đúng RULE SEO và đúng ĐỊNH DẠNG JSON. CHỈ trả về khối JSON, không giải thích gì thêm.\n\n"
-        f"=== RULE SEO ===\n{seo_rule}\n\n"
-        f"=== ĐỊNH DẠNG JSON ===\n{SEO_JSON_SPEC}\n\n"
-        f"=== NỘI DUNG BÀI VIẾT ===\n{body}\n"
+
+    head = (
+        "Tạo 1 khối JSON thông tin SEO theo file rule_seo.pdf đã đính kèm (sources) trong "
+        "Project này bao gồm: title, focus_keyword, description, tags\n"
+        "   - TOÀN BỘ thông tin SEO phải DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT Ở BÊN DƯỚI "
+        "(đúng sản phẩm, thương hiệu, model, thông số trong bài; không bịa thêm).\n"
+        '   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 '
+        "USP trong danh sách: Chính hãng / Giá tốt / CO/CQ đầy đủ / Báo giá nhanh / Hàng sẵn / "
+        "Giao nhanh / Đại lý / Phân phối / Hỗ trợ kỹ thuật / Bảo hành chính hãng / Tổng kho\n"
+        '   - "focus_keyword": 01 từ khoá chính duy nhất = Model của sản phẩm '
+        "(vd: BI15U-EM30WDTC-AP6X)\n"
+        '   - "description": 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được '
+        "phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> "
+        '<Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc."; dòng liên hệ '
+        "🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com; "
+        '"Tên sản phẩm <Brand> models tiêu biểu"; rồi tối đa 5 model tiêu biểu, MỖI DÒNG 1 model '
+        'dạng "<Tên sản phẩm> <Hãng> <Model>"\n'
+        '   - "tags": trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy, gồm: '
+        "tên sản phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa "
+        "phương/tiếng Việt thông dụng; thông tin công ty\n"
     )
+
+    rule_block = ""
+    if with_rule:
+        seo_rule = read_rule(rule_path(rules, "seo"))
+        if seo_rule:
+            rule_block = f"\n=== RULE SEO (rule_seo.pdf) ===\n{seo_rule}\n"
+
+    return (f"{head}{rule_block}\nKhông giải thích gì thêm.\n"
+            f"\n=== NỘI DUNG BÀI VIẾT ===\n{body}\n")
 
 
 def generate_seo_json(store, content_html: str, log=None, should_stop=None) -> dict:
     """Tạo JSON SEO (title / description / focus_keyword / tags) từ NỘI DUNG đã có."""
     rules = store.formats
-    prompt = build_seo_only_prompt(rules, content_html)
-    raw = _call_ai(store, prompt, prompt, log)
+    # ChatGPT: rule nằm trong Project -> prompt gọn; provider API: chèn thêm rule
+    short = build_seo_only_prompt(rules, content_html, with_rule=False)
+    full = build_seo_only_prompt(rules, content_html, with_rule=True)
+    raw = _call_ai(store, full, short, log)
     from .chatgpt_browser import split_reply
 
     seo, _content = split_reply(raw)
