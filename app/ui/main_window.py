@@ -652,6 +652,7 @@ class MainWindow(QMainWindow):
 
     def _on_post_closed(self, task) -> None:
         self.jobs_page.set_posting_locked(False)     # đã đóng Chrome -> mở khoá lại
+        self.status("")                              # xoá message ở thanh dưới
 
     def _on_post_ok(self, task, url: str) -> None:
         # KHÔNG mở lại nút ở đây: chờ người dùng đóng trình duyệt (xem _on_post_closed)
@@ -681,9 +682,9 @@ class MainWindow(QMainWindow):
             traceback.print_exc()
             self._log_err("Hiển thị kết quả", str(exc))
         self._refresh_count()
-        # KHÔNG hiện cảnh báo "không đăng được bài": việc đăng do người dùng tự bấm
-        # trên WordPress. Lỗi vẫn được ghi vào tab Log lỗi để tra khi cần.
-        self.status("Nội dung vẫn được giữ nguyên — bạn tự kiểm tra/đăng lại trên WordPress.")
+        # KHÔNG hiện cảnh báo "không đăng được bài" (việc đăng do người dùng tự bấm trên
+        # WordPress). Lỗi vẫn được ghi vào tab Log lỗi để tra khi cần.
+        self.status("")          # xoá message ở thanh dưới
 
     def _log_err(self, source: str, message: str) -> None:
         self.store.log_error(source, message)
