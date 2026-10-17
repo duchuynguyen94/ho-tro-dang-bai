@@ -31,7 +31,7 @@ from PySide6.QtWidgets import (
 from ...config import formats_dir, media_dir
 from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
-from ..style import Card, polish_combos
+from ..style import Card, make_cfg_panel, polish_combos
 from ..toast import show_toast
 from ..widgets.update_panel import UpdatePanel
 from ..workers import LoginWorker, OpenLoginWorker
@@ -779,6 +779,12 @@ class AIContentPanel(QWidget):
         title.setProperty("class", "h2")
         head.addWidget(title)
         head.addStretch(1)
+        self.fallback = QCheckBox("Fallback tự động")
+        self.fallback.setToolTip(
+            "Provider lỗi / hết lượt → tự chuyển sang provider kế tiếp theo thứ tự bên dưới"
+        )
+        self.fallback.setChecked(bool(self.store.ai_content.get("fallback", True)))
+        head.addWidget(self.fallback)
         save = QPushButton("Lưu cấu hình AI nội dung")
         save.setProperty("class", "primary")
         save.clicked.connect(self._save)
@@ -818,13 +824,10 @@ class AIContentPanel(QWidget):
             self.list.add_card(key, card, num)
         v.addWidget(self.list)
 
-        self.fallback = QCheckBox("Fallback tự động (provider lỗi/hết lượt → chuyển provider kế tiếp theo thứ tự trên)")
-        self.fallback.setChecked(bool(cfg.get("fallback", True)))
-        v.addWidget(self.fallback)
-
         v.addStretch(1)
         scroll.setWidget(root)
         outer.addWidget(scroll, 1)
+        make_cfg_panel(self)
 
     def _make_card(self, key: str, pcfg: dict):
         card = Card(PROVIDER_LABELS.get(key, key))
@@ -1027,6 +1030,7 @@ class AIImagePanel(QWidget):
         v.addStretch(1)
         scroll.setWidget(root)
         outer.addWidget(scroll, 1)
+        make_cfg_panel(self)
 
     def _toggle_providers(self, off: bool) -> None:
         """Tắt AI chỉnh ảnh -> khoá danh sách provider."""
@@ -1109,6 +1113,7 @@ class SheetsPanel(QScrollArea):
         v.addWidget(save, alignment=Qt.AlignRight)
         v.addStretch(1)
         self.setWidget(root)
+        make_cfg_panel(self)
 
     def _pick_sa(self) -> None:
         path = _pick_file(self, "Chọn Service Account JSON", "JSON (*.json)")
@@ -1199,6 +1204,7 @@ class TitleLinksPanel(QWidget):
         v.addStretch(1)
         scroll.setWidget(root)
         outer.addWidget(scroll, 1)
+        make_cfg_panel(self)
         self._load()
 
     def _add_row(self, value: str = "") -> None:
@@ -1319,6 +1325,7 @@ class FormatPanel(QScrollArea):
 
         v.addStretch(1)
         self.setWidget(root)
+        make_cfg_panel(self)
         self._load()
 
     # ------------------------------------------------------------------ #

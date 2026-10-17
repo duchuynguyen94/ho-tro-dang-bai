@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
 
 from ... import __version__
 from ... import update as upd
-from ..style import Card, dim_when_disabled
+from ..style import Card, dim_when_disabled, make_cfg_panel
 from ..workers import UpdateWorker
 
 
@@ -118,6 +118,7 @@ class UpdatePanel(QWidget):
         v.addStretch(1)
         scroll.setWidget(root)
         outer.addWidget(scroll, 1)
+        make_cfg_panel(self)
 
         dim_when_disabled(self.apply_btn)
         dim_when_disabled(self.check_btn)

@@ -1,7 +1,7 @@
 """Giao diện: màu sắc, style chung."""
 from __future__ import annotations
 
-from PySide6.QtCore import QEvent, QObject
+from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QFont, QFontDatabase
 from PySide6.QtWidgets import (
     QFrame,
@@ -72,6 +72,13 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 #cardHeader {{ border-bottom: 1px solid {LINE}; }}
 #cardHeader QLabel {{ font-weight: 700; font-size: 13px; }}
 #cardBody {{ background: #ffffff; border-radius: 10px; }}
+/* Panel Cài đặt (AI nội dung, AI ảnh, Format Rule, Link tiêu đề, Cập nhật): nền #f1f5f9 */
+QWidget#cfgPanel, QScrollArea#cfgPanel {{ background: #f1f5f9; }}
+QScrollArea#cfgPanel > QWidget {{ background: transparent; }}
+/* vùng cuộn con bên trong: trong suốt (bỏ màu xám mặc định của Qt) */
+QScrollArea#cfgScroll, QScrollArea#cfgScroll > QWidget,
+QScrollArea#cfgScroll > QWidget > QWidget {{ background: transparent; }}
+
 /* vùng cuộn panel kết quả: nền trong suốt (bỏ màu xám mặc định của Qt) */
 QScrollArea#resultScroll, QScrollArea#resultScroll > QWidget,
 QScrollArea#resultScroll > QWidget > QWidget {{ background: transparent; }}
@@ -336,3 +343,16 @@ def dim_all_buttons(root, opacity: float = 0.45) -> None:
 
     for b in root.findChildren(QPushButton):
         dim_when_disabled(b, opacity)
+
+def make_cfg_panel(panel) -> None:
+    """Panel Cài đặt: nền #f1f5f9 + mọi vùng cuộn bên trong trong suốt (hết #eeeeee)."""
+    from PySide6.QtWidgets import QScrollArea
+
+    try:
+        panel.setAttribute(Qt.WA_StyledBackground, True)
+    except Exception:
+        pass
+    panel.setObjectName("cfgPanel")
+    scrolls = panel.findChildren(QScrollArea) if not isinstance(panel, QScrollArea) else []
+    for sa in scrolls:
+        sa.setObjectName("cfgScroll")
