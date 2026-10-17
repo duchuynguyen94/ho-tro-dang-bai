@@ -4,7 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QPoint, Qt, QTimer, Signal
-from PySide6.QtGui import QColor, QFont, QPainter, QPixmap
+from PySide6.QtGui import QColor, QFont, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -91,13 +91,22 @@ class DraggableImage(QLabel):
     def set_selected(self, on: bool) -> None:
         """Viền LIỀN MẠCH màu xanh = thành phần ĐANG CHỌN (để Ctrl+C / resize)."""
         self._selected = bool(on)
-        base = getattr(self, "_base_style", "")
-        if on:
-            self.setStyleSheet("border:2px solid #1d4ed8;")
-        else:
-            self.setStyleSheet(base)
         try:
             self._update_grips()
+        except Exception:
+            pass
+        self.update()
+
+    def paintEvent(self, event) -> None:  # noqa: N802
+        """Vẽ ảnh + VIỀN CHỌN đè LÊN TRÊN (styleSheet bị ảnh che mất)."""
+        super().paintEvent(event)
+        if not getattr(self, "_selected", False):
+            return
+        try:
+            p = QPainter(self)
+            p.setPen(QPen(QColor(29, 78, 216), 2))
+            p.setBrush(Qt.NoBrush)
+            p.drawRect(self.rect().adjusted(1, 1, -2, -2))
         except Exception:
             pass
 
@@ -256,7 +265,9 @@ class ImageEditorPanel(QFrame):
         left.addWidget(self.canvas)
 
         self.logo_item = DraggableImage(self.canvas, dashed=True, kind="logo")
+        self.logo_item.on_pick = self._set_sel_item
         self.brand_item = DraggableImage(self.canvas, kind="brand")
+        self.brand_item.on_pick = self._set_sel_item
         self.logo_item.moved.connect(self._on_moved)
         self.brand_item.moved.connect(self._on_moved)
         self.logo_item.resized.connect(lambda w: self._on_resized("logo", w))
@@ -381,6 +392,16 @@ class ImageEditorPanel(QFrame):
                 up = ups[idx]
                 return {"path": up.get("path", ""), "scale": float(up.get("scale", 1.0) or 1.0),
                         "nobg": bool(up.get("nobg"))}
+        elif kind == "brand":
+            path = str(self._preview.get("brand") or "")
+            if path:
+                return {"path": path, "scale": float(self._opts.get("brand_scale", 1.0) or 1.0),
+                        "nobg": bool(self._opts.get("brand_nobg"))}
+        elif kind == "logo":
+            path = str(self._preview.get("logo") or "")
+            if path:
+                return {"path": path, "scale": float(self._opts.get("logo_scale", 1.0) or 1.0),
+                        "nobg": False}
         elif kind == "product":
             prods = list(self._preview.get("products") or [])
             scales = list(self._opts.get("product_scales") or [])
@@ -524,7 +545,7 @@ class ImageEditorPanel(QFrame):
             pm_nb = self._display_pixmap(brand_path, True)
             if pm_nb is not None and not pm_nb.isNull():
                 brand_src = pm_nb
-        brand_pm, bw, bh = self._pixmap_for(brand_path, 0.34, 0.13,
+        brand_pm, bw, bh = self._pixmap_for(brand_path, 0.374, 0.143,
                                             float(self._opts.get("brand_scale", 1.0) or 1.0),
                                             brand_src)
         if self._opts.get("brand_hidden"):
@@ -759,6 +780,18 @@ class ImageEditorPanel(QFrame):
             self._opts["brand_nobg"] = True
             self._layout_items()
         self._schedule_save()
+
+    def remove_selected(self) -> bool:
+        """Xoá thành phần ĐANG CHỌN (nút Delete). Trả về True nếu có xoá."""
+        it = getattr(self, "_sel_item", None)
+        if it is None:
+            return False
+        try:
+            self._ctx_remove_component(it)
+        except Exception:
+            return False
+        self._set_sel_item(None)
+        return True
 
     def _ctx_remove_component(self, item) -> None:
         """Xoá thành phần khỏi ảnh đang sửa."""

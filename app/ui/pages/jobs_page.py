@@ -1140,7 +1140,6 @@ class JobsPage(QWidget):
         self.store.save()
         self._load(self.current)
         self.recompose_image.emit(self.current, index)
-        show_toast(self, "Đã dán thành phần vào ảnh này", 2000)
 
     def _flush_editor(self) -> None:
         """Ghép NGAY phần vừa sửa của ẢNH ĐANG MỞ (đúng ảnh đó, không lây sang ảnh khác)."""
@@ -1297,6 +1296,13 @@ class JobsPage(QWidget):
         Ở ô nhập liệu (Tiêu đề / Nội dung…) thì để widget tự dán text như bình thường.
         """
         try:
+            if event.type() == QEvent.KeyPress and event.key() == Qt.Key_Delete:
+                fw = QApplication.focusWidget()
+                if self._is_text_widget(fw):
+                    return False
+                if self.isVisible() and self.current:
+                    if self.img_editor.remove_selected():
+                        return True
             if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Copy):
                 fw = QApplication.focusWidget()
                 if self._is_text_widget(fw):
@@ -1305,7 +1311,6 @@ class JobsPage(QWidget):
                     comp = self.img_editor.copy_selected()
                     if comp and comp.get("path"):
                         self._copied_component = dict(comp)
-                        show_toast(self, "Đã copy thành phần — sang ảnh khác bấm Ctrl+V", 2400)
                         return True
             if event.type() == QEvent.KeyPress and event.matches(QKeySequence.Paste):
                 fw = QApplication.focusWidget()
