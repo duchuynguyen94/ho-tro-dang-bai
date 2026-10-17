@@ -1012,16 +1012,16 @@ class AIImagePanel(QWidget):
         c1.body.addLayout(form)
         v.addWidget(c1)
 
-        # ---- Tắt AI chỉnh ảnh: công tắc CHUNG, đặt TRÊN danh sách provider ----
-        c2 = Card("")
-        self.ai_off = QCheckBox("Tắt AI chỉnh ảnh — chỉ dùng Pillow để cắt ghép (không gọi AI)")
-        self.ai_off.setChecked(cfg.get("active") == "off")
-        self.ai_off.toggled.connect(self._toggle_providers)
-        c2.body.addWidget(self.ai_off)
-        v.addWidget(c2)
-
-        # ---- AI chỉnh sửa ảnh (các provider) ----
+        # ---- AI chỉnh sửa ảnh (các provider) + công tắc BẬT ở header ----
         c3 = Card("AI chỉnh sửa ảnh")
+        self.ai_on = QCheckBox("Bật")
+        self.ai_on.setToolTip(
+            "Tick = BẬT AI chỉnh ảnh. Bỏ tick = chỉ dùng Pillow để cắt ghép (không gọi AI)."
+        )
+        self.ai_on.setChecked(cfg.get("active") != "off")     # tick = ĐANG BẬT
+        self._last_active = (cfg.get("active") if cfg.get("active") != "off" else "") or ""
+        self.ai_on.toggled.connect(self._toggle_providers)
+        c3.add_header_widget(self.ai_on)
         grid = QGridLayout()
         self._img_rows: dict[str, dict] = {}
         self._img_group = QButtonGroup(self)
@@ -1050,17 +1050,17 @@ class AIImagePanel(QWidget):
             idx += 1
         c3.body.addLayout(grid)
         v.addWidget(c3)
-        self._toggle_providers(self.ai_off.isChecked())
+        self._toggle_providers(self.ai_on.isChecked())
 
         v.addStretch(1)
         scroll.setWidget(root)
         outer.addWidget(scroll, 1)
         make_cfg_panel(self)
 
-    def _toggle_providers(self, off: bool) -> None:
-        """Tắt AI chỉnh ảnh -> khoá danh sách provider."""
+    def _toggle_providers(self, on: bool) -> None:
+        """Tick = BẬT AI chỉnh ảnh -> mở khoá danh sách provider; bỏ tick -> khoá."""
         for card in self._providers:
-            card.setEnabled(not off)
+            card.setEnabled(bool(on))
 
     def _save(self) -> None:
         try:
@@ -1073,14 +1073,16 @@ class AIImagePanel(QWidget):
                 p["api_key_enc"] = crypto.encrypt(row["key"].text().strip())
                 if row["model"].text().strip():
                     p["model"] = row["model"].text().strip()
-            if self.ai_off.isChecked():
-                cfg["active"] = "off"
+            if not self.ai_on.isChecked():
+                cfg["active"] = "off"                 # bỏ tick = TẮT AI chỉnh ảnh
             else:
                 chosen = next((k for k, r in self._img_rows.items() if r["radio"].isChecked()), "")
                 if chosen:
                     cfg["active"] = chosen
-                elif cfg.get("active") == "off":
-                    cfg["active"] = next(iter(self._img_rows), "gemini")
+                    self._last_active = chosen
+                else:
+                    cfg["active"] = (self._last_active
+                                     or next(iter(self._img_rows), "gemini"))
             self.store.save()
         except Exception as exc:      # noqa: BLE001
             show_toast(self, f"Lưu AI ảnh THẤT BẠI: {exc}", 3400, ok=False)
