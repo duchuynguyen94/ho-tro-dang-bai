@@ -316,6 +316,7 @@ class JobsPage(QWidget):
     stop_all = Signal()                        # dừng TẤT CẢ việc đang chờ / đang tạo
     apply_image_opts = Signal(object, int, dict)  # (task, chỉ số ảnh, tuỳ chọn)
     cancel_task = Signal(object)             # (task) dừng đang tạo
+    status_msg = Signal(str)                 # báo trạng thái ra thanh dưới cùng của app
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -1196,14 +1197,26 @@ class JobsPage(QWidget):
         return super().eventFilter(obj, event)
 
     def _pick_source_image(self) -> None:
-        """Popup: chọn 1 ảnh từ link nguồn để chèn vào canvas (hình đang sửa)."""
+        """Popup "Hình tự tìm".
+
+        - Job thường: lấy ảnh từ LINK NGUỒN -> nếu ít hơn 20 thì tìm thêm trên internet cho đủ 20.
+        - Job trống (hoặc muốn list khác): gõ keyword trong popup rồi bấm "Tìm ảnh" (20 ảnh).
+        - Bấm lại lần sau: GIỮ danh sách cũ của job đó (đổi job -> tự làm lại từ đầu).
+        """
         if not self.current:
             return
-        r0 = self.current.result or {}
+        task = self.current
+        r0 = task.result or {}
         urls = [u for u in (r0.get("source_images") or []) if u]
-        if not urls:
-            # chưa có -> đọc lại link nguồn
-            src_url = (self.current.source_url or "").strip()
+        keyword = str(r0.get("image_keyword") or "")
+        kind = str(getattr(task, "kind", "") or "")
+        if not keyword and kind != "blank":
+            # job thường: điền sẵn mã sản phẩm (muốn đổi thì gõ keyword khác trong popup)
+            keyword = (r0.get("focus_keyword") or "").strip() or (r0.get("title") or "").strip()
+
+        # 1) Job thường: lấy ảnh từ link nguồn (nếu chưa có)
+        if kind != "blank" and not urls:
+            src_url = (task.source_url or "").strip()
             if src_url:
                 from PySide6.QtCore import Qt as _Qt
 
@@ -1217,43 +1230,51 @@ class JobsPage(QWidget):
                     urls = []
                 finally:
                     QApplication.restoreOverrideCursor()
-                if urls:
-                    r = self.current.result = dict(r0)
-                    r["source_images"] = urls
-                    self.store.upsert_task(self.current)
-                    self.store.save()
-        if not urls:
-            # vẫn không có -> TÌM TRÊN INTERNET theo mã sản phẩm (tối đa 10 ảnh)
-            query = (r0.get("focus_keyword") or "").strip() or (r0.get("title") or "").strip()
-            if not query:
-                show_toast(self, "Không có mã sản phẩm để tìm ảnh", 3200, ok=False)
-                return
-            from PySide6.QtCore import Qt as _Qt
 
-            from ...source import search_images
+        # 2) Chưa đủ 20 ảnh -> tìm thêm trên internet (theo mã sản phẩm / keyword)
+        if kind != "blank" and 0 < len(urls) < 20:
+            q = (keyword or (r0.get("focus_keyword") or "").strip()
+                 or (r0.get("title") or "").strip())
+            if q:
+                from ...source import search_images
 
-            self.status("Đang tìm ảnh trên internet…")
-            show_toast(self, f"Đang tìm ảnh trên internet theo mã: {query}", 3000)
-            QApplication.setOverrideCursor(_Qt.WaitCursor)
-            try:
-                urls = search_images(query, limit=10, log=self.status)
-            except Exception:
-                urls = []
-            finally:
-                QApplication.restoreOverrideCursor()
-            if not urls:
-                show_toast(self, "Không tìm được ảnh nào từ internet", 3200, ok=False)
-                return
-            r = self.current.result = dict(r0)
-            r["source_images"] = urls
-            self.store.upsert_task(self.current)
-            self.store.save()
+                self.status_msg.emit(f"Đang tìm thêm ảnh trên internet cho đủ 20 (theo: {q})…")
+                try:
+                    more = search_images(q, limit=20 - len(urls) + 4, log=self.status_msg.emit)
+                except Exception:
+                    more = []
+                for u in more:
+                    if u not in urls:
+                        urls.append(u)
+                    if len(urls) >= 20:
+                        break
 
+        if kind != "blank" and urls:
+            self._save_source_images(urls, keyword)
+
+        # 3) Mở popup (giữ danh sách cũ, có ô keyword để làm list khác)
         from ..widgets.source_images import SourceImageDialog
 
-        dlg = SourceImageDialog(urls, self)
-        if dlg.exec() == QDialog.Accepted and dlg.chosen:
+        dlg = SourceImageDialog(urls, self, keyword=keyword)
+        accepted = dlg.exec() == QDialog.Accepted
+        # nhớ lại keyword + danh sách mới của RIÊNG job này
+        try:
+            self._save_source_images(dlg.urls or urls, dlg.keyword or keyword)
+        except Exception:
+            pass
+        if accepted and dlg.chosen:
             self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0))
+
+    def _save_source_images(self, urls: list[str], keyword: str = "") -> None:
+        """Lưu danh sách ảnh tự tìm + keyword theo TỪNG job (đổi job là làm lại từ đầu)."""
+        if not self.current:
+            return
+        r = self.current.result = dict(self.current.result or {})
+        r["source_images"] = [u for u in (urls or []) if u]
+        if keyword:
+            r["image_keyword"] = str(keyword)
+        self.store.upsert_task(self.current)
+        self.store.save()
 
     def _add_upload_components(self, paths: list[str], index: int) -> None:
         """Thêm NHIỀU ảnh cùng lúc vào canvas (mỗi ảnh 1 thành phần)."""

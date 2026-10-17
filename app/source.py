@@ -200,11 +200,7 @@ def search_images(query: str, limit: int = 10, log=None) -> list[str]:
                 page.goto(f"https://www.bing.com/images/search?q={quote(q)}",
                           wait_until="domcontentloaded", timeout=30000)
                 page.wait_for_timeout(2500)
-                for _ in range(2):
-                    page.mouse.wheel(0, 1600)
-                    page.wait_for_timeout(1200)
-                urls = page.evaluate(
-                    """() => {
+                js = """() => {
                         const out = [];
                         document.querySelectorAll('a.iusc').forEach(a => {
                             try {
@@ -220,7 +216,16 @@ def search_images(query: str, limit: int = 10, log=None) -> list[str]:
                         }
                         return out;
                     }"""
-                ) or []
+                # CUỘN THÊM cho tới khi gom ĐỦ số ảnh cần (mỗi lần cuộn Bing nạp thêm ~35 ảnh)
+                target = max(int(limit), 1)
+                for _ in range(14):
+                    urls = page.evaluate(js) or []
+                    if len(urls) >= target * 2:      # dư ra để lọc trùng / loại logo-icon
+                        break
+                    page.mouse.wheel(0, 1800)
+                    page.wait_for_timeout(900)
+                if not urls:
+                    urls = page.evaluate(js) or []
             finally:
                 try:
                     br.close()

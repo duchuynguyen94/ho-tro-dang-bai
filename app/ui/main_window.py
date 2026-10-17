@@ -139,6 +139,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.stop_all.connect(self._on_stop_all)
         self.jobs_page.apply_image_opts.connect(self._on_apply_image_opts)
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
+        self.jobs_page.status_msg.connect(self.status)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()

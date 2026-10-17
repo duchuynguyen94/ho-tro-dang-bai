@@ -799,6 +799,31 @@ class SourceImageDownloadWorker(TrackedThread):
         self.progress.emit("")
 
 
+class SourceImageSearchWorker(TrackedThread):
+    """Tìm ảnh trên internet theo keyword (dùng trong popup "Hình tự tìm")."""
+
+    log = Signal(str)
+    ok = Signal(list)          # danh sách URL ảnh
+    failed = Signal(str)
+
+    def __init__(self, query: str, limit: int = 20) -> None:
+        super().__init__()
+        self.query = str(query or "")
+        self.limit = max(1, int(limit or 20))
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        from ..source import search_images
+
+        try:
+            urls = search_images(self.query, limit=self.limit, log=self.log.emit)
+            self.ok.emit(list(urls or []))
+        except Exception as exc:      # noqa: BLE001
+            self.failed.emit(str(exc))
+
+
 class UpdateWorker(TrackedThread):
     """Kiểm tra / tải & áp dụng bản cập nhật phần mềm."""
 
