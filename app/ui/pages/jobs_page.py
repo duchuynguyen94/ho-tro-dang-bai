@@ -445,6 +445,7 @@ class JobsPage(QWidget):
         self._canvas_workers: list = []
         self._preview_token = 0                      # chỉ áp kết quả dựng nền MỚI NHẤT
         self._build()
+        self._init_autosave()
         self.refresh()
 
     # ------------------------------------------------------------------ #
@@ -557,6 +558,7 @@ class JobsPage(QWidget):
         ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit))
         self.content_edit = RichEditor()
         self.content_edit.changed.connect(self._sync_seo_btn)
+        self.content_edit.changed.connect(self._queue_save)
         ev2.addLayout(self._field("Nội dung", self.content_edit,
                                   extra=("Auto format", self._auto_format)))
 
@@ -762,7 +764,8 @@ class JobsPage(QWidget):
         if not task:
             return
         if getattr(self.current, "id", "") and self.current.id != task_id:
-            self._flush_editor()          # đổi JOB -> chốt ảnh đang mở của job CŨ trước
+            self._save()                  # đổi JOB -> LƯU thông tin đang gõ của job CŨ (không mất)
+            self._flush_editor()          # + chốt ảnh đang mở của job CŨ
         self.current = task
         for tid, row in self._rows.items():
             row.set_selected(tid == task_id)
@@ -952,6 +955,7 @@ class JobsPage(QWidget):
             self.footer.show()
 
     def _load_inner(self, task) -> None:
+        self._loading = True              # đang nạp job -> chặn tự lưu
         self._loaded_task_id = getattr(task, "id", "")
         r = task.result or {}
         self.title_edit.setText(r.get("title", ""))
@@ -959,6 +963,7 @@ class JobsPage(QWidget):
         self.desc_edit.setPlainText(r.get("description", ""))
         self.tags_edit.setText(r.get("tags", ""))
         self.content_edit.set_html(r.get("content_html", ""))
+        self._loading = False             # nạp xong -> cho phép tự lưu lại
 
         while self.images_row.count():
             it = self.images_row.takeAt(0)
@@ -1835,6 +1840,36 @@ class JobsPage(QWidget):
         if self.current and self.current.id == task_id:
             self.current = None
         self.delete_task.emit(task_id)
+
+    def _init_autosave(self) -> None:
+        """TỰ LƯU sau khi ngừng gõ ~1 giây (khỏi mất thông tin khi đổi job / tắt app)."""
+        self._loading = False
+        self._save_timer = QTimer(self)
+        self._save_timer.setSingleShot(True)
+        self._save_timer.setInterval(1000)
+        self._save_timer.timeout.connect(self._autosave)
+        for w in (self.title_edit, self.kw_edit, self.desc_edit, self.tags_edit):
+            try:
+                w.textChanged.connect(self._queue_save)
+            except Exception:      # noqa: BLE001
+                pass
+
+    def _queue_save(self, *args) -> None:
+        """Có thay đổi ở ô thông tin -> hẹn tự lưu sau 1 giây."""
+        if getattr(self, "_loading", False):
+            return                      # đang nạp job -> không lưu lại
+        try:
+            self._save_timer.start()
+        except Exception:      # noqa: BLE001
+            pass
+
+    def _autosave(self) -> None:
+        if getattr(self, "_loading", False):
+            return
+        try:
+            self._save()
+        except Exception:      # noqa: BLE001
+            pass
 
     def _save(self) -> None:
         if not self.current:

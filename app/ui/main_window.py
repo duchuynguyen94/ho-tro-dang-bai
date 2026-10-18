@@ -1369,6 +1369,10 @@ class MainWindow(QMainWindow):
             pass
 
     def closeEvent(self, event) -> None:  # noqa: N802
+        try:
+            self.jobs_page._save()      # lưu nốt thông tin đang gõ trước khi tắt app
+        except Exception:      # noqa: BLE001
+            pass
         self.shutdown_workers()
         try:
             self.store.save()
