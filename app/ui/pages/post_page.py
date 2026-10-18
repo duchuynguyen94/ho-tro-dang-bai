@@ -283,11 +283,13 @@ class PostPage(QWidget):
         only_one = (n_links == 1)
         # ẨN hẳn khi không phải 1 link
         self.split_check.setVisible(only_one)
-        self.split_count.setVisible(only_one)
         self.split_check.setEnabled(only_one)
         if not only_one and self.split_check.isChecked():
             self.split_check.setChecked(False)
-        self.split_count.setEnabled(only_one and self.split_check.isChecked())
+        # Ô SỐ LƯỢNG: chỉ HIỆN khi đã tick "chia nhiều bài" (gọn giao diện)
+        show_count = bool(only_one and self.split_check.isChecked())
+        self.split_count.setVisible(show_count)
+        self.split_count.setEnabled(show_count)
         self.split_check.setToolTip(
             "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
             "Mỗi bài tạo 1 JOB TRỐNG, website chia tuần tự."
@@ -296,7 +298,9 @@ class PostPage(QWidget):
         )
 
     def _on_split_toggled(self, on: bool) -> None:
-        self.split_count.setEnabled(bool(on) and self.split_check.isEnabled())
+        show = bool(on) and self.split_check.isEnabled()
+        self.split_count.setVisible(show)
+        self.split_count.setEnabled(show)
         # tick "chia nhiều bài" -> ẨN mục chọn website (website chia tuần tự)
         try:
             self.site_label.setVisible(not on)
