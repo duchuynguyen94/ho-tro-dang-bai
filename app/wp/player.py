@@ -272,18 +272,39 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 value = render(step.value, ctx)
                 _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
             elif action in ("tagify", "tag_input"):
-                # Ô nhập kiểu Tagify (Rank Math focus keyword): gõ rồi Enter để chốt
+                # Ô nhập kiểu Tagify (Rank Math focus keyword): gõ rồi Enter để chốt.
+                # TUYỆT ĐỐI không gõ "mù" vào ô đang focus (sẽ chèn nhầm vào ô Mô tả…).
                 value = render(step.value, ctx)
                 loc = _locate(page, step)
                 try:
-                    loc.click(force=True, timeout=8000)
+                    loc.scroll_into_view_if_needed(timeout=5000)
                 except Exception:
                     pass
+                ok_click = False
                 try:
-                    loc.fill(value, timeout=8000)
+                    loc.click(force=True, timeout=8000)
+                    ok_click = True
                 except Exception:
-                    page.keyboard.insert_text(value)
-                page.keyboard.press("Enter")
+                    pass
+                ok_fill = False
+                if ok_click:
+                    try:
+                        loc.fill(value, timeout=8000)
+                        ok_fill = True
+                    except Exception:
+                        try:      # gõ vào CHÍNH ô này (không phải ô đang focus)
+                            loc.press_sequentially(value, timeout=8000)
+                            ok_fill = True
+                        except Exception:
+                            ok_fill = False
+                if not ok_fill:
+                    if log:
+                        log("⚠ Ô nhập từ khoá (tagify) không điền được — BỎ QUA bước này.")
+                else:
+                    try:
+                        page.keyboard.press("Enter")
+                    except Exception:
+                        pass
                 time.sleep(0.5)
             elif action in ("panel", "open_panel"):
                 # Mở bảng (metabox) nếu phần tử bên trong đang bị ẩn
