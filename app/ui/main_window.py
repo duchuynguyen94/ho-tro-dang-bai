@@ -482,6 +482,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.current = fresh
         # CHỈ cập nhật thumbnail + ảnh nền của trình sửa (KHÔNG nạp lại panel -> không đóng menu chuột phải)
         self.jobs_page.reload_thumbs()
+        self.jobs_page.refresh_info()        # ảnh xong -> cập nhật "Thông tin đã đầy đủ"
         try:
             idx = self.jobs_page._sel_index
             imgs = fresh.result.get("images") or []
@@ -646,6 +647,7 @@ class MainWindow(QMainWindow):
                 self.jobs_page._load(fresh)
         except Exception:      # noqa: BLE001
             pass
+        self.jobs_page.refresh_info()
         self._refresh_count()
 
     def _on_split_seo_finished(self, ok: int, total: int) -> None:
@@ -732,6 +734,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.set_seo_busy(False)
         self.jobs_page.current = fresh
         self.jobs_page._load(fresh)         # điền vào các ô
+        self.jobs_page.refresh_info()       # có JSON SEO -> cập nhật "Thông tin đã đầy đủ"
         self._refresh_count()
         self.status("Đã tạo JSON SEO — đã điền Title / Description / Focus keyword / Tags.")
 
@@ -1010,7 +1013,7 @@ class MainWindow(QMainWindow):
         # KHÔNG mở lại nút ở đây: chờ người dùng đóng trình duyệt (xem _on_post_closed)
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         fresh.result["result_url"] = url
-        fresh.status = STATUS_FINISH
+        # ĐĂNG THÀNH CÔNG: KHÔNG đổi trạng thái (giữ nguyên trạng thái cũ của job)
         self.store.upsert_task(fresh)
         self.store.save()
         self.jobs_page.refresh()
@@ -1021,8 +1024,7 @@ class MainWindow(QMainWindow):
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         r = fresh.result or {}
         has_content = bool(r.get("content_html") or r.get("title"))
-        # Nội dung đã có -> GIỮ NGUYÊN "Chờ đăng", KHÔNG chuyển sang trang tạo lại
-        fresh.status = STATUS_FINISH if has_content else STATUS_ERROR
+        # ĐĂNG LỖI: KHÔNG đổi trạng thái (chỉ ghi Log lỗi + giữ panel kết quả nếu đã có nội dung)
         fresh.message = err
         fresh.error_stage = "post" if has_content else "content"
         self.store.upsert_task(fresh)

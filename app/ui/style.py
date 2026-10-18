@@ -221,6 +221,8 @@ QLabel#taskTitle {{ font-weight: 600; font-size: 12.5px; }}
 QLabel#taskTitleBlank {{ font-weight: 600; font-size: 12.5px; color: #7c3aed; }}
 QLabel#taskMeta {{ color: {MUTED}; font-size: 11px; }}
 QLabel#taskDone {{ color: {GREEN}; font-size: 11px; font-weight: 700; }}
+QLabel#taskInfoOk {{ color: {GREEN}; font-size: 11px; font-weight: 700; }}
+QLabel#taskInfoMissing {{ color: {AMBER}; font-size: 11px; font-weight: 700; }}
 QLabel#taskUrl {{ color: #94a3b8; font-size: 10.5px; }}
 QPushButton#taskDel {{ background: transparent; border: none; color: #94a3b8; font-weight: 700; }}
 QPushButton#taskDel:hover {{ color: {RED}; background: #fef2f2; border-radius: 5px; }}

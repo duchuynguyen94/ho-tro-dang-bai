@@ -221,6 +221,26 @@ class ImagesBox(QWidget):
         event.acceptProposedAction()
 
 
+def info_state(task) -> tuple[bool, list[str]]:
+    """Job đã ĐẦY ĐỦ thông tin input chưa? -> (đủ?, [tên các ô còn thiếu])."""
+    r = task.result or {}
+    missing: list[str] = []
+    if not str(r.get("title") or "").strip():
+        missing.append("Tiêu đề")
+    if not str(r.get("focus_keyword") or "").strip():
+        missing.append("Focus keyword")
+    if not str(r.get("description") or "").strip():
+        missing.append("Description")
+    if not str(r.get("tags") or "").strip():
+        missing.append("Search tags")
+    if not str(r.get("content_html") or "").strip():
+        missing.append("Nội dung")
+    imgs = r.get("images") or []
+    if not any(str((im or {}).get("path") or "").strip() for im in imgs):
+        missing.append("Ảnh")
+    return (not missing), missing
+
+
 class TaskRow(QFrame):
     """1 dòng trong danh sách công việc (có nút xoá)."""
 
@@ -267,27 +287,17 @@ class TaskRow(QFrame):
         url.setWordWrap(True)
         v.addWidget(url)
 
-        if split_no > 0:                     # job CHIA BÀI: hiện trạng thái
-            label = STATUS_LABELS.get(task.status, task.status)
-            meta = QLabel(label)
-            meta.setObjectName("taskMeta")
-            v.addWidget(meta)
-        elif not is_blank:                   # job trống: ẩn phần trạng thái
-            label = STATUS_LABELS.get(task.status, task.status)     # lỗi -> chỉ báo "lỗi"
-            if task.status == STATUS_FINISH:
-                # "đã xong" -> XANH + ĐẬM (tiêu đề vẫn màu đen)
-                st = QLabel(label)
-                st.setObjectName("taskDone")
-                mrow = QHBoxLayout()
-                mrow.setContentsMargins(0, 0, 0, 0)
-                mrow.setSpacing(4)
-                mrow.addWidget(st)
-                mrow.addStretch(1)
-                v.addLayout(mrow)
-            else:
-                meta = QLabel(label)
-                meta.setObjectName("taskMeta")
-                v.addWidget(meta)
+        # DÒNG TRẠNG THÁI (1 nhãn duy nhất — cập nhật lại được khi thông tin thay đổi):
+        # - Job đã tạo xong -> nói về THÔNG TIN: "Thông tin đã đầy đủ" (xanh) / "Thiếu thông tin" (vàng)
+        # - Job đang chờ / đang tạo / lỗi / chưa tạo -> hiện trạng thái như cũ
+        self._task = task
+        self._split_no = split_no
+        self._is_blank = is_blank
+        self.status_lbl = QLabel()
+        self.status_lbl.setObjectName("taskMeta")
+        self.status_lbl.setWordWrap(True)
+        v.addWidget(self.status_lbl)
+        self.refresh_info()
 
         if task.status == STATUS_GENERATING:
             bar = QProgressBar()
@@ -341,6 +351,36 @@ class TaskRow(QFrame):
             st.unpolish(self)
             st.polish(self)
             self.update()
+        except Exception:      # noqa: BLE001
+            pass
+
+    def refresh_info(self) -> None:
+        """Cập nhật dòng trạng thái: đủ thông tin (xanh) / thiếu thông tin (vàng) / trạng thái cũ."""
+        task = getattr(self, "_task", None)
+        lbl = getattr(self, "status_lbl", None)
+        if task is None or lbl is None:
+            return
+        try:
+            if task.status == STATUS_FINISH:
+                ok_info, missing = info_state(task)
+                lbl.setText("Thông tin đã đầy đủ" if ok_info else "Thiếu thông tin")
+                lbl.setObjectName("taskInfoOk" if ok_info else "taskInfoMissing")
+                lbl.setToolTip(("Còn thiếu: " + ", ".join(missing)) if missing else "")
+                lbl.setVisible(True)
+            else:
+                split_no = int(getattr(self, "_split_no", 0) or 0)
+                is_blank = bool(getattr(self, "_is_blank", False))
+                if split_no > 0 or not is_blank:
+                    lbl.setText(STATUS_LABELS.get(task.status, task.status))
+                    lbl.setObjectName("taskMeta")
+                    lbl.setToolTip("")
+                    lbl.setVisible(True)
+                else:
+                    lbl.setVisible(False)
+            st = lbl.style()                 # đổi objectName -> phải polish lại mới ăn màu
+            st.unpolish(lbl)
+            st.polish(lbl)
+            lbl.update()
         except Exception:      # noqa: BLE001
             pass
 
@@ -1145,6 +1185,18 @@ class JobsPage(QWidget):
         self.ai_edit.emit(self.current, index, prompt.strip())
 
     # ------------------------------------------------------------------ #
+    def refresh_info(self) -> None:
+        """Cập nhật dòng "Thông tin đã đầy đủ / Thiếu thông tin" của mọi job (nhẹ, không dựng lại list)."""
+        for tid, row in list(getattr(self, "_rows", {}).items()):
+            t = next((x for x in self.store.tasks if x.id == tid), None)
+            if t is None:
+                continue
+            try:
+                row._task = t
+                row.refresh_info()
+            except Exception:      # noqa: BLE001
+                continue
+
     def reload_thumbs(self) -> None:
         """Chỉ dựng lại DANH SÁCH ẢNH (thumbnail) — không nạp lại cả panel/trình sửa."""
         try:
