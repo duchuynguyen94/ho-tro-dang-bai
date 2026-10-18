@@ -495,9 +495,6 @@ class MainWindow(QMainWindow):
         if not new_site:
             return
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        if (getattr(fresh, "kind", "") or "") == "blank":
-            show_toast(self, "Job trống không đổi được website", 2600, ok=False)
-            return
         if fresh.site_id == site_id:
             return
         if not (getattr(new_site, "script", None) and getattr(new_site.script, "steps", None)):

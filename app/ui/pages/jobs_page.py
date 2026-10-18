@@ -334,21 +334,16 @@ class TaskRow(QFrame):
     def contextMenuEvent(self, event) -> None:  # noqa: N802
         menu = QMenu(self)
         sub = menu.addMenu("Đổi website")
-        if self.kind == "blank":
-            # job trống: hiện 1 dòng MỜ để biết lý do không đổi được
-            act_no = sub.addAction("Không đổi được (job trống)")
-            act_no.setEnabled(False)
-        else:
-            for sid, name, has_script in self._sites:
-                act = sub.addAction(("✔ " if sid == self.site_id else "") + name)
-                act.setEnabled(bool(has_script))
-                if not has_script:
-                    act.setToolTip("Website này chưa có kịch bản đăng bài")
-                if sid == self.site_id:
-                    act.setEnabled(False)      # đang dùng rồi
-                act.setData(sid)
-            if not self._sites:
-                sub.setEnabled(False)
+        for sid, name, has_script in self._sites:
+            act = sub.addAction(("✔ " if sid == self.site_id else "") + name)
+            act.setEnabled(bool(has_script))
+            if not has_script:
+                act.setToolTip("Website này chưa có kịch bản đăng bài")
+            if sid == self.site_id:
+                act.setEnabled(False)          # đang dùng rồi
+            act.setData(sid)
+        if not self._sites:
+            sub.setEnabled(False)
         menu.addSeparator()
         act_copy = menu.addAction("Sao chép link nguồn")
         act_copy.setEnabled(bool(self.source_url))
