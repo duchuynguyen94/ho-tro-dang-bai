@@ -802,22 +802,30 @@ class MainWindow(QMainWindow):
         if other:
             show_toast(self, "Đang có 1 việc đăng bài — chờ việc đó xong đã", 3200, ok=False)
             return
-        # CHỌN WEBSITE ĐỂ ĐĂNG (job KHÔNG nhớ website -> hỏi mỗi lần; chỉ web có kịch bản)
+        # CHỌN WEBSITE ĐỂ ĐĂNG (popup chọn sẵn website đã lưu của job; chỉ web có kịch bản)
         self.jobs_page._save()                          # chốt nội dung đang gõ trước khi hỏi
-        site = self._choose_post_site()
+        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        prev_site_id = str(getattr(fresh, "site_id", "") or "")
+        site = self._choose_post_site(fresh)
         if site is None:
             return                                     # người dùng huỷ -> không đăng
         self.jobs_page.set_posting(task.id, True)      # khoá + mờ nút Đăng bài
         self._post_sites[task.id] = site
-
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        # LƯU website vào job (lần sau popup chọn sẵn website này)
+        fresh.site_id = site.id
+        fresh.site_name = site.name or site.url
+        self.store.upsert_task(fresh)
+        self.store.save()
         # 1) AUTO FORMAT LẠI 1 LẦN + link tiêu đề ĐẦU = website vừa chọn
         self._format_content_for_site(fresh, site)
-        # 2) GHÉP LẠI ẢNH theo website vừa chọn -> CHỜ ghép xong mới mở Chrome để đăng
-        if not self._compose_images_for_site(fresh, site):
-            self.jobs_page.set_posting(task.id, False)
-            self._post_sites.pop(task.id, None)
-            return
+        # 2) ẢNH: chỉ GHÉP LẠI khi ĐỔI website (hoặc chưa có ảnh) -> chờ xong mới mở Chrome
+        cur_imgs = (fresh.result or {}).get("images") or []
+        have_img = bool(cur_imgs and any(str(im.get("path") or "") for im in cur_imgs))
+        if (site.id != prev_site_id) or not have_img:
+            if not self._compose_images_for_site(fresh, site):
+                self.jobs_page.set_posting(task.id, False)
+                self._post_sites.pop(task.id, None)
+                return
         fresh = next((t for t in self.store.tasks if t.id == task.id), fresh)
         try:
             paths = export_post_images(self.store, fresh)
@@ -1155,8 +1163,11 @@ class MainWindow(QMainWindow):
                 or self._post_sites.get(getattr(task, "id", ""))
                 or Site())
 
-    def _choose_post_site(self):
-        """Popup chọn website để ĐĂNG (chỉ website CÓ KỊCH BẢN). None nếu người dùng huỷ."""
+    def _choose_post_site(self, task=None):
+        """Popup chọn website để ĐĂNG (chỉ website CÓ KỊCH BẢN). None nếu người dùng huỷ.
+
+        Job đã lưu website -> CHỌN SẴN website đó (bấm OK là đăng luôn).
+        """
         sites = [x for x in self.store.sites
                  if getattr(x, "script", None) and getattr(x.script, "steps", None)]
         if not sites:
@@ -1168,12 +1179,14 @@ class MainWindow(QMainWindow):
             )
             return None
         names = [x.name or x.url for x in sites]
+        cur = str(getattr(task, "site_id", "") or "") if task is not None else ""
+        start = next((i for i, x in enumerate(sites) if x.id == cur), 0)
         name, ok = QInputDialog.getItem(
-            self, "Chọn website để đăng", "Website sẽ đăng bài này:", names, 0, False
+            self, "Chọn website để đăng", "Website sẽ đăng bài này:", names, start, False
         )
         if not ok or not name:
             return None
-        idx = names.index(name) if name in names else 0
+        idx = names.index(name) if name in names else start
         return sites[idx]
 
     def _format_content_for_site(self, task, site) -> None:
