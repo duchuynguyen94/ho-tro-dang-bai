@@ -150,19 +150,86 @@ def _auto_open_panel(page: Page, el) -> bool:
 
 
 def _auto_editor_text_mode(page: Page, el) -> bool:
-    """Ô soạn thảo TinyMCE đang bị ẩn (đang ở chế độ Trực quan) -> bấm tab "Mã" của ô đó."""
+    """Ô soạn thảo TinyMCE đang bị ẩn (đang ở chế độ Trực quan) -> bấm tab "Mã" của ô đó.
+
+    Bấm lại 1 lần nữa nếu chưa ăn (trang còn đang nạp) và CHỈ trả về True khi ô đã hiện.
+    """
     try:
         eid = el.get_attribute("id") or ""
         cls = (el.get_attribute("class") or "")
         if not eid or "wp-editor-area" not in cls:
             return False
         tab = page.locator(f"#{eid}-html").first
-        if tab.count() and tab.is_visible():
+        for _ in range(2):
+            if not (tab.count() and tab.is_visible()):
+                break
             tab.click(timeout=3000)
-            page.wait_for_timeout(500)
-            return True
+            page.wait_for_timeout(600)
+            try:
+                if el.is_visible():          # đã sang chế độ "Mã" -> điền được
+                    return True
+            except Exception:
+                pass
     except Exception:
         pass
+    return False
+
+
+def _is_fillable(loc) -> bool:
+    """Phần tử có điền được bằng fill() không (input / textarea / select / contenteditable)?"""
+    try:
+        return bool(loc.evaluate(
+            """el => {
+                const tag = (el.tagName || '').toLowerCase();
+                if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+                if (el.isContentEditable) return true;
+                const role = (el.getAttribute('role') || '').toLowerCase();
+                return ['textbox', 'searchbox', 'combobox', 'spinbutton'].indexOf(role) >= 0;
+            }"""
+        ))
+    except Exception:
+        return False
+
+
+def _editor_iframe_selectors(step: ScriptStep) -> list[str]:
+    """Các selector là KHUNG soạn thảo TinyMCE (#content_ifr, #excerpt_ifr…)."""
+    out: list[str] = []
+    for sel in [*_selectors(step), *_fallbacks_for(step)]:
+        s = (sel or "").strip()
+        if s.startswith("#") and s.endswith("_ifr") and s not in out:
+            out.append(s)
+    return out
+
+
+def _fill_editor_iframe(page: Page, step: ScriptStep, value: str, log=None) -> bool:
+    """Ô soạn thảo TinyMCE đang ở chế độ "Trực quan": điền thẳng vào khung soạn thảo.
+
+    Đồng thời ghi lại vào ô ẩn + TinyMCE để lúc bấm Lưu/Cập nhật KHÔNG bị mất nội dung.
+    """
+    for sel in _editor_iframe_selectors(step):
+        eid = sel[1:-4]                       # "#content_ifr" -> "content"
+        try:
+            body = page.frame_locator(sel).locator("body")
+            if body.count() == 0:
+                continue
+            body.fill(value, timeout=10000)
+            try:
+                page.evaluate(
+                    """([id, html]) => {
+                        const ta = document.getElementById(id);
+                        if (ta) ta.value = html;
+                        const ed = (window.tinymce && window.tinymce.get) ? window.tinymce.get(id) : null;
+                        if (ed) { try { ed.setContent(html); } catch (e) {} }
+                    }""",
+                    [eid, value],
+                )
+            except Exception:
+                pass
+            if log:
+                log("  (ô soạn thảo đang ở chế độ Trực quan — đã điền thẳng vào khung soạn thảo)")
+            return True
+        except Exception:
+            continue
     return False
 
 
@@ -170,16 +237,18 @@ def _locate(page: Page, step: ScriptStep):
     """Tìm phần tử theo selector chính rồi tới các selector dự phòng.
 
     - Ưu tiên phần tử ĐANG HIỆN (tránh input ẩn của WordPress/Gutenberg).
+    - Bước ĐIỀN nội dung: bỏ qua phần tử KHÔNG điền được (khung iframe TinyMCE…).
     - Nếu phần tử bị ẩn do BẢNG THU GỌN -> tự mở bảng rồi dùng lại.
     - Nếu là ô soạn thảo TinyMCE đang ẩn -> tự bấm tab "Mã" rồi dùng lại.
     """
+    fillable = str(getattr(step, "action", "") or "") in ("type", "tagify", "tag_input")
     sels = _selectors(step)
     for extra in _fallbacks_for(step):
         if extra not in sels:
             sels.append(extra)
 
     last = None
-    # 1) phần tử đang hiện
+    # 1) phần tử đang hiện (bước điền: phải ĐIỀN ĐƯỢC — tránh chọn nhầm khung iframe)
     for sel in sels:
         try:
             loc = _make(page, sel)
@@ -187,8 +256,11 @@ def _locate(page: Page, step: ScriptStep):
             for i in range(n):
                 cand = loc.nth(i)
                 try:
-                    if cand.is_visible():
-                        return cand
+                    if not cand.is_visible():
+                        continue
+                    if fillable and not _is_fillable(cand):
+                        continue
+                    return cand
                 except Exception:
                     continue
         except Exception as exc:
@@ -204,8 +276,11 @@ def _locate(page: Page, step: ScriptStep):
                     changed = _auto_open_panel(page, cand) or _auto_editor_text_mode(page, cand)
                     if changed:
                         page.wait_for_timeout(700)
-                        if cand.is_visible():
-                            return cand
+                        try:
+                            if cand.is_visible() and (not fillable or _is_fillable(cand)):
+                                return cand
+                        except Exception:
+                            pass
                 except Exception:
                     continue
         except Exception as exc:
@@ -223,12 +298,54 @@ def _locate(page: Page, step: ScriptStep):
     raise RuntimeError("Không tìm thấy phần tử cho bước: " + (step.note or step.selector))
 
 
+def _wait_editors_ready(page: Page, timeout: int = 15000) -> None:
+    """Chờ các ô soạn thảo TinyMCE (Mô tả sản phẩm / Mô tả ngắn) khởi tạo xong.
+
+    Chỉ chờ những ô CÓ trên trang; trang Gutenberg (không có ô nào) -> xong ngay.
+    """
+    deadline = time.time() + timeout / 1000.0
+    while time.time() < deadline:
+        try:
+            ok = page.evaluate(
+                """() => {
+                    for (const id of ['content', 'excerpt']) {
+                        const area = document.getElementById(id);
+                        if (!area) continue;                       // trang không có ô này -> bỏ qua
+                        if (!area.classList.contains('wp-editor-area')) continue;
+                        if (!document.getElementById(id + '-html')) return false;   // chưa có tab "Mã"
+                        // ô đang HIỆN = đang ở chế độ Mã (không cần TinyMCE) -> không phải chờ
+                        if (area.offsetWidth || area.offsetHeight || area.getClientRects().length) continue;
+                        if (!window.tinymce || !window.tinymce.get || !window.tinymce.get(id)) {
+                            return false;                          // TinyMCE chưa khởi tạo xong
+                        }
+                    }
+                    return true;
+                }"""
+            )
+            if ok:
+                return
+        except Exception:
+            pass
+        time.sleep(0.3)
+
+
 def wait_editor_ready(page: Page, log=None, timeout: int = 15000) -> None:
-    """Chờ trang soạn thảo (Gutenberg/Classic) sẵn sàng."""
+    """Chờ trang soạn thảo (Gutenberg/Classic) TẢI XONG mới cho phát lại kịch bản."""
     try:
-        page.wait_for_load_state("domcontentloaded")
+        page.wait_for_load_state("domcontentloaded", timeout=timeout)
     except Exception:
         pass
+    # trang tải xong hẳn (ảnh / script) — tối đa 10 giây rồi đi tiếp
+    try:
+        page.wait_for_load_state("load", timeout=10000)
+    except Exception:
+        pass
+    # mạng tạm yên (WordPress hay có "nhịp tim" nên chỉ chờ tối đa 10 giây)
+    try:
+        page.wait_for_load_state("networkidle", timeout=10000)
+    except Exception:
+        pass
+    # khung soạn thảo đã có mặt
     deadline = time.time() + timeout / 1000.0
     while time.time() < deadline:
         for sel in EDITOR_READY:
@@ -236,11 +353,13 @@ def wait_editor_ready(page: Page, log=None, timeout: int = 15000) -> None:
                 if page.locator(sel).count() > 0:
                     time.sleep(0.6)
                     _dismiss_overlays(page)
+                    _wait_editors_ready(page)
                     return
             except Exception:
                 continue
         time.sleep(0.4)
     _dismiss_overlays(page)
+    _wait_editors_ready(page)
 
 
 def _dismiss_overlays(page: Page) -> None:
@@ -280,7 +399,12 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 _locate(page, step).click(force=bool(step.force), timeout=15000)
             elif action == "type":
                 value = render(step.value, ctx)
-                _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
+                try:
+                    _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
+                except Exception:
+                    # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
+                    if not _fill_editor_iframe(page, step, value, log=log):
+                        raise
             elif action in ("open_details", "open_attachment_details"):
                 # Mở BẢNG CHI TIẾT ẢNH (chỉ bấm vào ảnh khi bảng CHƯA hiện —
                 # bấm lúc đã chọn sẽ bị BỎ CHỌN)
