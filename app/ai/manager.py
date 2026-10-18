@@ -287,6 +287,9 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         f"=== BÀI {n} ===\n"
         f"Nội dung mỗi bài là HTML thật (đủ các mục theo rule_content.pdf). "
         f"Không giải thích gì thêm.\n"
+        f"MỖI BÀI CHỈ GỒM PHẦN NỘI DUNG BÀI VIẾT. TUYỆT ĐỐI KHÔNG viết phần "
+        f"“Thông tin SEO”, không liệt kê Title / Focus Keyword / Mô tả / Search Tags "
+        f"trong bài — phần SEO do phần mềm tự tạo riêng.\n"
     )
 
 
@@ -294,6 +297,29 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
 _MARK_RE = re.compile(
     r"(?im)^[\s>*_#\-–—]*[=]{0,}\s*(?:B[ÀA]I|BAI)\s*[:\-–—]?\s*(\d+)\s*[=]{0,}[\s*_]*$"
 )
+
+
+_SEO_BLOCK_HTML_RE = re.compile(
+    r"(?is)<h[1-6][^>]*>[^<]*th\s*[oô]ng\s*tin\s*seo[^<]*</h[1-6]>"
+)
+_SEO_BLOCK_TEXT_RE = re.compile(r"(?im)^[\s>*_#\-–—]*th\s*[oô]ng\s*tin\s*seo\b")
+
+
+def strip_seo_block(html_text: str) -> str:
+    """Cắt BỎ khối "Thông tin SEO – Bài k" mà AI hay viết lẫn vào cuối bài (chia bài).
+
+    Phần SEO do phần mềm tự tạo riêng (JSON SEO) -> không được nằm trong nội dung bài.
+    """
+    t = str(html_text or "")
+    if not t.strip():
+        return t
+    m = _SEO_BLOCK_HTML_RE.search(t)          # dạng HTML: <h2>Thông tin SEO – Bài 1</h2> …
+    if m:
+        return t[:m.start()].rstrip()
+    m = _SEO_BLOCK_TEXT_RE.search(t)          # dạng chữ thường
+    if m:
+        return t[:m.start()].rstrip()
+    return t
 
 
 def parse_split_articles(raw: str, n: int) -> list[str]:
@@ -305,10 +331,11 @@ def parse_split_articles(raw: str, n: int) -> list[str]:
         for i, m in enumerate(marks):
             end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
             chunk = _strip_fences(text[m.end():end]).strip()
+            chunk = strip_seo_block(chunk)          # bỏ khối "Thông tin SEO" nếu AI viết lẫn
             if chunk:
                 out.append(chunk)
     if not out:                            # không có ngăn cách -> tách theo dòng trống lớn / thử cả bài
-        c = _strip_fences(text).strip()
+        c = strip_seo_block(_strip_fences(text).strip())
         if c and len(c) > 80:
             out = [c]
     try:
