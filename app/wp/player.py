@@ -281,6 +281,27 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
             elif action == "type":
                 value = render(step.value, ctx)
                 _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
+            elif action in ("open_details", "open_attachment_details"):
+                # Mở BẢNG CHI TIẾT ẢNH (chỉ bấm vào ảnh khi bảng CHƯA hiện —
+                # bấm lúc đã chọn sẽ bị BỎ CHỌN)
+                try:
+                    if page.locator("#attachment-details-title").count() == 0:
+                        for sel in (".attachments .attachment", ".attachment-preview",
+                                    ".media-frame-content .attachment"):
+                            try:
+                                loc2 = page.locator(sel)
+                                if loc2.count():
+                                    loc2.nth(0).click(timeout=8000)
+                                    break
+                            except Exception:
+                                continue
+                        page.wait_for_timeout(1200)
+                    if page.locator("#attachment-details-title").count() == 0:
+                        if log:
+                            log("⚠ Không mở được bảng chi tiết ảnh.")
+                except Exception as exc:      # noqa: BLE001
+                    if log:
+                        log(f"⚠ Lỗi mở bảng chi tiết ảnh: {str(exc)[:60]}")
             elif action in ("tagify", "tag_input"):
                 # Ô nhập kiểu Tagify (Rank Math focus keyword): gõ rồi Enter để chốt.
                 # TUYỆT ĐỐI không gõ "mù" vào ô đang focus (sẽ chèn nhầm vào ô Mô tả…).

@@ -273,6 +273,17 @@
       "force": false
     },
     {
+      "action": "open_details",
+      "selector": "",
+      "selectors": [],
+      "value": "",
+      "note": "Mở bảng chi tiết ảnh (nếu chưa hiện)",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": ""
+    },
+    {
       "action": "type",
       "selector": "#attachment-details-title",
       "selectors": [
@@ -282,7 +293,7 @@
       "value": "{{title}}",
       "note": "Tiêu đề ảnh 1 ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false
     },
     {
@@ -295,7 +306,7 @@
       "value": "{{title}}",
       "note": "Văn bản thay thế (SEO) ảnh 1 ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false
     },
     {
@@ -307,7 +318,7 @@
       "value": "{{title}}",
       "note": "Image Caption ảnh 1 ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false
     },
     {
@@ -319,7 +330,7 @@
       "value": "{{title}}",
       "note": "Miêu tả ảnh 1 ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false
     },
     {
@@ -402,6 +413,17 @@
       "when": "{{image_2}}"
     },
     {
+      "action": "open_details",
+      "selector": "",
+      "selectors": [],
+      "value": "",
+      "note": "Mở bảng chi tiết ảnh (nếu chưa hiện)",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": ""
+    },
+    {
       "action": "type",
       "selector": "#attachment-details-title",
       "selectors": [
@@ -411,7 +433,7 @@
       "value": "{{title}}",
       "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false,
       "when": "{{image_2}}"
     },
@@ -425,7 +447,7 @@
       "value": "{{title}}",
       "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false,
       "when": "{{image_2}}"
     },
@@ -438,7 +460,7 @@
       "value": "{{title}}",
       "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false,
       "when": "{{image_2}}"
     },
@@ -451,7 +473,7 @@
       "value": "{{title}}",
       "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
-      "optional": true,
+      "optional": false,
       "force": false,
       "when": "{{image_2}}"
     },
