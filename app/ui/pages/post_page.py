@@ -110,6 +110,25 @@ class PostPage(QWidget):
         self.source_url.textChanged.connect(self._validate)
         b.addWidget(self.source_url)
 
+        # CHIA NHIỀU BÀI (ngay dưới ô nhập link): chỉ dùng khi có ĐÚNG 1 link
+        b.addSpacing(4)
+        srow = QHBoxLayout()
+        self.split_check = QCheckBox("Chia nhiều bài")
+        self.split_check.setToolTip(
+            "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
+            "Mỗi bài tạo 1 JOB TRỐNG, website chia tuần tự."
+        )
+        self.split_check.toggled.connect(self._on_split_toggled)
+        srow.addWidget(self.split_check)
+        self.split_count = QComboBox()
+        self.split_count.addItems([f"{n} bài" for n in range(2, 11)])
+        self.split_count.setFixedWidth(120)
+        self.split_count.setEnabled(False)
+        srow.addWidget(self.split_count)
+        srow.addStretch(1)
+        b.addLayout(srow)
+        polish_combos(self)
+
         b.addSpacing(4)
         b.addWidget(QLabel("Logo thương hiệu (dự phòng — nếu AI không tìm thấy)"))
         h = QHBoxLayout()
@@ -136,25 +155,6 @@ class PostPage(QWidget):
         self.image_count = QComboBox()
         self.image_count.addItems(["3 ảnh (mặc định)", "1 ảnh", "2 ảnh", "4 ảnh", "5 ảnh"])
         b.addWidget(self.image_count)
-        polish_combos(self)
-
-        b.addSpacing(6)
-        # CHIA NHIỀU BÀI: chỉ dùng khi có ĐÚNG 1 link
-        srow = QHBoxLayout()
-        self.split_check = QCheckBox("Chia nhiều bài")
-        self.split_check.setToolTip(
-            "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
-            "Mỗi bài tạo 1 JOB TRỐNG, website chia tuần tự."
-        )
-        self.split_check.toggled.connect(self._on_split_toggled)
-        srow.addWidget(self.split_check)
-        self.split_count = QComboBox()
-        self.split_count.addItems([f"{n} bài" for n in range(2, 11)])
-        self.split_count.setFixedWidth(120)
-        self.split_count.setEnabled(False)
-        srow.addWidget(self.split_count)
-        srow.addStretch(1)
-        b.addLayout(srow)
         polish_combos(self)
 
         b.addSpacing(6)
