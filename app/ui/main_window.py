@@ -4,8 +4,8 @@ from __future__ import annotations
 import traceback
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, QTimer, QUrl
-from PySide6.QtGui import QDesktopServices, QIcon
+from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFileDialog,
     QFrame,
@@ -1046,7 +1046,7 @@ class MainWindow(QMainWindow):
         self._start_images_worker(fresh, None, None, "Đang ghép lại toàn bộ ảnh…")
 
     def _on_export_images(self, task) -> None:
-        """Hỏi THƯ MỤC xuất ảnh -> xuất thẳng vào đó rồi MỞ THƯ MỤC."""
+        """Hỏi THƯ MỤC xuất ảnh -> xuất thẳng vào đó (KHÔNG tự mở thư mục)."""
         self.jobs_page._save()
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         # hỏi nơi xuất (nhớ thư mục vừa chọn)
@@ -1082,11 +1082,7 @@ class MainWindow(QMainWindow):
         self.store.upsert_task(fresh)
         self.store.save()
         folder = Path(paths[0]).parent
-        try:
-            QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
-        except Exception:
-            pass
-        show_toast(self, f"Đã xuất {len(paths)} ảnh vào {folder.name}/ — đã mở thư mục", 3200)
+        show_toast(self, f"Đã xuất {len(paths)} ảnh vào {folder.name}/", 3200)
 
     def _on_stop_all(self) -> None:
         """Dừng TẤT CẢ: mọi việc đang chờ / đang tạo -> cancelled ("chưa tạo")."""
