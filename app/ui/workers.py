@@ -83,6 +83,7 @@ def export_post_images(store, task, dest_dir: str = "") -> list[str]:
     - Định dạng (PNG/JPG) và kích thước lấy từ Cài đặt → AI ảnh → Xử lý ảnh cục bộ.
     - Xuất TẤT CẢ ảnh đang có (kể cả ảnh thêm bằng nút "+ Thêm hình").
     - dest_dir: nếu có -> xuất THẲNG vào thư mục đó; không thì dùng posts/<ID>.
+    - Khi xuất vào thư mục người dùng chọn (dest_dir): gặp tên file đã có -> thêm " (2)", " (3)"… KHÔNG đè.
     """
     from PIL import Image as _Img
 
@@ -114,11 +115,20 @@ def export_post_images(store, task, dest_dir: str = "") -> list[str]:
         "description": r.get("description", ""),
     }
     out: list[str] = []
+    dedupe = bool(str(dest_dir or "").strip())     # chỉ chống đè khi xuất ra thư mục người dùng chọn
+    used: set[str] = set()
     for i, im in enumerate(images):
         src = Path(im.get("path", ""))
         if not src.exists():
             continue
-        dest = base / f"{_image_stem(rules[i] if i < len(rules) else '', ctx, i)}{ext}"
+        stem = _image_stem(rules[i] if i < len(rules) else "", ctx, i)
+        dest = base / f"{stem}{ext}"
+        if dedupe:                                 # tên đã có (trong thư mục / trong lần xuất này) -> thêm số
+            n = 2
+            while dest.name in used or dest.exists():
+                dest = base / f"{stem} ({n}){ext}"
+                n += 1
+            used.add(dest.name)
         try:
             img = _Img.open(src)
             if out_size > 0 and (img.width != out_size or img.height != out_size):
