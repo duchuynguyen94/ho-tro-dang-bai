@@ -356,6 +356,17 @@ def _open_page(br, project_url: str, log=None, should_stop=None):
         raise AIError("Đã dừng theo yêu cầu.")
     page = br.open()
     target = project_url if project_url.startswith("http") else CHATGPT_URL
+    # LUÔN bỏ query (?tab=...) và #hash khi mở URL project
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+
+        parts = urlsplit(target)
+        if parts.query or parts.fragment:
+            target = urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+            if log:
+                log("Đã bỏ phần ?query/#hash trong URL project.")
+    except Exception:      # noqa: BLE001
+        pass
     page.goto(target, wait_until="domcontentloaded", timeout=60000)
     page.wait_for_timeout(1200)
     _dismiss_modals(page)
