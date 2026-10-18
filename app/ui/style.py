@@ -143,18 +143,18 @@ QComboBox::down-arrow {{ image: url("{ARROW}"); width: 11px; height: 11px; }}
 
 /* Danh sách xổ xuống: nền trắng bo góc, item có hover + đang chọn rõ ràng */
 QComboBox QAbstractItemView {{ background: #ffffff; border: 1px solid #cbd5e1;
-    border-radius: 10px; padding: 6px; outline: none;
+    border-radius: 12px; padding: 7px; outline: none;
     selection-color: {ACCENT_DARK}; }}
-QComboBox QAbstractItemView::item {{ padding: 7px 10px; border-radius: 7px;
-    min-height: 20px; color: #1f2937; }}
+QComboBox QAbstractItemView::item {{ padding: 9px 12px; border-radius: 8px;
+    min-height: 22px; color: #1f2937; }}
 QComboBox QAbstractItemView::item:hover {{ background: #f1f5f9; }}
 QComboBox QAbstractItemView::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; font-weight: 600; }}
 
 /* Khung popup (window riêng) — trong suốt để thấy viền bo của phần view */
 #comboPopup {{ background: transparent; border: none; }}
-#comboView {{ background: #ffffff; border: 1px solid #cbd5e1; border-radius: 10px;
-    padding: 6px; outline: none; }}
-#comboView::item {{ padding: 7px 10px; border-radius: 7px; min-height: 20px; color: #1f2937; }}
+#comboView {{ background: #ffffff; border: 1px solid #cbd5e1; border-radius: 12px;
+    padding: 7px; outline: none; }}
+#comboView::item {{ padding: 9px 12px; border-radius: 8px; min-height: 22px; color: #1f2937; }}
 #comboView::item:hover {{ background: #f1f5f9; }}
 #comboView::item:selected {{ background: #eff6ff; color: {ACCENT_DARK}; font-weight: 600; }}
 
@@ -272,6 +272,22 @@ QLabel.notice {{ color: {ACCENT_DARK}; background: #eff6ff; border: 1px solid #b
 """
 
 
+class _PopupWidthFilter(QObject):
+    """Giữ bề rộng danh sách xổ xuống tối đa `max_w` (gọn như menu, không kéo dài hết ô)."""
+
+    def __init__(self, parent, max_w: int = 420) -> None:
+        super().__init__(parent)
+        self.max_w = int(max_w)
+
+    def eventFilter(self, obj, event) -> bool:  # noqa: N802
+        try:
+            if event.type() in (QEvent.Show, QEvent.Resize) and obj.width() > self.max_w:
+                obj.setFixedWidth(self.max_w)
+        except Exception:      # noqa: BLE001
+            pass
+        return False
+
+
 def polish_combo(combo) -> None:
     """Bo tròn + làm đẹp danh sách xổ xuống của QComboBox.
 
@@ -290,14 +306,45 @@ def polish_combo(combo) -> None:
         view.setObjectName("comboView")
         fm = combo.fontMetrics()
         longest = max([fm.horizontalAdvance(combo.itemText(i)) for i in range(combo.count())] or [0])
-        view.setMinimumWidth(max(combo.width(), longest + 48, 150))
+        # GỌN: bề rộng vừa đủ theo mục dài nhất, tối đa 420px (không kéo dài hết ô)
+        want = max(longest + 60, 200)
+        view.setMinimumWidth(min(want, 420))
+        try:
+            view.setMaximumWidth(420)
+        except Exception:      # noqa: BLE001
+            pass
         frame = view.parentWidget()
         win = view.window()
         if frame is not None and frame is not win:
             frame.setObjectName("comboPopup")
+            try:      # chừa lề để vẽ bóng đổ
+                lay = frame.layout()
+                if lay is not None:
+                    lay.setContentsMargins(12, 12, 12, 12)
+            except Exception:      # noqa: BLE001
+                pass
         if win is not None:
             win.setWindowFlags(Qt.Popup | Qt.FramelessWindowHint | Qt.NoDropShadowWindowHint)
             win.setAttribute(Qt.WA_TranslucentBackground, True)
+        try:      # giới hạn bề rộng popup (Qt tự nới bằng bề rộng ô -> kéo lại 420px)
+            target = frame if frame is not None else win
+            if target is not None:
+                flt = _PopupWidthFilter(combo, 420)
+                target.installEventFilter(flt)
+                combo._popup_filter = flt        # giữ tham chiếu
+        except Exception:      # noqa: BLE001
+            pass
+        try:      # bóng đổ nhẹ cho danh sách xổ xuống
+            from PySide6.QtGui import QColor
+            from PySide6.QtWidgets import QGraphicsDropShadowEffect
+
+            eff = QGraphicsDropShadowEffect(view)
+            eff.setBlurRadius(20)
+            eff.setOffset(0, 5)
+            eff.setColor(QColor(15, 23, 42, 70))
+            view.setGraphicsEffect(eff)
+        except Exception:      # noqa: BLE001
+            pass
         combo.setMaxVisibleItems(12)
     except Exception:
         pass
