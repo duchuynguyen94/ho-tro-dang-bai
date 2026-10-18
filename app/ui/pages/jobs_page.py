@@ -5,7 +5,8 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import QPixmapCache, QDesktopServices, QDrag, QKeySequence, QPixmap
+from PySide6.QtGui import (QCursor, QPixmapCache, QDesktopServices, QDrag,
+                             QKeySequence, QPixmap)
 from PySide6.QtWidgets import (
     QApplication,
     QComboBox,
@@ -287,6 +288,18 @@ class TaskRow(QFrame):
         self.del_btn.clicked.connect(lambda: self.delete.emit(self.task_id))
         h.addWidget(self.del_btn, 0, Qt.AlignTop)
 
+        # Cho chuột "XUYÊN QUA" các nhãn con -> item nhận được HOVER (nền đổi khi rê chuột);
+        # nút ✕ vẫn bấm được bình thường.
+        try:
+            from PySide6.QtWidgets import QWidget as _QW
+
+            for child in self.findChildren(_QW):
+                if child is self.del_btn:
+                    continue
+                child.setAttribute(Qt.WA_TransparentForMouseEvents, True)
+        except Exception:      # noqa: BLE001
+            pass
+
         self.set_selected(False)
 
     def set_selected(self, on: bool) -> None:
@@ -299,6 +312,20 @@ class TaskRow(QFrame):
     def mousePressEvent(self, event) -> None:  # noqa: N802
         self.clicked.emit(self.task_id)
         super().mousePressEvent(event)
+
+    def set_hover(self, on: bool) -> None:
+        """Đổi nền khi RÊ CHUỘT vào item (theo dõi chuột ở cấp app -> chắc chắn chạy)."""
+        if bool(getattr(self, "_hover", False)) == bool(on):
+            return
+        self._hover = bool(on)
+        try:
+            self.setProperty("hover", "true" if on else "false")
+            st = self.style()
+            st.unpolish(self)
+            st.polish(self)
+            self.update()
+        except Exception:      # noqa: BLE001
+            pass
 
     def set_sites(self, sites: list[tuple[str, str, bool]]) -> None:
         """Danh sách website cho menu "Đổi website"."""
@@ -1223,6 +1250,27 @@ class JobsPage(QWidget):
         self._load(self.current)
         self.recompose_image.emit(self.current, index)
 
+    def _track_row_hover(self) -> None:
+        """Rê chuột -> item nào thì đổi nền item đó (đáng tin hơn QSS :hover)."""
+        try:
+            wdg = QApplication.widgetAt(QCursor.pos())   # None = chuột ra ngoài app -> bỏ hover
+            row = None
+            while wdg is not None:
+                if isinstance(wdg, TaskRow):
+                    row = wdg
+                    break
+                wdg = wdg.parentWidget()
+            if row is getattr(self, "_hover_row", None):
+                return
+            old = getattr(self, "_hover_row", None)
+            if old is not None:
+                old.set_hover(False)
+            self._hover_row = row
+            if row is not None:
+                row.set_hover(True)
+        except Exception:      # noqa: BLE001
+            pass
+
     def _site_choices(self) -> list[tuple[str, str, bool]]:
         """Danh sách website cho menu "Đổi website" (kèm cờ có kịch bản)."""
         out: list[tuple[str, str, bool]] = []
@@ -1487,6 +1535,8 @@ class JobsPage(QWidget):
         Ở ô nhập liệu (Tiêu đề / Nội dung…) thì để widget tự dán text như bình thường.
         """
         try:
+            if event.type() in (QEvent.MouseMove, QEvent.Leave):
+                self._track_row_hover()
             # macOS: phím "delete" trên bàn phím = Backspace; Windows: Delete
             if event.type() == QEvent.KeyPress and event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
                 fw = QApplication.focusWidget()
