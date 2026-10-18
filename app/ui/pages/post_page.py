@@ -121,6 +121,7 @@ class PostPage(QWidget):
         )
         self.split_check.toggled.connect(self._on_split_toggled)
         srow.addWidget(self.split_check)
+        srow.addSpacing(14)              # đệm CỐ ĐỊNH -> không bị dính sát
         self.split_count = QComboBox()
         self.split_count.addItems([f"{n} bài" for n in range(2, 11)])
         self.split_count.setFixedWidth(120)
