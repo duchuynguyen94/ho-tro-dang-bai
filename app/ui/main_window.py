@@ -813,6 +813,10 @@ class MainWindow(QMainWindow):
         if site is None:
             return                                     # người dùng huỷ -> không đăng
         self.jobs_page.set_posting(task.id, True)      # khoá + mờ nút Đăng bài
+        self.jobs_page.set_posting_locked(True)        # khoá nút của MỌI job (đang chuẩn bị đăng)
+        import time as _time0
+
+        self._post_started[task.id] = _time0.time()    # mốc để watchdog không mở khoá sớm
         self._post_sites[task.id] = site
         # LƯU website vào job (lần sau popup chọn sẵn website này)
         fresh.site_id = site.id
@@ -827,7 +831,9 @@ class MainWindow(QMainWindow):
         if (site.id != prev_site_id) or not have_img:
             if not self._compose_images_for_site(fresh, site):
                 self.jobs_page.set_posting(task.id, False)
+                self.jobs_page.set_posting_locked(False)
                 self._post_sites.pop(task.id, None)
+                self._post_started.pop(task.id, None)
                 return
         fresh = next((t for t in self.store.tasks if t.id == task.id), fresh)
         try:
@@ -841,7 +847,6 @@ class MainWindow(QMainWindow):
         except Exception:      # noqa: BLE001
             traceback.print_exc()
 
-        self.jobs_page.set_posting_locked(True)      # khoá nút OK — Đăng bài của mọi job
         worker = PostWorker(site, task.result or {})
         import time as _time
 
@@ -1202,6 +1207,12 @@ class MainWindow(QMainWindow):
             r["content_html"] = out
             self.store.upsert_task(task)
             self.store.save()
+            # Nạp lại ô Nội dung (nếu đang mở đúng job) -> lần tự lưu sau không ghi đè bản CŨ
+            try:
+                if getattr(self.jobs_page.current, "id", "") == getattr(task, "id", ""):
+                    self.jobs_page.content_edit.set_html(out)
+            except Exception:      # noqa: BLE001
+                pass
             self.status(f"Đã auto format lại nội dung + link tiêu đề đầu → {site.name or site_url}")
         except Exception:      # noqa: BLE001
             traceback.print_exc()          # không ghi Log lỗi (việc đăng không đụng vào job)

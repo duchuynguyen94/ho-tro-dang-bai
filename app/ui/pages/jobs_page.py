@@ -9,7 +9,6 @@ from PySide6.QtGui import (QCursor, QPixmapCache, QDesktopServices, QDrag,
                              QKeySequence, QPixmap)
 from PySide6.QtWidgets import (
     QApplication,
-    QComboBox,
     QDialog,
     QFileDialog,
     QFrame,
@@ -23,7 +22,6 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
-    QSizePolicy,
     QSplitter,
     QStackedWidget,
     QVBoxLayout,
@@ -39,7 +37,7 @@ from ...storage.models import (
     STATUS_FINISH,
 )
 from ...config import output_dir
-from ...images import compose, save_composed
+from ...images import compose
 from ..style import Card, polish_combos
 from ..workers import _remove_bg_opts
 from ..widgets.image_editor import ImageEditorPanel
@@ -245,7 +243,6 @@ class TaskRow(QFrame):
     clicked = Signal(str)
     delete = Signal(str)
     copied = Signal(str)
-    site_pick = Signal(str, str)          # (task_id, site_id) — đổi website cho job
 
     def __init__(self, task, parent=None) -> None:
         super().__init__(parent)
@@ -254,7 +251,6 @@ class TaskRow(QFrame):
         self.source_url = task.source_url or ""
         self.kind = str(getattr(task, "kind", "") or "")
         self.site_id = str(getattr(task, "site_id", "") or "")
-        self._sites: list[tuple[str, str, bool]] = []      # (id, tên, có kịch bản)
 
         h = QHBoxLayout(self)
         h.setContentsMargins(12, 10, 8, 10)
@@ -382,10 +378,6 @@ class TaskRow(QFrame):
         except Exception:      # noqa: BLE001
             pass
 
-    def set_sites(self, sites: list[tuple[str, str, bool]]) -> None:
-        """(Đã bỏ) — website được chọn lúc bấm "OK — Đăng bài"."""
-        self._sites = list(sites or [])
-
     def contextMenuEvent(self, event) -> None:  # noqa: N802
         menu = QMenu(self)
         act_copy = menu.addAction("Sao chép link nguồn")
@@ -421,7 +413,6 @@ class JobsPage(QWidget):
     cancel_task = Signal(object)             # (task) dừng đang tạo
     status_msg = Signal(str)                 # báo trạng thái ra thanh dưới cùng của app
     seo_json = Signal(object)                # (task) tạo JSON SEO từ nội dung (job trống)
-    change_site = Signal(object, str)        # (task, site_id) đổi website cho job thường
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -710,8 +701,6 @@ class JobsPage(QWidget):
             row.clicked.connect(self.select_task)
             row.delete.connect(self._confirm_delete)
             row.copied.connect(lambda _u: show_toast(self, "Đã sao chép link nguồn"))
-            row.set_sites(self._site_choices())
-            row.site_pick.connect(self._on_row_site_pick)
             self._rows[t.id] = row
             self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
 
@@ -951,6 +940,8 @@ class JobsPage(QWidget):
             )
             self.stack.setCurrentWidget(self.page_error)
             self.footer.show()
+        finally:
+            self._loading = False        # dù lỗi hay không -> vẫn mở lại TỰ LƯU
 
     def _load_inner(self, task) -> None:
         self._loading = True              # đang nạp job -> chặn tự lưu
@@ -1336,23 +1327,6 @@ class JobsPage(QWidget):
                 row.set_hover(True)
         except Exception:      # noqa: BLE001
             pass
-
-    def _site_choices(self) -> list[tuple[str, str, bool]]:
-        """Danh sách website cho menu "Đổi website" (kèm cờ có kịch bản)."""
-        out: list[tuple[str, str, bool]] = []
-        try:
-            for s in self.store.sites:
-                steps = getattr(getattr(s, "script", None), "steps", None) or []
-                out.append((s.id, s.name, bool(steps)))
-        except Exception:
-            pass
-        return out
-
-    def _on_row_site_pick(self, task_id: str, site_id: str) -> None:
-        task = next((t for t in self.store.tasks if t.id == task_id), None)
-        if task is None or not site_id:
-            return
-        self.change_site.emit(task, site_id)
 
     def _sync_seo_btn(self) -> None:
         """Nút "Tạo JSON SEO": chỉ hiện khi job TRỐNG và ô Nội dung CÓ chữ."""
