@@ -589,14 +589,23 @@ class PostWorker(TrackedThread):
         except Exception:      # noqa: BLE001
             profile = ""
         deadline = time.time() + timeout
+        last_n = -1
         while self._running and time.time() < deadline:
             time.sleep(3)
             # (1) đã đóng HẾT TAB -> coi như xong (Chrome có thể vẫn chạy nền)
             try:
-                if not page.context.pages:
-                    break
+                n_tabs = len(page.context.pages)
             except Exception:      # noqa: BLE001
                 break                  # trình duyệt đã tắt hẳn -> cũng coi như xong
+            if n_tabs != last_n:       # log khi SỐ TAB thay đổi (để soi khi chưa mở khoá)
+                last_n = n_tabs
+                try:
+                    self.log.emit(f"  (còn {n_tabs} tab Chrome…)" if n_tabs
+                                  else "  (đã đóng hết tab Chrome)")
+                except Exception:      # noqa: BLE001
+                    pass
+            if n_tabs == 0:
+                break
             # (2) tiến trình Chrome của profile đã tắt hẳn
             if profile:
                 try:

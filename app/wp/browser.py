@@ -242,7 +242,10 @@ class WPBrowser:
                         headless=self.headless,
                         # giữ SANDBOX của Chrome (tránh cảnh báo "--no-sandbox")
                         chromium_sandbox=True,
-                        args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
+                        args=["--disable-blink-features=AutomationControlled",
+                              "--start-maximized",
+                              # đóng tab cuối -> Chrome TẮT HẲN (không chạy nền) -> app mở khoá ngay
+                              "--disable-background-mode"],
                     )
                     if self.headless:
                         kwargs["viewport"] = {"width": 1400, "height": 900}
