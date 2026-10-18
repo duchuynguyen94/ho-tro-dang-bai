@@ -141,6 +141,7 @@ class PostPage(QWidget):
         pick = QPushButton("Chọn file")
         pick.setProperty("class", "ghost")
         pick.clicked.connect(self._pick_brand)
+        self.brand_logo.textChanged.connect(self._validate)     # đổi logo -> kiểm tra lại nút
         h.addWidget(self.brand_logo, 1)
         h.addWidget(pick)
         b.addLayout(h)
@@ -212,7 +213,7 @@ class PostPage(QWidget):
                 # chưa có kịch bản -> MỜ CẢ KHUNG, không chọn được
                 row.setToolTip("Website này chưa có kịch bản đăng bài")
                 row.setEnabled(False)
-                dim_when_disabled(row, 0.45)
+                dim_when_disabled(row, 0.30)      # mờ hơn cho rõ là không chọn được
             else:
                 row.radio.setEnabled(True)
             row.radio.toggled.connect(self._validate)
@@ -244,12 +245,16 @@ class PostPage(QWidget):
         self._sync_split_enabled(len(links))
         has_rule = self.store.has_format_content()
         splitting = bool(self.split_check.isChecked() and self.split_check.isEnabled())
-        ok = bool(has_rule and (site or splitting))
+        # CHIA NHIỀU BÀI -> BẮT BUỘC chọn logo thương hiệu
+        need_logo = bool(splitting and not self.brand_logo.text().strip())
+        ok = bool(has_rule and (site or splitting) and not need_logo)
         self.create_btn.setEnabled(ok and not getattr(self, "_splitting", False))
 
         problems: list[str] = []
         if not site and not splitting:
             problems.append("chưa chọn website")
+        if need_logo:
+            problems.append("chia nhiều bài cần chọn <b>logo thương hiệu</b>")
         # link nguồn: CÓ THỂ để trống -> sẽ tạo job trống (không chạy AI)
 
         if problems:
