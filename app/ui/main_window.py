@@ -35,6 +35,7 @@ from .pages.jobs_page import JobsPage
 from .pages.post_page import PostPage
 from .style import app_font, register_bundled_fonts
 from .toast import show_toast
+from .widgets.seo_progress import SeoProgressOverlay
 from .workers import (
     ContentWorker,
     export_post_images,
@@ -45,6 +46,7 @@ from .workers import (
     ImagesWorker,
     PostWorker,
     SeoJsonWorker,
+    SplitSeoWorker,
     SplitWorker,
     shutdown_all_threads,
 )
@@ -73,6 +75,9 @@ class MainWindow(QMainWindow):
         self._content_only_ids: set = set()  # "Random lại" -> chỉ tạo lại NỘI DUNG, giữ nguyên ảnh
         self._seo_worker = None              # luồng tạo JSON SEO (job trống)
         self._split_worker = None            # luồng chia 1 link thành N bài
+        self._split_seo_worker = None         # luồng tạo JSON SEO cho từng bài đã chia
+        self._split_seo_overlay = None        # popup phủ toàn app báo tiến trình lấy JSON SEO
+        self._split_seo_cancelled = False     # người dùng đã bấm "Dừng và đóng"
         self._post_workers: dict = {}        # task_id -> luồng đăng bài
         self._post_started: dict = {}        # task_id -> thời điểm bắt đầu đăng (giây)
         self._start_post_watchdog()          # lưới an toàn: Chrome tắt -> mở khoá nút
@@ -617,6 +622,121 @@ class MainWindow(QMainWindow):
         for t in made:      # tự ghép ảnh theo website được chia
             self._start_images_worker(t, None, None, "Đang ghép ảnh…")
         show_toast(self, f"Đã tạo {len(made)} job trống (Bài 1 → Bài {len(made)})", 3600)
+        self._start_split_seo(made)      # tự lấy JSON SEO cho TỪNG bài (popup phủ toàn app)
+
+    # ------------------------------------------------------------------ #
+    # JSON SEO cho từng bài của "chia bài" (popup phủ toàn app, chạy tuần tự)
+    # ------------------------------------------------------------------ #
+    def _start_split_seo(self, made: list) -> None:
+        """Sau khi chia bài: hiện popup + tự tạo JSON SEO lần lượt cho từng bài."""
+        items = []
+        for i, t in enumerate(made, 1):
+            html = str((t.result or {}).get("content_html") or "")
+            if not html.strip():
+                continue
+            items.append((t.id, html, f"Bài {i}"))
+        if not items:
+            return
+        self._split_seo_cancelled = False
+        try:
+            overlay = SeoProgressOverlay(self)
+            overlay.cancelled.connect(self._stop_split_seo)
+            self._split_seo_overlay = overlay
+            overlay.start(len(items))
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            self._split_seo_overlay = None
+        worker = SplitSeoWorker(self.store, items)
+        worker.log.connect(self._on_worker_log)
+        worker.progress.connect(self._on_split_seo_progress)
+        worker.done.connect(self._on_split_seo_done)
+        worker.finished_all.connect(self._on_split_seo_finished)
+
+        def _done() -> None:
+            if self._split_seo_worker is worker:
+                self._split_seo_worker = None
+            self._cleanup(worker)
+
+        worker.finished.connect(_done)
+        self._split_seo_worker = worker
+        self._workers.append(worker)
+        self.jobs_page.set_seo_busy(True)
+        worker.start()
+        self.status(f"Đang lấy JSON SEO cho {len(items)} bài (tuần tự)…")
+
+    def _on_split_seo_progress(self, i: int, total: int, label: str) -> None:
+        ov = self._split_seo_overlay
+        if ov is not None:
+            try:
+                ov.set_step(i, total, label)
+            except Exception:      # noqa: BLE001
+                pass
+        self.status(f"Đang lấy JSON SEO cho {label} ({i}/{total})…")
+
+    def _on_split_seo_done(self, i: int, total: int, task_id: str, seo: dict) -> None:
+        """1 bài đã có JSON SEO -> điền Title / Description / Focus keyword / Tags."""
+        self._apply_split_seo(task_id, seo)
+        ov = self._split_seo_overlay
+        if ov is not None:
+            try:
+                ov.set_done(i, total)
+            except Exception:      # noqa: BLE001
+                pass
+
+    def _apply_split_seo(self, task_id: str, seo: dict) -> None:
+        fresh = next((t for t in self.store.tasks if t.id == task_id), None)
+        if fresh is None:
+            return
+        r = fresh.result = dict(fresh.result or {})
+        for k in ("title", "description", "focus_keyword", "tags"):
+            v = str((seo or {}).get(k, "") or "").strip()
+            if v:
+                r[k] = v
+        self.store.upsert_task(fresh)
+        self.store.save()
+        try:      # nếu đang mở đúng job đó -> điền luôn vào các ô
+            if getattr(self.jobs_page.current, "id", "") == task_id:
+                self.jobs_page.current = fresh
+                self.jobs_page._load(fresh)
+        except Exception:      # noqa: BLE001
+            pass
+        self._refresh_count()
+
+    def _on_split_seo_finished(self, ok: int, total: int) -> None:
+        """Chạy xong HẾT -> tự đóng popup + báo tổng kết."""
+        self._close_split_seo_overlay()
+        self.jobs_page.set_seo_busy(False)
+        if self._split_seo_cancelled:
+            return                      # người dùng đã dừng -> không báo "xong"
+        self.status(f"Đã tạo JSON SEO cho {ok}/{total} bài.")
+        show_toast(self, f"Đã tạo JSON SEO cho {ok}/{total} bài", 3600,
+                   ok=(ok >= total))
+
+    def _stop_split_seo(self) -> None:
+        """Bấm "Dừng và đóng" / X / Esc -> DỪNG lấy JSON SEO ngay."""
+        if self._split_seo_cancelled and self._split_seo_overlay is None:
+            return                      # đã dừng rồi -> không báo lại
+        self._split_seo_cancelled = True
+        w = self._split_seo_worker
+        if w is not None:
+            try:
+                w.stop()
+            except Exception:      # noqa: BLE001
+                pass
+        self._close_split_seo_overlay()
+        self.jobs_page.set_seo_busy(False)
+        self.status("Đã dừng lấy JSON SEO — các bài chưa xong bạn bấm “Tạo JSON SEO” sau.")
+        show_toast(self, "Đã dừng lấy JSON SEO", 3000, ok=False)
+
+    def _close_split_seo_overlay(self) -> None:
+        ov = self._split_seo_overlay
+        self._split_seo_overlay = None
+        if ov is not None:
+            try:
+                ov.hide()
+                ov.deleteLater()
+            except Exception:      # noqa: BLE001
+                pass
 
     def _on_split_failed(self, err: str) -> None:
         try:

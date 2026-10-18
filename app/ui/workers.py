@@ -1051,6 +1051,48 @@ class SeoJsonWorker(TrackedThread):
             self.failed.emit(str(exc))
 
 
+class SplitSeoWorker(TrackedThread):
+    """Tạo JSON SEO cho TỪNG bài của "chia bài" — chạy TUẦN TỰ, có thể DỪNG giữa đường."""
+
+    log = Signal(str)
+    progress = Signal(int, int, str)      # (bài thứ i, tổng, nhãn)
+    done = Signal(int, int, str, dict)    # (bài thứ i, tổng, task_id, JSON SEO)
+    finished_all = Signal(int, int)       # (số bài xong, tổng)
+
+    def __init__(self, store, items: list) -> None:
+        """items: [(task_id, content_html, nhãn)] — theo đúng thứ tự Bài 1 → Bài N."""
+        super().__init__()
+        self.store = store
+        self.items = list(items or [])
+        self._running = True
+
+    def stop(self) -> None:
+        self._running = False
+
+    def run(self) -> None:
+        from ..ai.manager import generate_seo_json
+
+        total = len(self.items)
+        ok = 0
+        for i, item in enumerate(self.items, 1):
+            if not self._running:
+                break
+            tid, html, label = (list(item) + ["", "", ""])[:3]
+            self.progress.emit(i, total, str(label or f"Bài {i}"))
+            self.log.emit(f"Đang tạo JSON SEO cho {label} ({i}/{total})…")
+            try:
+                seo = generate_seo_json(self.store, str(html or ""), log=self.log.emit,
+                                        should_stop=lambda: not self._running)
+                if not self._running:
+                    break
+                self.done.emit(i, total, str(tid), dict(seo or {}))
+                ok += 1
+            except Exception as exc:      # noqa: BLE001
+                traceback.print_exc()
+                self.log.emit(f"⚠ {label}: không tạo được JSON SEO ({str(exc)[:80]})")
+        self.finished_all.emit(ok, total)
+
+
 class SourceImageSearchWorker(TrackedThread):
     """Tìm ảnh trên internet theo keyword (dùng trong popup "Hình tự tìm")."""
 
