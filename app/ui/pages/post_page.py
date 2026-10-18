@@ -113,6 +113,7 @@ class PostPage(QWidget):
         # CHIA NHIỀU BÀI (ngay dưới ô nhập link): chỉ dùng khi có ĐÚNG 1 link
         b.addSpacing(4)
         srow = QHBoxLayout()
+        srow.setSpacing(12)              # cách ra cho thoáng (nút tick <-> ô số lượng)
         self.split_check = QCheckBox("Chia nhiều bài")
         self.split_check.setToolTip(
             "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
@@ -267,7 +268,9 @@ class PostPage(QWidget):
 
     def _links(self) -> list[str]:
         """Tách các link nguồn (mỗi dòng 1 link), bỏ trùng, tối đa 10."""
-        raw = self.source_url.toPlainText().replace(",", "\n").splitlines()
+        import re as _re
+
+        raw = _re.split(r"[\s,;]+", self.source_url.toPlainText())
         out: list[str] = []
         for line in raw:
             u = line.strip()
