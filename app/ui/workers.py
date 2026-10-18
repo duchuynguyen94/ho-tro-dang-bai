@@ -701,11 +701,24 @@ class PostWorker(TrackedThread):
             traceback.print_exc()
             self.failed.emit(str(exc))
         finally:
-            # Kịch bản XONG hoặc LỖI -> DỪNG ĐIỀU KHIỂN CHROME: gỡ bộ bắt hộp thoại,
-            # từ đây app không can thiệp vào trang nữa (bạn tự do bấm/kiểm tra).
-            if _on_dialog is not None and page is not None:
+            # Kịch bản XONG hoặc LỖI -> DỪNG ĐIỀU KHIỂN CHROME: từ đây app không can thiệp
+            # vào trang nữa (bạn tự do bấm/kiểm tra).
+            if page is not None:
                 try:
-                    page.remove_listener("dialog", _on_dialog)
+                    if _on_dialog is not None:
+                        page.remove_listener("dialog", _on_dialog)
+                    if not page.is_closed():
+                        # Giữ hộp thoại (alert/confirm) của web ĐỨNG YÊN cho bạn tự bấm Yes/No.
+                        # (không còn listener thì Playwright tự bấm "No" -> hộp thoại nhấp nháy)
+                        def _hold_dialog(d) -> None:      # noqa: ANN001
+                            try:
+                                self.log.emit(
+                                    f"  (web hỏi: {str(d.message)[:80]}…) — bạn tự bấm Yes/No"
+                                )
+                            except Exception:      # noqa: BLE001
+                                pass
+
+                        page.on("dialog", _hold_dialog)
                     self.log.emit("Đã dừng điều khiển Chrome — bạn tự do thao tác trên trang.")
                 except Exception:      # noqa: BLE001
                     pass
