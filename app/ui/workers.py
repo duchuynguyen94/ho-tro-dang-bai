@@ -288,6 +288,32 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
     return images
 
 
+def merge_sources(pages: list[dict], urls: list[str]) -> dict:
+    """Gộp NHIỀU trang nguồn thành 1 nguồn (nhiều link -> 1 bài viết)."""
+    pages = [p for p in (pages or []) if isinstance(p, dict)]
+    if not pages:
+        return {}
+    if len(pages) == 1:
+        p = dict(pages[0])
+        p["urls"] = list(urls or [p.get("url", "")])
+        return p
+    imgs: list[str] = []
+    texts: list[str] = []
+    for i, pg in enumerate(pages, 1):
+        u = str(pg.get("url") or (urls[i - 1] if i - 1 < len(urls) else ""))
+        texts.append(f"=== NGUỒN {i}: {u} ===\n{str(pg.get('text') or '').strip()}")
+        for im in (pg.get("images") or []):
+            if im and im not in imgs:
+                imgs.append(im)
+    return {
+        "url": (urls[0] if urls else str(pages[0].get("url") or "")),
+        "urls": list(urls),
+        "title": str(pages[0].get("title") or ""),
+        "text": "\n\n".join(texts)[:18000],
+        "images": imgs,
+    }
+
+
 class ContentWorker(TrackedThread):
     """Đọc link nguồn -> AI viết -> ghép ảnh."""
 
@@ -317,8 +343,26 @@ class ContentWorker(TrackedThread):
             self.progress.emit(5)
             if self._stopped():
                 raise _Cancelled()
-            self.log.emit("Đang đọc link nguồn…")
-            page = src.fetch_source(t.source_url)
+            urls = [u for u in (getattr(t, "source_urls", None) or []) if str(u).strip()]
+            if not urls and t.source_url:
+                urls = [t.source_url]
+            self.log.emit("Đang đọc link nguồn…" if len(urls) <= 1
+                          else f"Đang đọc {len(urls)} link nguồn…")
+            pages: list[dict] = []
+            for i, u in enumerate(urls, 1):
+                if self._stopped():
+                    raise _Cancelled()
+                if len(urls) > 1:
+                    self.log.emit(f"  nguồn {i}/{len(urls)}: {u}")
+                try:
+                    pages.append(src.fetch_source(u))
+                except Exception as exc:      # noqa: BLE001
+                    self.log.emit(f"  (bỏ qua nguồn {i}: {str(exc)[:80]})")
+            if not pages:
+                raise RuntimeError("Không đọc được link nguồn nào.")
+            page = merge_sources(pages, urls)
+            if len(urls) > 1:
+                self.log.emit(f"Đã gộp {len(pages)}/{len(urls)} nguồn thành 1 bài viết.")
             self.progress.emit(25)
 
             # KHÔNG tự tải/chèn ảnh nữa: chỉ lưu danh sách ảnh nguồn để người dùng chọn
@@ -835,6 +879,47 @@ class SourceImageDownloadWorker(TrackedThread):
                 data = b""
             self.done.emit(url, data)
         self.progress.emit("")
+
+
+class SplitWorker(TrackedThread):
+    """Chia 1 link nguồn thành N bài viết (CHỈ content, KHÔNG JSON SEO)."""
+
+    log = Signal(str)
+    ok = Signal(list)          # danh sách content HTML
+    failed = Signal(str)
+
+    def __init__(self, store, link: str, n: int) -> None:
+        super().__init__()
+        self.store = store
+        self.link = str(link or "")
+        self.n = max(2, int(n or 2))
+
+    def run(self) -> None:
+        try:
+            from ..ai.manager import (_call_ai, apply_template_icons,
+                                      build_split_prompt, linkify_domains,
+                                      parse_split_articles)
+
+            self.log.emit(f"Đang đọc link nguồn rồi chia thành {self.n} bài…")
+            page = src.fetch_source(self.link)
+            full = build_split_prompt(self.store.formats, page, self.n, with_rule=True)
+            short = build_split_prompt(self.store.formats, page, self.n, with_rule=False)
+            raw = _call_ai(self.store, full, short, self.log.emit)
+            arts = parse_split_articles(raw, self.n)
+            all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
+            out: list[str] = []
+            for a in arts:
+                html = apply_template_icons(a)
+                html = linkify_domains(html, all_sites)
+                if html.strip():
+                    out.append(html)
+            if not out:
+                raise RuntimeError("AI không trả về bài viết nào.")
+            self.log.emit(f"Đã chia được {len(out)}/{self.n} bài.")
+            self.ok.emit(out)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))
 
 
 class CanvasPreviewWorker(TrackedThread):

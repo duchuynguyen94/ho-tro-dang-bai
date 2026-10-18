@@ -4,12 +4,14 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
     QButtonGroup,
+    QCheckBox,
     QComboBox,
     QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QPlainTextEdit,
     QPushButton,
     QRadioButton,
     QScrollArea,
@@ -45,7 +47,8 @@ class SiteRow(QFrame):
 
 
 class PostPage(QWidget):
-    create_task = Signal(object)  # Task
+    create_task = Signal(object)
+    split_task = Signal(object, int)        # (task mẫu, số bài cần chia)  # Task
 
     def __init__(self, store, parent=None) -> None:
         super().__init__(parent)
@@ -100,9 +103,10 @@ class PostPage(QWidget):
 
         b = self.card.body
 
-        b.addWidget(QLabel("Link bài viết nguồn"))
-        self.source_url = QLineEdit()
-        self.source_url.setPlaceholderText("https://...")
+        b.addWidget(QLabel("Link nguồn (mỗi link 1 dòng — nhiều link = 1 bài viết)"))
+        self.source_url = QPlainTextEdit()
+        self.source_url.setPlaceholderText("https://...\nhttps://...")
+        self.source_url.setFixedHeight(84)
         self.source_url.textChanged.connect(self._validate)
         b.addWidget(self.source_url)
 
@@ -132,6 +136,25 @@ class PostPage(QWidget):
         self.image_count = QComboBox()
         self.image_count.addItems(["3 ảnh (mặc định)", "1 ảnh", "2 ảnh", "4 ảnh", "5 ảnh"])
         b.addWidget(self.image_count)
+        polish_combos(self)
+
+        b.addSpacing(6)
+        # CHIA NHIỀU BÀI: chỉ dùng khi có ĐÚNG 1 link
+        srow = QHBoxLayout()
+        self.split_check = QCheckBox("Chia nhiều bài")
+        self.split_check.setToolTip(
+            "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
+            "Mỗi bài tạo 1 JOB TRỐNG, website chia tuần tự."
+        )
+        self.split_check.toggled.connect(self._on_split_toggled)
+        srow.addWidget(self.split_check)
+        self.split_count = QComboBox()
+        self.split_count.addItems([f"{n} bài" for n in range(2, 11)])
+        self.split_count.setFixedWidth(120)
+        self.split_count.setEnabled(False)
+        srow.addWidget(self.split_count)
+        srow.addStretch(1)
+        b.addLayout(srow)
         polish_combos(self)
 
         b.addSpacing(6)
@@ -211,10 +234,12 @@ class PostPage(QWidget):
         for sid, row in self._rows.items():
             row.set_selected(bool(site and sid == site.id))
 
-        has_link = bool(self.source_url.text().strip())
+        links = self._links()
+        has_link = bool(links)
+        self._sync_split_enabled(len(links))
         has_rule = self.store.has_format_content()
         ok = bool(site and has_rule)
-        self.create_btn.setEnabled(ok)
+        self.create_btn.setEnabled(ok and not getattr(self, "_splitting", False))
 
         problems: list[str] = []
         if not site:
@@ -228,6 +253,51 @@ class PostPage(QWidget):
             self.warn.hide()
 
     # ------------------------------------------------------------------ #
+    def set_splitting(self, on: bool, n: int = 0) -> None:
+        """Đang chia bài -> khoá nút tạo + đổi chữ."""
+        self._splitting = bool(on)
+        try:
+            self.create_btn.setText(f"Đang chia bài… ({n} bài)" if on else "Tạo nội dung bằng AI")
+        except Exception:      # noqa: BLE001
+            pass
+        self._validate()
+
+    def _links(self) -> list[str]:
+        """Tách các link nguồn (mỗi dòng 1 link), bỏ trùng, tối đa 10."""
+        raw = self.source_url.toPlainText().replace(",", "\n").splitlines()
+        out: list[str] = []
+        for line in raw:
+            u = line.strip()
+            if not u or u in out:
+                continue
+            out.append(u)
+            if len(out) >= 10:
+                break
+        return out
+
+    def _sync_split_enabled(self, n_links: int) -> None:
+        """Tick "chia nhiều bài" chỉ bật khi có ĐÚNG 1 link."""
+        only_one = (n_links == 1)
+        self.split_check.setEnabled(only_one)
+        if not only_one and self.split_check.isChecked():
+            self.split_check.setChecked(False)
+        self.split_count.setEnabled(only_one and self.split_check.isChecked())
+        self.split_check.setToolTip(
+            "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
+            "Mỗi bài tạo 1 JOB TRỐNG, website chia tuần tự."
+            if only_one else
+            "Chỉ dùng được khi nhập ĐÚNG 1 link (nhiều link luôn là 1 bài viết)"
+        )
+
+    def _on_split_toggled(self, on: bool) -> None:
+        self.split_count.setEnabled(bool(on) and self.split_check.isEnabled())
+
+    def _split_count_value(self) -> int:
+        try:
+            return int(self.split_count.currentText().split()[0])
+        except Exception:      # noqa: BLE001
+            return 2
+
     def _pick_brand(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
             self, "Chọn logo thương hiệu", "", "Ảnh (*.png *.jpg *.jpeg *.webp *.svg)"
@@ -237,18 +307,35 @@ class PostPage(QWidget):
 
     def _create(self) -> None:
         site = self._selected_site()
-        url = self.source_url.text().strip()
+        links = self._links()
         # link nguồn ĐỂ TRỐNG -> tạo job trống (kind="blank"): không chạy AI, tự điền tay
         if not site or not self.store.has_format_content():
             self._validate()
             return
         count = int(self.image_count.currentText().split()[0])
+        brand = self.brand_logo.text().strip()
+        # CHIA NHIỀU BÀI (chỉ khi đúng 1 link): chưa tạo job — chờ provider chia xong
+        if links and self.split_check.isEnabled() and self.split_check.isChecked():
+            task = Task(
+                site_id=site.id,
+                site_name=site.name,
+                source_url=links[0],
+                source_urls=[links[0]],
+                kind="",
+                brand_logo_fallback=brand,
+                image_count=count,
+            )
+            self.split_task.emit(task, self._split_count_value())
+            self.source_url.clear()
+            self.brand_logo.clear()
+            return
         task = Task(
             site_id=site.id,
             site_name=site.name,
-            source_url=url,
-            kind="" if url else "blank",
-            brand_logo_fallback=self.brand_logo.text().strip(),
+            source_url=(links[0] if links else ""),
+            source_urls=list(links),
+            kind="" if links else "blank",
+            brand_logo_fallback=brand,
             image_count=count,
         )
         self.create_task.emit(task)

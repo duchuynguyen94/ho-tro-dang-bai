@@ -246,9 +246,24 @@ class TaskRow(QFrame):
         v.setSpacing(3)
 
         is_blank = (getattr(task, "kind", "") or "") == "blank"
-        url = QLabel(task.site_name if is_blank else (task.source_url or "(chưa có link)"))
-        # job trống -> tiêu đề (tên website) màu TÍM; job thường -> màu đen
-        url.setObjectName("taskTitleBlank" if is_blank else "taskTitle")
+        split_no = int(getattr(task, "split_no", 0) or 0)
+        srcs = [u for u in (getattr(task, "source_urls", None) or []) if u]
+        if not srcs and task.source_url:
+            srcs = [task.source_url]
+        if split_no > 0:
+            # job được CHIA từ 1 link -> "Bài N - link nguồn"
+            title_text = f"Bài {split_no} - {task.source_url or task.site_name}"
+            purple = True
+        elif is_blank:
+            title_text = task.site_name
+            purple = True
+        else:
+            title_text = srcs[0] if srcs else "(chưa có link)"
+            if len(srcs) > 1:
+                title_text = f"{title_text}  (+{len(srcs) - 1})"      # nhiều link nguồn
+            purple = False
+        url = QLabel(title_text)
+        url.setObjectName("taskTitleBlank" if purple else "taskTitle")
         url.setWordWrap(True)
         v.addWidget(url)
 

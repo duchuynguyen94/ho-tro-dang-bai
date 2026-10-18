@@ -233,6 +233,8 @@ class Task:
     site_id: str = ""
     site_name: str = ""
     source_url: str = ""
+    source_urls: list[str] = field(default_factory=list)   # NHIỀU link nguồn (mỗi dòng 1 link)
+    split_no: int = 0       # > 0 = job được CHIA từ 1 link (Bài 1, Bài 2…)
     kind: str = ""          # "" = có link nguồn | "blank" = job trống (không chạy AI)
     brand_logo_fallback: str = ""
     image_count: int = 3
@@ -256,6 +258,8 @@ class Task:
             site_id=d.get("site_id", ""),
             site_name=d.get("site_name", ""),
             source_url=d.get("source_url", ""),
+            source_urls=[str(u) for u in (d.get("source_urls") or []) if str(u).strip()],
+            split_no=int(d.get("split_no", 0) or 0),
             kind=d.get("kind", ""),
             brand_logo_fallback=d.get("brand_logo_fallback", ""),
             image_count=int(d.get("image_count", 3)),

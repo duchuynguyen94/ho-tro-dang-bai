@@ -192,7 +192,14 @@ Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 
 def build_combined_short_prompt(source: dict) -> str:
     """1 prompt ngắn cho ChatGPT (2 file rule nằm trong Project đã đính kèm)."""
-    return f"""Đọc bài viết tại link nguồn {source.get('url', '')} viết lại thành 1 bài viết mới theo file "rule_content.pdf" đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này.
+    urls = [str(u) for u in (source.get("urls") or []) if str(u).strip()]
+    if len(urls) > 1:
+        link_line = ("Đọc các bài viết tại CÁC link nguồn sau:\n"
+                     + "\n".join(f"- {u}" for u in urls)
+                     + "\nTỔNG HỢP các nguồn trên thành 1 BÀI VIẾT MỚI")
+    else:
+        link_line = f"Đọc bài viết tại link nguồn {source.get('url', '')}"
+    return f"""{link_line} theo file "rule_content.pdf" đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này. theo file "rule_content.pdf" đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này.
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng "HTML" theo template trong rule_content.pdf
@@ -204,6 +211,62 @@ def build_combined_short_prompt(source: dict) -> str:
    - "tags": trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy, gồm: tên sản phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa phương/tiếng Việt thông dụng; thông tin công ty
 
 Không giải thích gì thêm."""
+
+
+def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> str:
+    """Prompt CHIA 1 link nguồn thành N bài viết (CHỈ content, KHÔNG JSON SEO)."""
+    urls = [str(u) for u in (source.get("urls") or []) if str(u).strip()] or \
+        [str(source.get("url", "") or "")]
+    link_line = "\n".join(f"- {u}" for u in urls)
+    rule_block = ""
+    if with_rule:
+        rc = read_rule(rule_path(rules, "content"))
+        if rc:
+            rule_block = f"\n=== RULE CONTENT (rule_content.pdf) ===\n{rc}\n"
+    body = re.sub(r"<[^>]+>", " ", str(source.get("text", "") or ""))
+    body = re.sub(r"\s+", " ", body).strip()[:6000]
+    return (
+        f"Đọc bài viết tại link nguồn sau:\n{link_line}\n"
+        f"Viết lại thành {int(n)} BÀI VIẾT RIÊNG BIỆT (mỗi bài là 1 bài hoàn chỉnh, "
+        f"khác nhau về góc nhìn/cách viết) theo file \"rule_content.pdf\" đã đính kèm "
+        f"(sources) trong Project này.\n"
+        f"KHÔNG tạo JSON SEO, KHÔNG viết thông tin SEO.\n"
+        f"{rule_block}"
+        f"\n=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC) ===\n"
+        f"Mỗi bài bắt đầu bằng ĐÚNG 1 dòng ngăn cách: === BÀI 1 ===, === BÀI 2 === … "
+        f"=== BÀI {int(n)} ===\n"
+        f"Nội dung mỗi bài là HTML thật (đủ các mục theo rule_content.pdf). "
+        f"Không giải thích gì thêm.\n"
+        f"\n=== BÀI VIẾT NGUỒN (tham khảo) ===\nTiêu đề gốc: {source.get('title', '')}\n{body}\n"
+    )
+
+
+def parse_split_articles(raw: str, n: int) -> list[str]:
+    """Tách câu trả lời thành N bài viết (theo dòng ngăn cách === BÀI k ===)."""
+    text = str(raw or "")
+    parts = re.split(r"\n?\s*={2,}\s*B[ÀA]I\s*(\d+)\s*={2,}\s*\n?", text, flags=re.IGNORECASE)
+    out: list[str] = []
+    if len(parts) >= 3:                    # có dòng ngăn cách -> parts[1::2] là số, parts[2::2] là bài
+        for chunk in parts[2::2]:
+            c = _strip_fences(chunk).strip()
+            if c and len(c) > 80:
+                out.append(c)
+    if not out:                            # không có ngăn cách -> tách theo dòng trống lớn / thử cả bài
+        c = _strip_fences(text).strip()
+        if c and len(c) > 80:
+            out = [c]
+    try:
+        want = max(1, int(n or 1))
+    except Exception:      # noqa: BLE001
+        want = 1
+    return out[:want] if len(out) > want else out
+
+
+def _strip_fences(text: str) -> str:
+    t = (text or "").strip()
+    t = re.sub(r"^```[a-zA-Z]*\s*", "", t)
+    t = re.sub(r"```\s*$", "", t)
+    return t.strip()
 
 
 # --------------------------------------------------------------------------- #

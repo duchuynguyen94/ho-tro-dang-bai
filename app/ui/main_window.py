@@ -24,6 +24,7 @@ from ..storage.models import (
     STATUS_QUEUED,
     STATUS_GENERATING,
     STATUS_FINISH,
+    Task,
 )
 from ..storage.store import Store
 from .pages.config_page import ConfigPage
@@ -42,6 +43,7 @@ from .workers import (
     ImagesWorker,
     PostWorker,
     SeoJsonWorker,
+    SplitWorker,
     shutdown_all_threads,
 )
 
@@ -68,6 +70,7 @@ class MainWindow(QMainWindow):
         self._img_queue: dict = {}        # việc ghép ảnh đang chờ (task_id -> [(opts, index, msg)])
         self._content_only_ids: set = set()  # "Random lại" -> chỉ tạo lại NỘI DUNG, giữ nguyên ảnh
         self._seo_worker = None              # luồng tạo JSON SEO (job trống)
+        self._split_worker = None            # luồng chia 1 link thành N bài
         self._post_workers: dict = {}        # task_id -> luồng đăng bài
         self._post_started: dict = {}        # task_id -> thời điểm bắt đầu đăng (giây)
         self._start_post_watchdog()          # lưới an toàn: Chrome tắt -> mở khoá nút
@@ -151,6 +154,7 @@ class MainWindow(QMainWindow):
 
         # signals
         self.post_page.create_task.connect(self._on_create_task)
+        self.post_page.split_task.connect(self._on_split_task)
         self.jobs_page.regenerate.connect(self._on_regenerate)
         self.jobs_page.regenerate_images.connect(self._on_regenerate_images)
         self.jobs_page.delete_task.connect(self._on_delete_task)
@@ -515,6 +519,92 @@ class MainWindow(QMainWindow):
         # luôn GHÉP LẠI ẢNH theo website mới (logo site / watermark / thanh thông tin của site mới)
         self._start_images_worker(fresh, None, None, "Đang ghép lại ảnh theo website mới…")
         show_toast(self, f"Đã đổi sang “{new_site.name}” — đang ghép lại ảnh theo website mới…", 2800)
+
+    def _on_split_task(self, task, n: int) -> None:
+        """Chia 1 link nguồn thành N bài -> tạo N JOB TRỐNG (website chia TUẦN TỰ)."""
+        if self._split_worker is not None and self._split_worker.isRunning():
+            return
+        if getattr(self.jobs_page, "_busy", False):
+            show_toast(self, "Đang có tiến trình chạy — chờ xong đã", 2800, ok=False)
+            return
+        link = str(getattr(task, "source_url", "") or "").strip()
+        if not link:
+            return
+        sites = [x for x in self.store.sites
+                 if getattr(x, "script", None) and getattr(x.script, "steps", None)]
+        if not sites:
+            show_toast(self, "Chưa có website nào có kịch bản đăng bài", 3200, ok=False)
+            return
+        try:
+            self.post_page.set_splitting(True, n)
+        except Exception:      # noqa: BLE001
+            pass
+        worker = SplitWorker(self.store, link, n)
+        worker.log.connect(self._on_worker_log)
+        worker.ok.connect(lambda arts: self._on_split_ok(task, arts, sites))
+        worker.failed.connect(self._on_split_failed)
+
+        def _done() -> None:
+            if self._split_worker is worker:
+                self._split_worker = None
+            self._cleanup(worker)
+
+        worker.finished.connect(_done)
+        self._split_worker = worker
+        self._workers.append(worker)
+        worker.start()
+        show_toast(self, f"Đang chia link nguồn thành {n} bài…", 3200)
+
+    def _on_split_ok(self, task, arts: list, sites: list) -> None:
+        """Provider trả về các content -> tạo N job TRỐNG (mỗi job 1 content)."""
+        try:
+            self.post_page.set_splitting(False, 0)
+        except Exception:      # noqa: BLE001
+            pass
+        arts = [str(a) for a in (arts or []) if str(a).strip()]
+        if not arts:
+            show_toast(self, "Không chia được bài nào", 3200, ok=False)
+            return
+        link = str(getattr(task, "source_url", "") or "")
+        brand = str(getattr(task, "brand_logo_fallback", "") or "")
+        count = max(1, int(getattr(task, "image_count", 3) or 3))
+        made: list = []
+        for i, content in enumerate(arts, 1):
+            site = sites[(i - 1) % len(sites)]      # TUẦN TỰ, cho phép trùng
+            t = Task(
+                site_id=site.id,
+                site_name=site.name,
+                source_url=link,
+                source_urls=[link],
+                split_no=i,
+                kind="blank",
+                brand_logo_fallback=brand,
+                image_count=count,
+                status=STATUS_FINISH,
+            )
+            slots = [{"path": "", "footer": ""} for _ in range(count)]
+            t.result = {"title": "", "focus_keyword": "", "description": "", "tags": "",
+                        "content_html": content, "images": slots,
+                        "image_opts_list": [{} for _ in slots], "product_images": []}
+            self.store.upsert_task(t)
+            made.append(t)
+        self.store.save()
+        self.jobs_page.refresh()
+        self._refresh_count()
+        self._go(2)
+        if made:
+            self.jobs_page.select_task(made[0].id)
+        for t in made:      # tự ghép ảnh theo website được chia
+            self._start_images_worker(t, None, None, "Đang ghép ảnh…")
+        show_toast(self, f"Đã tạo {len(made)} job trống (Bài 1 → Bài {len(made)})", 3600)
+
+    def _on_split_failed(self, err: str) -> None:
+        try:
+            self.post_page.set_splitting(False, 0)
+        except Exception:      # noqa: BLE001
+            pass
+        self._log_err("Chia nhiều bài", err)
+        show_toast(self, f"Chia bài lỗi: {str(err)[:80]}", 4000, ok=False)
 
     def _on_seo_json(self, task) -> None:
         """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""
