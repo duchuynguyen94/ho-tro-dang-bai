@@ -279,6 +279,8 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         f"Trong link nguồn hãy lấy DANH SÁCH SẢN PHẨM. Sau đó CHIA ĐỀU danh sách sản phẩm "
         f"đó thành {n} NHÓM, rồi viết MỖI NHÓM thành 1 BÀI VIẾT RIÊNG BIỆT hoàn chỉnh theo "
         f'file "rule_content.pdf" đã đính kèm (sources) trong Project này.\n'
+        f"- KHÔNG ĐƯỢC TRÙNG MÃ SẢN PHẨM giữa các nhóm — mỗi mã sản phẩm chỉ nằm ở "
+        f"ĐÚNG 1 NHÓM.\n"
         f"{rule_block}"
         f"\n=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC) HTML gom vào 1 block cho gọn  ===\n"
         f"Mỗi bài bắt đầu bằng ĐÚNG 1 dòng ngăn cách: === BÀI 1 ===, === BÀI 2 === … "
