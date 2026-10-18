@@ -252,10 +252,10 @@ class TaskRow(QFrame):
             srcs = [task.source_url]
         if split_no > 0:
             # job được CHIA từ 1 link -> "Bài N - link nguồn"
-            title_text = f"Bài {split_no} - {task.source_url or task.site_name}"
+            title_text = f"Bài {split_no} - {task.source_url or '(chưa có link)'}"
             purple = True
         elif is_blank:
-            title_text = task.site_name
+            title_text = task.source_url or "(chưa có link)"
             purple = True
         else:
             title_text = srcs[0] if srcs else "(chưa có link)"
@@ -267,28 +267,25 @@ class TaskRow(QFrame):
         url.setWordWrap(True)
         v.addWidget(url)
 
-        if split_no > 0:                     # job CHIA BÀI: hiện trạng thái + website
+        if split_no > 0:                     # job CHIA BÀI: hiện trạng thái
             label = STATUS_LABELS.get(task.status, task.status)
-            meta = QLabel(f"{label}  ·  {task.site_name}")
+            meta = QLabel(label)
             meta.setObjectName("taskMeta")
             v.addWidget(meta)
         elif not is_blank:                   # job trống: ẩn phần trạng thái
             label = STATUS_LABELS.get(task.status, task.status)     # lỗi -> chỉ báo "lỗi"
             if task.status == STATUS_FINISH:
-                # "đã xong" -> XANH + ĐẬM (tiêu đề vẫn màu đen); tên website vẫn xám
+                # "đã xong" -> XANH + ĐẬM (tiêu đề vẫn màu đen)
+                st = QLabel(label)
+                st.setObjectName("taskDone")
                 mrow = QHBoxLayout()
                 mrow.setContentsMargins(0, 0, 0, 0)
                 mrow.setSpacing(4)
-                st = QLabel(label)
-                st.setObjectName("taskDone")
-                nm = QLabel(f"·  {task.site_name}")
-                nm.setObjectName("taskMeta")
                 mrow.addWidget(st)
-                mrow.addWidget(nm)
                 mrow.addStretch(1)
                 v.addLayout(mrow)
             else:
-                meta = QLabel(f"{label}  ·  {task.site_name}")
+                meta = QLabel(label)
                 meta.setObjectName("taskMeta")
                 v.addWidget(meta)
 
@@ -348,23 +345,11 @@ class TaskRow(QFrame):
             pass
 
     def set_sites(self, sites: list[tuple[str, str, bool]]) -> None:
-        """Danh sách website cho menu "Đổi website"."""
+        """(Đã bỏ) — website được chọn lúc bấm "OK — Đăng bài"."""
         self._sites = list(sites or [])
 
     def contextMenuEvent(self, event) -> None:  # noqa: N802
         menu = QMenu(self)
-        sub = menu.addMenu("Đổi website")
-        for sid, name, has_script in self._sites:
-            act = sub.addAction(("✔ " if sid == self.site_id else "") + name)
-            act.setEnabled(bool(has_script))
-            if not has_script:
-                act.setToolTip("Website này chưa có kịch bản đăng bài")
-            if sid == self.site_id:
-                act.setEnabled(False)          # đang dùng rồi
-            act.setData(sid)
-        if not self._sites:
-            sub.setEnabled(False)
-        menu.addSeparator()
         act_copy = menu.addAction("Sao chép link nguồn")
         act_copy.setEnabled(bool(self.source_url))
         act_open = menu.addAction("Mở link nguồn")
@@ -373,11 +358,6 @@ class TaskRow(QFrame):
         act_del = menu.addAction("Xoá công việc")
 
         chosen = menu.exec(event.globalPos())
-        if chosen is not None and chosen.parent() is sub:
-            sid = str(chosen.data() or "")
-            if sid:
-                self.site_pick.emit(self.task_id, sid)
-            return
         if chosen == act_copy and self.source_url:
             QApplication.clipboard().setText(self.source_url)
             self.copied.emit(self.source_url)
@@ -746,7 +726,7 @@ class JobsPage(QWidget):
         self.current = task
         for tid, row in self._rows.items():
             row.set_selected(tid == task_id)
-        self.result_card.set_title(f"Kết quả AI — {task.site_name}")
+        self.result_card.set_title("")      # đã bỏ tên website ở tiêu đề panel phải
         active = self.store.ai_content.get("active", "")
         self.provider_badge.setText(f"Provider: {active}" if active else "")
         self._show_state()
@@ -849,7 +829,7 @@ class JobsPage(QWidget):
                 return
             # đang chờ tới lượt: KHÔNG có nút nào, KHÔNG hiện message của việc khác
             self.footer.hide()
-            self.loading_label.setText(f"đang chờ tới lượt · {task.site_name}")
+            self.loading_label.setText("đang chờ tới lượt…")
             self.loading_note.setText("")
             self.loading_bar.setVisible(False)
             self.stop_btn.setVisible(False)
@@ -861,9 +841,7 @@ class JobsPage(QWidget):
                 self._keep_panel(task, "Đang tạo lại nội dung…")
                 return
             self.footer.hide()
-            self.loading_label.setText(
-                f"Đang tạo nội dung cho {task.site_name}…"
-            )
+            self.loading_label.setText("Đang tạo nội dung…")
             self.loading_bar.setVisible(True)
             self.stop_btn.setVisible(True)
             self.stack.setCurrentWidget(self.page_loading)
@@ -1033,6 +1011,14 @@ class JobsPage(QWidget):
         r["image_opts_list"] = lst
         task.image_count = max(1, len(images))
 
+    def _site_of(self, task):
+        """Website của job: đã chọn lúc Đăng -> hoặc MẶC ĐỊNH của phần mềm."""
+        from ...storage.models import Site
+
+        return (self.store.get_site(getattr(task, "site_id", ""))
+                or getattr(self, "_post_sites", {}).get(getattr(task, "id", ""))
+                or Site())
+
     def _footer_mode_of(self, task, index: int) -> str:
         """Thanh thông tin (bar1/bar2) ảnh ở vị trí `index` đang dùng.
 
@@ -1052,8 +1038,8 @@ class JobsPage(QWidget):
             if m in ("bar1", "bar2"):
                 return m
         # 2) ảnh đã ghép -> theo thanh thật trong ảnh
-        site = self.store.get_site(task.site_id)
-        bars = _site_bars(site) if site else []
+        site = self._site_of(task)
+        bars = _site_bars(site)
         images = r.get("images") or []
         cur = str(images[index].get("footer", "") or "") if 0 <= index < len(images) else ""
         if cur:
@@ -1344,7 +1330,7 @@ class JobsPage(QWidget):
             pass
 
     def _build_preview(self, task, index: int, mode_override: str = "") -> dict:
-        site = self.store.get_site(task.site_id)
+        site = self._site_of(task)
         r = task.result or {}
         images = r.get("images") or []
         footer = str(images[index].get("footer", "") or "") if index < len(images) else ""
@@ -1373,12 +1359,12 @@ class JobsPage(QWidget):
                       or str(getattr(task, "brand_logo_fallback", "") or "")),
             "products": [] if opts.get("no_products") else
                         [p for p in (r.get("product_images") or []) if p],
-            "watermark": (site.watermark_text if site else ""),
+            "watermark": site.watermark_text,
         }
 
     def _preview_params(self, task, index: int, mode_override: str = "") -> dict:
         """Tham số dựng ẢNH NỀN canvas (ghép ở luồng riêng — không đứng giao diện)."""
-        site = self.store.get_site(task.site_id)
+        site = self._site_of(task)
         r = task.result or {}
         images = r.get("images") or []
         footer = str(images[index].get("footer", "") or "") if index < len(images) else ""
@@ -1470,7 +1456,7 @@ class JobsPage(QWidget):
         title = f"Ảnh {idx + 1}" if images else ""
         lst = r.get("image_opts_list") or []
         opts_i = dict(lst[idx]) if idx < len(lst) else (r.get("image_opts") or {})
-        preview = self._build_preview(task, idx) if images and self.store.get_site(task.site_id) else {}
+        preview = self._build_preview(task, idx) if images else {}
         self.img_editor.set_ai_enabled((self.store.ai_image or {}).get("active") != "off")
         # thanh thông tin: select phản ánh ĐÚNG thanh đang có trong ảnh
         # job trống: không chạy AI -> ẩn nút Random lại

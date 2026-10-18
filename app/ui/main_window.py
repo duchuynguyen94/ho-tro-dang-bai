@@ -8,6 +8,7 @@ from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtGui import QIcon
 from PySide6.QtWidgets import (
     QFileDialog,
+    QInputDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -21,6 +22,7 @@ from PySide6.QtWidgets import (
 
 from .. import __version__
 from ..storage.models import (
+    Site,
     STATUS_CANCELLED,
     STATUS_ERROR,
     STATUS_QUEUED,
@@ -79,6 +81,7 @@ class MainWindow(QMainWindow):
         self._split_seo_overlay = None        # popup phủ toàn app báo tiến trình lấy JSON SEO
         self._split_seo_cancelled = False     # người dùng đã bấm "Dừng và đóng"
         self._post_workers: dict = {}        # task_id -> luồng đăng bài
+        self._post_sites: dict = {}           # task_id -> website đang đăng (chọn lúc bấm Đăng)
         self._post_started: dict = {}        # task_id -> thời điểm bắt đầu đăng (giây)
         self._start_post_watchdog()          # lưới an toàn: Chrome tắt -> mở khoá nút
         self._start_update_watch()           # kiểm tra cập nhật (chỉ Windows)
@@ -152,6 +155,7 @@ class MainWindow(QMainWindow):
         self.error_log_page = ErrorLogPage(self.store)     # nằm trong Cài đặt (sidebar)
         self.config_page = ConfigPage(self.store, self.error_log_page)
         self.jobs_page = JobsPage(self.store)
+        self.jobs_page._post_sites = self._post_sites    # job chưa lưu website -> dùng chung
         for page in (self.config_page, self.post_page, self.jobs_page):
             self.stack.addWidget(page)
         v.addWidget(self.stack, 1)
@@ -177,7 +181,6 @@ class MainWindow(QMainWindow):
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.jobs_page.status_msg.connect(self.status)
         self.jobs_page.seo_json.connect(self._on_seo_json)
-        self.jobs_page.change_site.connect(self._on_change_site)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -220,9 +223,7 @@ class MainWindow(QMainWindow):
     # ------------------------------------------------------------------ #
     def _on_create_task(self, task) -> None:
         """Việc mới: đưa vào HÀNG ĐỢI (queued) rồi để bộ điều phối chạy khi tới lượt."""
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
+        site = self._site_of(task)
         if (getattr(task, "kind", "") or "") == "blank":
             # JOB TRỐNG: không chạy AI -> mở thẳng panel kết quả, các ô để trống
             task.status = STATUS_FINISH
@@ -275,9 +276,7 @@ class MainWindow(QMainWindow):
                 self._update_ai_busy()
                 return
             task = queued[0]                      # job cũ nhất chạy trước
-            site = self.store.get_site(task.site_id)
-            if not site:
-                return
+            site = self._site_of(task)
             task.status = STATUS_GENERATING
             task.progress = 10
             task.message = ""
@@ -457,9 +456,7 @@ class MainWindow(QMainWindow):
 
     # ------------------------------------------------------------------ #
     def _on_regenerate_images(self, task, footer_mode: str) -> None:
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
+        site = self._site_of(task)
         self.jobs_page._save()
         task.footer_mode = footer_mode
         self.store.upsert_task(task)
@@ -495,49 +492,6 @@ class MainWindow(QMainWindow):
             pass
         self.status("Đã tạo lại ảnh.")
 
-    def _on_change_site(self, task, site_id: str) -> None:
-        """Đổi website cho job THƯỜNG: giữ nội dung, hỏi có ghép lại ảnh theo site mới không."""
-        if getattr(self.jobs_page, "_busy", False):
-            show_toast(self, "Đang có tiến trình chạy — chờ xong đã", 2800, ok=False)
-            return
-        new_site = self.store.get_site(site_id)
-        if not new_site:
-            return
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        if fresh.site_id == site_id:
-            return
-        if not (getattr(new_site, "script", None) and getattr(new_site.script, "steps", None)):
-            show_toast(self, f"Website “{new_site.name}” chưa có kịch bản đăng bài", 3000, ok=False)
-            return
-        self.jobs_page._save()               # lưu nội dung đang gõ trước khi đổi
-        old = self.store.get_site(fresh.site_id)
-        fresh.site_id = new_site.id
-        fresh.site_name = new_site.name
-        self.store.upsert_task(fresh)
-        self.store.save()
-        self.jobs_page.current = fresh
-        try:
-            self._refresh_jobs_keep(fresh)
-        except Exception:      # noqa: BLE001
-            traceback.print_exc()
-        # sửa link TIÊU ĐỀ ĐẦU của nội dung -> website MỚI
-        try:
-            from ..ai.manager import set_first_title_link
-
-            r2 = fresh.result = dict(fresh.result or {})
-            html2 = str(r2.get("content_html") or "")
-            if html2:
-                r2["content_html"] = set_first_title_link(html2, new_site.url or "")
-                self.store.upsert_task(fresh)
-                self.store.save()
-                self.jobs_page._load(fresh)      # cập nhật lại panel (editor thấy link mới)
-        except Exception:      # noqa: BLE001
-            traceback.print_exc()
-        self.status(f"Đã đổi website: {old.name if old else '?'} → {new_site.name}")
-        # luôn GHÉP LẠI ẢNH theo website mới (logo site / watermark / thanh thông tin của site mới)
-        self._start_images_worker(fresh, None, None, "Đang ghép lại ảnh theo website mới…")
-        show_toast(self, f"Đã đổi sang “{new_site.name}” — đang ghép lại ảnh theo website mới…", 2800)
-
     def _on_split_task(self, task, n: int) -> None:
         """Chia 1 link nguồn thành N bài -> tạo N JOB TRỐNG (website chia TUẦN TỰ)."""
         if self._split_worker is not None and self._split_worker.isRunning():
@@ -548,18 +502,13 @@ class MainWindow(QMainWindow):
         link = str(getattr(task, "source_url", "") or "").strip()
         if not link:
             return
-        sites = [x for x in self.store.sites
-                 if getattr(x, "script", None) and getattr(x.script, "steps", None)]
-        if not sites:
-            show_toast(self, "Chưa có website nào có kịch bản đăng bài", 3200, ok=False)
-            return
         try:
             self.post_page.set_splitting(True, n)
         except Exception:      # noqa: BLE001
             pass
         worker = SplitWorker(self.store, link, n)
         worker.log.connect(self._on_worker_log)
-        worker.ok.connect(lambda arts: self._on_split_ok(task, arts, sites))
+        worker.ok.connect(lambda arts: self._on_split_ok(task, arts))
         worker.failed.connect(self._on_split_failed)
 
         def _done() -> None:
@@ -573,7 +522,7 @@ class MainWindow(QMainWindow):
         worker.start()
         show_toast(self, f"Đang chia link nguồn thành {n} bài…", 3200)
 
-    def _on_split_ok(self, task, arts: list, sites: list) -> None:
+    def _on_split_ok(self, task, arts: list) -> None:
         """Provider trả về các content -> tạo N job TRỐNG (mỗi job 1 content)."""
         try:
             self.post_page.set_splitting(False, 0)
@@ -588,10 +537,7 @@ class MainWindow(QMainWindow):
         count = max(1, int(getattr(task, "image_count", 3) or 3))
         made: list = []
         for i, content in enumerate(arts, 1):
-            site = sites[(i - 1) % len(sites)]      # TUẦN TỰ, cho phép trùng
             t = Task(
-                site_id=site.id,
-                site_name=site.name,
                 source_url=link,
                 source_urls=[link],
                 split_no=i,
@@ -601,11 +547,11 @@ class MainWindow(QMainWindow):
                 status=STATUS_FINISH,
             )
             slots = [{"path": "", "footer": ""} for _ in range(count)]
-            # link TIÊU ĐỀ ĐẦU = website mà job này SẼ ĐĂNG
+            # link TIÊU ĐỀ ĐẦU: tạm dùng link mặc định -> khi bấm Đăng mới đổi theo website
             try:
                 from ..ai.manager import set_first_title_link as _set_first
 
-                content = _set_first(content, site.url or "")
+                content = _set_first(content, self.store.title_link_first or "")
             except Exception:      # noqa: BLE001
                 pass
             t.result = {"title": "", "focus_keyword": "", "description": "", "tags": "",
@@ -619,7 +565,7 @@ class MainWindow(QMainWindow):
         self._go(2)
         if made:
             self.jobs_page.select_task(made[0].id)
-        for t in made:      # tự ghép ảnh theo website được chia
+        for t in made:      # ghép ảnh bằng logo/thanh thông tin MẶC ĐỊNH (chưa chọn website)
             self._start_images_worker(t, None, None, "Đang ghép ảnh…")
         show_toast(self, f"Đã tạo {len(made)} job trống (Bài 1 → Bài {len(made)})", 3600)
         self._start_split_seo(made)      # tự lấy JSON SEO cho TỪNG bài (popup phủ toàn app)
@@ -748,9 +694,6 @@ class MainWindow(QMainWindow):
 
     def _on_seo_json(self, task) -> None:
         """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
         if self._seo_worker is not None and self._seo_worker.isRunning():
             return
         self.jobs_page._save()              # lưu nội dung đang gõ
@@ -802,9 +745,6 @@ class MainWindow(QMainWindow):
         # đang có việc tạo nội dung -> không cho tạo lại (chạy tuần tự)
         if self._content_workers:
             self.status("Đang có 1 công việc tạo nội dung — chờ xong rồi hãy tạo lại.")
-            return
-        site = self.store.get_site(task.site_id)
-        if not site:
             return
         # Ghi lại các trường đã sửa trước khi tạo lại
         self.jobs_page._save()
@@ -862,24 +802,23 @@ class MainWindow(QMainWindow):
         if other:
             show_toast(self, "Đang có 1 việc đăng bài — chờ việc đó xong đã", 3200, ok=False)
             return
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
+        # CHỌN WEBSITE ĐỂ ĐĂNG (job KHÔNG nhớ website -> hỏi mỗi lần; chỉ web có kịch bản)
+        self.jobs_page._save()                          # chốt nội dung đang gõ trước khi hỏi
+        site = self._choose_post_site()
+        if site is None:
+            return                                     # người dùng huỷ -> không đăng
         self.jobs_page.set_posting(task.id, True)      # khoá + mờ nút Đăng bài
-        self.jobs_page._save()
+        self._post_sites[task.id] = site
 
-        if not (site.script and site.script.steps):
-            self.jobs_page.set_posting(task.id, False)  # mở lại nút nếu không chạy được
-            QMessageBox.warning(
-                self,
-                "Chưa có kịch bản",
-                f"Website “{site.name}” chưa có kịch bản đăng bài.\n\n"
-                "Vào Cài đặt → website → Kịch bản đăng bài để dán/import kịch bản.",
-            )
-            return
-
-        # lưu 3 ảnh vào thư mục tên = ID công việc (để upload lên website)
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        # 1) AUTO FORMAT LẠI 1 LẦN + link tiêu đề ĐẦU = website vừa chọn
+        self._format_content_for_site(fresh, site)
+        # 2) GHÉP LẠI ẢNH theo website vừa chọn -> CHỜ ghép xong mới mở Chrome để đăng
+        if not self._compose_images_for_site(fresh, site):
+            self.jobs_page.set_posting(task.id, False)
+            self._post_sites.pop(task.id, None)
+            return
+        fresh = next((t for t in self.store.tasks if t.id == task.id), fresh)
         try:
             paths = export_post_images(self.store, fresh)
             if paths:
@@ -910,6 +849,7 @@ class MainWindow(QMainWindow):
         def _post_done() -> None:
             self._post_workers.pop(task.id, None)
             self._post_started.pop(task.id, None)
+            self._post_sites.pop(task.id, None)
             self._cleanup(worker)
 
         worker.finished.connect(_post_done)
@@ -1021,8 +961,7 @@ class MainWindow(QMainWindow):
                 started = float(self._post_started.get(tid, 0) or 0)
                 if started and (_time.time() - started) < 12:
                     continue                 # đang mở trình duyệt -> chưa kiểm tra
-                task = next((t for t in self.store.tasks if t.id == tid), None)
-                site = self.store.get_site(task.site_id) if task is not None else None
+                site = self._post_sites.get(tid)          # website chọn lúc bấm Đăng
                 if site is None:
                     self.jobs_page.set_posting(tid, False)
                     changed = True
@@ -1102,9 +1041,9 @@ class MainWindow(QMainWindow):
         Nếu việc đó ĐANG ghép ảnh -> xếp hàng chờ (KHÔNG giết việc đang chạy) để
         không mất ảnh vừa yêu cầu ghép lại.
         """
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
+        # Job CHƯA chọn website -> ghép bằng MẶC ĐỊNH của phần mềm
+        # (logo mặc định + thanh thông tin 1/2 mặc định + watermark mặc định).
+        site = self._site_of(task)
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         old = self._img_workers.get(fresh.id)
         if old is not None and old.isRunning():
@@ -1140,9 +1079,7 @@ class MainWindow(QMainWindow):
         self.status(status_msg)
 
     def _on_apply_image_opts(self, task, index: int, opts: dict) -> None:
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
+        site = self._site_of(task)
         self.jobs_page._save()
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         lst = _opts_list_of(fresh.result)
@@ -1209,6 +1146,107 @@ class MainWindow(QMainWindow):
         folder = Path(paths[0]).parent
         show_toast(self, f"Đã xuất {len(paths)} ảnh vào {folder.name}/", 3200)
 
+    # ------------------------------------------------------------------ #
+    # Chọn website lúc ĐĂNG BÀI + format lại nội dung + ghép lại ảnh
+    # ------------------------------------------------------------------ #
+    def _site_of(self, task):
+        """Website của job: đã chọn lúc Đăng -> hoặc MẶC ĐỊNH (job chưa chọn website)."""
+        return (self.store.get_site(getattr(task, "site_id", ""))
+                or self._post_sites.get(getattr(task, "id", ""))
+                or Site())
+
+    def _choose_post_site(self):
+        """Popup chọn website để ĐĂNG (chỉ website CÓ KỊCH BẢN). None nếu người dùng huỷ."""
+        sites = [x for x in self.store.sites
+                 if getattr(x, "script", None) and getattr(x.script, "steps", None)]
+        if not sites:
+            QMessageBox.warning(
+                self,
+                "Chưa có kịch bản",
+                "Chưa có website nào có kịch bản đăng bài.\n\n"
+                "Vào Cài đặt → website → Kịch bản đăng bài để dán/import kịch bản.",
+            )
+            return None
+        names = [x.name or x.url for x in sites]
+        name, ok = QInputDialog.getItem(
+            self, "Chọn website để đăng", "Website sẽ đăng bài này:", names, 0, False
+        )
+        if not ok or not name:
+            return None
+        idx = names.index(name) if name in names else 0
+        return sites[idx]
+
+    def _format_content_for_site(self, task, site) -> None:
+        """Auto format LẠI 1 lần + đặt link tiêu đề ĐẦU = website sẽ đăng."""
+        try:
+            from ..ai.manager import (apply_template_icons, clean_content_html,
+                                      extract_product_name, insert_title_links,
+                                      linkify_domains, mark_auto_formatted,
+                                      set_first_title_link)
+
+            r = task.result = dict(task.result or {})
+            html = str(r.get("content_html") or "")
+            if not html.strip():
+                return
+            site_url = str(getattr(site, "url", "") or "")
+            from ..ai.manager import already_auto_formatted
+
+            if already_auto_formatted(html):
+                # đã format rồi -> chỉ sửa link tiêu đề đầu cho đúng website
+                out = set_first_title_link(html, site_url)
+            else:
+                out = clean_content_html(html)
+                out = apply_template_icons(out)
+                all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
+                out = linkify_domains(out, all_sites)
+                out = insert_title_links(
+                    out, site_url, list(self.store.title_links),
+                    [extract_product_name(out, ""), str(r.get("focus_keyword") or ""),
+                     str(r.get("title") or ""), ""],
+                )
+                out = set_first_title_link(out, site_url)
+                out = mark_auto_formatted(out)
+            r["content_html"] = out
+            self.store.upsert_task(task)
+            self.store.save()
+            self.status(f"Đã auto format lại nội dung + link tiêu đề đầu → {site.name or site_url}")
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Auto format khi đăng", str(exc))
+
+    def _compose_images_for_site(self, task, site, timeout_ms: int = 180000) -> bool:
+        """Ghép LẠI ảnh theo website vừa chọn rồi CHỜ xong mới cho mở Chrome đăng."""
+        from PySide6.QtCore import QEventLoop
+
+        loop = QEventLoop(self)
+        state = {"ok": False, "err": ""}
+        try:
+            worker = ImagesWorker(self.store, site, task, task.footer_mode, None)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self._log_err("Ghép ảnh", str(exc))
+            return False
+        worker.log.connect(lambda m: self.status(m))
+        worker.ok.connect(lambda images: (self._on_images_ok(task, images),
+                                          state.update(ok=True), loop.quit()))
+        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", str(err)),
+                                           state.update(err=str(err)), loop.quit()))
+        self._workers.append(worker)
+        self.status(f"Đang ghép lại ảnh theo {site.name}… (xong mới mở Chrome)")
+        worker.start()
+        QTimer.singleShot(max(5000, int(timeout_ms)), loop.quit)     # lưới an toàn
+        loop.exec()
+        try:
+            if worker.isRunning():
+                worker.wait(2000)
+        except Exception:      # noqa: BLE001
+            pass
+        self._cleanup(worker)
+        if state["ok"]:
+            return True
+        show_toast(self, f"Ghép ảnh lỗi: {state['err'][:80] or 'quá lâu'}", 4200, ok=False)
+        return False
+
     def _on_stop_all(self) -> None:
         """Dừng TẤT CẢ: mọi việc đang chờ / đang tạo -> cancelled ("chưa tạo")."""
         try:
@@ -1270,9 +1308,7 @@ class MainWindow(QMainWindow):
         show_toast(self, "Đã cắt viền ảnh", 2200)
 
     def _on_refetch_image(self, task, index: int) -> None:
-        site = self.store.get_site(task.site_id)
-        if not site:
-            return
+        site = self._site_of(task)
         self.jobs_page._save()
         worker = ImageRefetchWorker(self.store, site, task, index)
         worker.log.connect(lambda m: self.status(m))
@@ -1285,8 +1321,6 @@ class MainWindow(QMainWindow):
         self.status(f"Đang lấy ảnh cho Ảnh {index + 1}…")
 
     def _on_ai_edit(self, task, index: int, prompt: str) -> None:
-        if not self.store.get_site(task.site_id):
-            return
         worker = ImageEditWorker(self.store, task, index, prompt)
         worker.log.connect(self.status)
         worker.ok.connect(lambda path: self._on_ai_edit_ok(task, index, path))
