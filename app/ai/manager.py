@@ -214,7 +214,12 @@ Không giải thích gì thêm."""
 
 
 def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> str:
-    """Prompt CHIA 1 link nguồn thành N bài viết (CHỈ content, KHÔNG JSON SEO)."""
+    """Prompt CHIA DANH SÁCH SẢN PHẨM của 1 link nguồn thành N bài viết.
+
+    - with_rule=False: cho ChatGPT (rule_content.pdf đã đính kèm trong Project).
+    - with_rule=True : chèn thêm nội dung rule (cho provider API — không có Project).
+    """
+    n = max(2, int(n or 2))
     urls = [str(u) for u in (source.get("urls") or []) if str(u).strip()] or \
         [str(source.get("url", "") or "")]
     link_line = "\n".join(f"- {u}" for u in urls)
@@ -223,21 +228,23 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         rc = read_rule(rule_path(rules, "content"))
         if rc:
             rule_block = f"\n=== RULE CONTENT (rule_content.pdf) ===\n{rc}\n"
-    body = re.sub(r"<[^>]+>", " ", str(source.get("text", "") or ""))
-    body = re.sub(r"\s+", " ", body).strip()[:6000]
     return (
-        f"Đọc bài viết tại link nguồn sau:\n{link_line}\n"
-        f"Viết lại thành {int(n)} BÀI VIẾT RIÊNG BIỆT (mỗi bài là 1 bài hoàn chỉnh, "
-        f"khác nhau về góc nhìn/cách viết) theo file \"rule_content.pdf\" đã đính kèm "
+        f"Đọc bài viết tại link nguồn sau:\n{link_line}\n\n"
+        f"Trong link nguồn có DANH SÁCH SẢN PHẨM. Hãy CHIA ĐỀU danh sách sản phẩm đó thành "
+        f"{n} NHÓM (giữ đúng thứ tự xuất hiện trong trang), rồi viết MỖI NHÓM thành "
+        f"1 BÀI VIẾT RIÊNG BIỆT hoàn chỉnh theo file \"rule_content.pdf\" đã đính kèm "
         f"(sources) trong Project này.\n"
-        f"KHÔNG tạo JSON SEO, KHÔNG viết thông tin SEO.\n"
+        f"- Tổng số sản phẩm chia hết cho {n} → mỗi bài đúng (tổng ÷ {n}) sản phẩm.\n"
+        f"- Nếu chia KHÔNG hết → các bài ĐẦU nhận nhiều hơn 1 sản phẩm "
+        f"(ví dụ 10 sản phẩm chia 3 → bài 1: 4, bài 2: 3, bài 3: 3).\n"
+        f"- Mỗi bài CHỈ viết về sản phẩm của NHÓM MÌNH — KHÔNG viết lại sản phẩm của nhóm khác.\n"
+        f"- KHÔNG tạo JSON SEO, KHÔNG viết thông tin SEO.\n"
         f"{rule_block}"
         f"\n=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC) ===\n"
         f"Mỗi bài bắt đầu bằng ĐÚNG 1 dòng ngăn cách: === BÀI 1 ===, === BÀI 2 === … "
-        f"=== BÀI {int(n)} ===\n"
+        f"=== BÀI {n} ===\n"
         f"Nội dung mỗi bài là HTML thật (đủ các mục theo rule_content.pdf). "
         f"Không giải thích gì thêm.\n"
-        f"\n=== BÀI VIẾT NGUỒN (tham khảo) ===\nTiêu đề gốc: {source.get('title', '')}\n{body}\n"
     )
 
 
