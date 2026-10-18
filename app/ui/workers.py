@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import random
+import sys
 import traceback
+import unicodedata
 from pathlib import Path
 
 from PySide6.QtCore import QThread, Signal
@@ -116,17 +118,24 @@ def export_post_images(store, task, dest_dir: str = "") -> list[str]:
     }
     out: list[str] = []
     dedupe = bool(str(dest_dir or "").strip())     # chỉ chống đè khi xuất ra thư mục người dùng chọn
+    # macOS lưu tên tiếng Việt ở dạng NFD (tách dấu) -> phải đổi cho khớp,
+    # nếu không Finder sẽ báo lỗi -36 khi xoá / đổi tên file.
+    _nfd = (sys.platform == "darwin" and dedupe)
+
+    def _fix(name: str) -> str:
+        return unicodedata.normalize("NFD", name) if _nfd else name
+
     used: set[str] = set()
     for i, im in enumerate(images):
         src = Path(im.get("path", ""))
         if not src.exists():
             continue
         stem = _image_stem(rules[i] if i < len(rules) else "", ctx, i)
-        dest = base / f"{stem}{ext}"
+        dest = base / _fix(f"{stem}{ext}")
         if dedupe:                                 # tên đã có (trong thư mục / trong lần xuất này) -> thêm số
             n = 2
             while dest.name in used or dest.exists():
-                dest = base / f"{stem} ({n}){ext}"
+                dest = base / _fix(f"{stem} ({n}){ext}")
                 n += 1
             used.add(dest.name)
         try:
