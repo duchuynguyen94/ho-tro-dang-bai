@@ -245,16 +245,12 @@ class PostPage(QWidget):
         self._sync_split_enabled(len(links))
         has_rule = self.store.has_format_content()
         splitting = bool(self.split_check.isChecked() and self.split_check.isEnabled())
-        # CHIA NHIỀU BÀI -> BẮT BUỘC chọn logo thương hiệu
-        need_logo = bool(splitting and not self.brand_logo.text().strip())
-        ok = bool(has_rule and (site or splitting) and not need_logo)
+        ok = bool(has_rule and (site or splitting))
         self.create_btn.setEnabled(ok and not getattr(self, "_splitting", False))
 
         problems: list[str] = []
         if not site and not splitting:
             problems.append("chưa chọn website")
-        if need_logo:
-            problems.append("chia nhiều bài cần chọn <b>logo thương hiệu</b>")
         # link nguồn: CÓ THỂ để trống -> sẽ tạo job trống (không chạy AI)
 
         if problems:
@@ -341,8 +337,26 @@ class PostPage(QWidget):
             return
         count = int(self.image_count.currentText().split()[0])
         brand = self.brand_logo.text().strip()
+        # CHIA NHIỀU BÀI mà CHƯA có logo -> popup 2 nút (Huỷ / OK chọn file)
+        split_mode = bool(links and self.split_check.isEnabled() and self.split_check.isChecked())
+        if split_mode and not brand:
+            from PySide6.QtWidgets import QMessageBox as _MB
+
+            box = _MB(self)
+            box.setWindowTitle("Thiếu logo thương hiệu")
+            box.setText("Bạn chưa chọn logo thương hiệu.\nChia nhiều bài cần có logo thương hiệu.")
+            ok_btn = box.addButton("OK chọn file", _MB.AcceptRole)
+            box.addButton("Huỷ", _MB.RejectRole)
+            box.exec()
+            if box.clickedButton() is not ok_btn:
+                return                                  # Huỷ -> không tạo gì
+            self._pick_brand()                          # mở hộp chọn file logo
+            brand = self.brand_logo.text().strip()
+            if not brand:
+                return                                  # Huỷ hộp chọn file -> không tạo
+        splitting = split_mode
         # CHIA NHIỀU BÀI (chỉ khi đúng 1 link): chưa tạo job — chờ provider chia xong
-        if links and self.split_check.isEnabled() and self.split_check.isChecked():
+        if splitting:
             task = Task(
                 site_id=site.id,
                 site_name=site.name,
