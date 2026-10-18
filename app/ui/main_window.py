@@ -66,17 +66,6 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
         self.setFont(app_font())
-        try:                      # nhớ kích thước màn hình (để mở Chrome AI ra ngoài màn hình)
-            from PySide6.QtGui import QGuiApplication
-
-            from ..wp.browser import set_screen_size
-
-            scr = QGuiApplication.primaryScreen()
-            if scr is not None:
-                g = scr.availableGeometry()
-                set_screen_size(g.width(), g.height())
-        except Exception:
-            pass
         self._workers: list = []
         self._content_workers: dict = {}
         self._img_workers: dict = {}

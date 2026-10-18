@@ -54,53 +54,6 @@ def _user_data_dir(site_id: str) -> str:
     return str(d)
 
 
-# Kích thước màn hình (giao diện truyền vào lúc mở app) — dùng để mở cửa sổ Chrome
-# RA NGOÀI màn hình với ĐÚNG kích thước như khi mở to (không làm lệch kịch bản).
-_SCREEN_SIZE: dict[str, int] = {"w": 0, "h": 0}
-
-
-def set_screen_size(w: int, h: int) -> None:
-    try:
-        w, h = int(w), int(h)
-    except (TypeError, ValueError):
-        return
-    if w > 0 and h > 0:
-        _SCREEN_SIZE["w"], _SCREEN_SIZE["h"] = w, h
-
-
-def _offscreen_args() -> list[str]:
-    """Cờ mở Chrome RA NGOÀI màn hình: không che app khác, kích thước y như mở to."""
-    w = _SCREEN_SIZE["w"] or 1600
-    h = _SCREEN_SIZE["h"] or 900
-    return [
-        "--window-position=-3200,-3200",
-        f"--window-size={w},{h}",
-        # cửa sổ nằm ngoài màn hình -> Chrome dễ coi là "bị che" rồi làm chậm trang
-        "--disable-backgrounding-occluded-windows",
-        "--disable-renderer-backgrounding",
-        "--disable-background-timer-throttling",
-    ]
-
-
-def move_window_offscreen(page) -> None:
-    """Đẩy cửa sổ Chrome ra NGOÀI màn hình (Chrome hay tự khôi phục vị trí cũ nên phải làm lại).
-
-    Phải đặt "normal" trước rồi mới đặt vị trí; macOS chỉ chừa lại ~40px ở mép màn hình.
-    """
-    w = _SCREEN_SIZE["w"] or 1600
-    h = _SCREEN_SIZE["h"] or 900
-    try:
-        cdp = page.context.new_cdp_session(page)
-        wid = cdp.send("Browser.getWindowForTarget")["windowId"]
-        cdp.send("Browser.setWindowBounds",
-                 {"windowId": wid, "bounds": {"windowState": "normal"}})
-        cdp.send("Browser.setWindowBounds",
-                 {"windowId": wid, "bounds": {"left": -3200, "top": -3200,
-                                              "width": w, "height": h}})
-    except Exception:
-        pass
-
-
 LOCK_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
 
 # --------------------------------------------------------------------------- #
@@ -284,18 +237,12 @@ class WPBrowser:
             opened = False
             for retry in (False, True):
                 try:
-                    # AI nội dung (ChatGPT): mở cửa sổ RA NGOÀI màn hình -> không che app khác.
-                    # Đăng bài: vẫn mở TO (người dùng cần tự bấm Đăng trên website).
-                    if not self.headless and self.site_id == "chatgpt":
-                        win_args = ["--disable-blink-features=AutomationControlled", *_offscreen_args()]
-                    else:
-                        win_args = ["--disable-blink-features=AutomationControlled", "--start-maximized"]
                     kwargs = dict(
                         user_data_dir=_user_data_dir(self.site_id),
                         headless=self.headless,
                         # giữ SANDBOX của Chrome (tránh cảnh báo "--no-sandbox")
                         chromium_sandbox=True,
-                        args=win_args,
+                        args=["--disable-blink-features=AutomationControlled", "--start-maximized"],
                     )
                     if self.headless:
                         kwargs["viewport"] = {"width": 1400, "height": 900}
@@ -345,9 +292,6 @@ class WPBrowser:
 
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         self.page.set_default_timeout(20000)
-        if not self.headless and self.site_id == "chatgpt":
-            # AI nội dung: đẩy cửa sổ ra ngoài màn hình (không che app khác)
-            move_window_offscreen(self.page)
         return self.page
 
     # ------------------------------------------------------------------ #
