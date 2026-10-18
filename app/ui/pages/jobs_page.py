@@ -537,8 +537,8 @@ class JobsPage(QWidget):
         ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit))
         self.content_edit = RichEditor()
         self.content_edit.changed.connect(self._sync_seo_btn)
-        ev2.addLayout(self._field("Nội dung (soạn thảo trực tiếp — chèn được link/ảnh & sửa HTML)",
-                                  self.content_edit))
+        ev2.addLayout(self._field("Nội dung", self.content_edit,
+                                  extra=("Auto format", self._auto_format)))
 
         self.add_img_btn = QPushButton("+ Thêm hình")
         self.add_img_btn.setProperty("class", "ghost")
@@ -645,13 +645,20 @@ class JobsPage(QWidget):
         outer.addWidget(split)
         polish_combos(self)
 
-    def _field(self, label: str, widget: QWidget, field: str | None = None) -> QVBoxLayout:
+    def _field(self, label: str, widget: QWidget, field: str | None = None,
+               extra: tuple[str, object] | None = None) -> QVBoxLayout:
         box = QVBoxLayout()
         row = QHBoxLayout()
         lab = QLabel(label)
         lab.setStyleSheet("font-weight:600;")
         row.addWidget(lab)
         row.addStretch(1)
+        if extra is not None:      # nút phụ bên phải nhãn (vd "Auto format")
+            name, fn = extra
+            ebtn = QPushButton(str(name))
+            ebtn.setProperty("class", "ghost")
+            ebtn.clicked.connect(fn)
+            row.addWidget(ebtn)
         if field:
             btn = QPushButton("↻ Random")
             btn.setProperty("class", "ghost")
@@ -1583,6 +1590,39 @@ class JobsPage(QWidget):
         except Exception:      # noqa: BLE001
             traceback.print_exc()
         return super().eventFilter(obj, event)
+
+    def _auto_format(self) -> None:
+        """Auto format nội dung: dọn rác + ICON theo logic + LINK tên miền + LINK tiêu đề mục."""
+        if not self.current:
+            return
+        try:
+            from ...ai.manager import (apply_template_icons, clean_content_html,
+                                       extract_product_name, insert_title_links,
+                                       linkify_domains)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            return
+        try:
+            html = self.content_edit.get_html() or ""
+            if not html.strip():
+                show_toast(self, "Ô Nội dung đang trống", 2600, ok=False)
+                return
+            r = self.current.result or {}
+            out = clean_content_html(html)                    # 1) dọn rác HTML
+            out = apply_template_icons(out)                   # 2) icon đầu mục + dòng liên hệ
+            all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
+            out = linkify_domains(out, all_sites)             # 3) www.<domain> -> link thật
+            out = insert_title_links(                          # 4) link vào tiêu đề mục
+                out, self.store.title_link_first, list(self.store.title_links),
+                [extract_product_name(out, ""), str(r.get("focus_keyword") or ""),
+                 str(r.get("title") or ""), ""],
+            )
+            self.content_edit.set_html(out)
+            self._save()
+            show_toast(self, "Đã auto format nội dung (icon + link)", 2600)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            show_toast(self, f"Auto format lỗi: {exc}", 3600, ok=False)
 
     def _pick_source_image(self) -> None:
         """Popup "Hình tự tìm".
