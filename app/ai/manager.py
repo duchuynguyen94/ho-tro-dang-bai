@@ -213,6 +213,28 @@ def build_combined_short_prompt(source: dict) -> str:
 Không giải thích gì thêm."""
 
 
+AUTO_FMT_ATTR = 'data-auto-format="true"'
+
+
+def already_auto_formatted(html_text: str) -> bool:
+    """Đã auto format chưa (tìm dấu data-auto-format)."""
+    t = str(html_text or "").lower()
+    return "data-auto-format" in t or "auto-format -->" in t
+
+
+def mark_auto_formatted(html_text: str) -> str:
+    """Gắn dấu auto-format vào TIÊU ĐỀ ĐẦU TIÊN (h1 -> h2); không có thì chèn ghi chú đầu bài."""
+    t = str(html_text or "")
+    if not t.strip() or already_auto_formatted(t):
+        return t
+    for tag in ("h1", "h2"):
+        m = re.search(rf"<{tag}(\s[^>]*)?>", t, flags=re.I)
+        if m:
+            inner = m.group(1) or ""
+            return t[:m.start()] + f'<{tag}{inner} {AUTO_FMT_ATTR}>' + t[m.end():]
+    return f"<!-- auto-format -->\n{t}"
+
+
 def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> str:
     """Prompt CHIA DANH SÁCH SẢN PHẨM của 1 link nguồn thành N bài viết.
 
@@ -809,24 +831,47 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
     pending = [l for l in (links or []) if str(l).strip()]
     used: set[str] = set()
     heading_seen = 0        # đếm h1 + h2 (tiêu đề đầu tiên = h1 hoặc h2)
+    # tiêu đề nào ĐÃ CÓ <a> bên trong -> bỏ qua toàn bộ (bấm lại không chèn thêm)
+    skip_ranges: list[tuple[int, int]] = []
+    for _m in re.finditer(r"<h([1-6])\b[^>]*>(.*?)</h\1>", html_text, flags=re.I | re.S):
+        if "<a" in str(_m.group(2) or "").lower():
+            skip_ranges.append((_m.start(), _m.end()))
+
     depth = 0
+    in_a = 0                # đang ở TRONG thẻ <a> -> KHÔNG chèn thêm (tránh lồng link)
+    head_has_a = False      # tiêu đề HIỆN TẠI đã có <a> -> KHÔNG chèn nữa
+    pos = 0
     i = 0
     while i < len(parts):
         part = parts[i]
+        if any(_a <= pos < _b for _a, _b in skip_ranges):
+            out.append(part)          # tiêu đề đã có link -> giữ nguyên
+            pos += len(part)
+            i += 1
+            continue
+        pos += len(part)
         if part.startswith("<"):
             m = head_re.match(part)
             if m:
                 depth += 1
+                head_has_a = False              # tiêu đề mới -> chưa có link
                 if m.group(1) in ("1", "2"):
                     heading_seen += 1
             elif close_re.match(part):
                 depth = max(0, depth - 1)
+            low = part.lower()
+            if low.startswith("<a ") or low.startswith("<a>"):
+                in_a += 1
+                if depth:
+                    head_has_a = True           # tiêu đề này đã có link -> bỏ qua
+            elif low.startswith("</a"):
+                in_a = max(0, in_a - 1)
             out.append(part)
             i += 1
             continue
 
         text = part
-        if depth and text.strip():
+        if depth and not in_a and not head_has_a and text.strip():
             href = ""
             # tìm TÊN MỤC CHUẨN trong tiêu đề (linh hoạt &/và, -/–/—, dấu câu)
             hit = None

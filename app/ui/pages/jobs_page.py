@@ -1596,9 +1596,10 @@ class JobsPage(QWidget):
         if not self.current:
             return
         try:
-            from ...ai.manager import (apply_template_icons, clean_content_html,
-                                       extract_product_name, insert_title_links,
-                                       linkify_domains)
+            from ...ai.manager import (already_auto_formatted, apply_template_icons,
+                                       clean_content_html, extract_product_name,
+                                       insert_title_links, linkify_domains,
+                                       mark_auto_formatted)
         except Exception:      # noqa: BLE001
             traceback.print_exc()
             return
@@ -1606,6 +1607,9 @@ class JobsPage(QWidget):
             html = self.content_edit.get_html() or ""
             if not html.strip():
                 show_toast(self, "Ô Nội dung đang trống", 2600, ok=False)
+                return
+            if already_auto_formatted(html):
+                show_toast(self, "Nội dung đã auto format rồi — không chèn lại", 2800)
                 return
             r = self.current.result or {}
             out = clean_content_html(html)                    # 1) dọn rác HTML
@@ -1617,6 +1621,7 @@ class JobsPage(QWidget):
                 [extract_product_name(out, ""), str(r.get("focus_keyword") or ""),
                  str(r.get("title") or ""), ""],
             )
+            out = mark_auto_formatted(out)                    # 5) gắn dấu đã auto format
             self.content_edit.set_html(out)
             self._save()
             show_toast(self, "Đã auto format nội dung (icon + link)", 2600)
