@@ -304,6 +304,9 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "title_links": ["https://samoapumps.com", "https://enda-vietnam.com"],
     "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)
+    "ui": {
+        "export_dir": "",     # thư mục xuất ảnh đã chọn lần trước (nhớ qua các lần mở app)
+    },
     "sites": [],
     "tasks": [],
     "formats": {          # format & rule dùng chung cho MỌI website

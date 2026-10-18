@@ -1049,8 +1049,8 @@ class MainWindow(QMainWindow):
         """Hỏi THƯ MỤC xuất ảnh -> xuất thẳng vào đó (KHÔNG tự mở thư mục)."""
         self.jobs_page._save()
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        # hỏi nơi xuất (nhớ thư mục vừa chọn)
-        start = str(getattr(self, "_export_dir", "") or "")
+        # hỏi nơi xuất (nhớ thư mục đã chọn, lưu trong config.json -> nhớ cả khi tắt app)
+        start = str(((self.store.data.get("ui") or {}).get("export_dir") or "")).strip()
         if not start:
             try:
                 start = str(Path.home())
@@ -1067,6 +1067,11 @@ class MainWindow(QMainWindow):
         if not chosen:                        # Huỷ -> KHÔNG xuất
             return
         self._export_dir = chosen
+        try:                                  # lưu lại để lần sau (kể cả sau khi tắt app) mở sẵn
+            self.store.data.setdefault("ui", {})["export_dir"] = chosen
+            self.store.save()
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
         try:
             paths = export_post_images(self.store, fresh, dest_dir=chosen)
         except Exception as exc:      # noqa: BLE001
