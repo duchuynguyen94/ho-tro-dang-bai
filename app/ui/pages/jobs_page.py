@@ -267,7 +267,12 @@ class TaskRow(QFrame):
         url.setWordWrap(True)
         v.addWidget(url)
 
-        if not is_blank:                     # job trống: ẩn phần trạng thái
+        if split_no > 0:                     # job CHIA BÀI: hiện trạng thái + website
+            label = STATUS_LABELS.get(task.status, task.status)
+            meta = QLabel(f"{label}  ·  {task.site_name}")
+            meta.setObjectName("taskMeta")
+            v.addWidget(meta)
+        elif not is_blank:                   # job trống: ẩn phần trạng thái
             label = STATUS_LABELS.get(task.status, task.status)     # lỗi -> chỉ báo "lỗi"
             if task.status == STATUS_FINISH:
                 # "đã xong" -> XANH + ĐẬM (tiêu đề vẫn màu đen); tên website vẫn xám

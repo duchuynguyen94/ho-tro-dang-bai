@@ -145,7 +145,8 @@ class PostPage(QWidget):
         b.addWidget(hint)
 
         b.addSpacing(4)
-        b.addWidget(QLabel("Chọn website đăng (chỉ 1 website)"))
+        self.site_label = QLabel("Chọn website đăng (chỉ 1 website)")
+        b.addWidget(self.site_label)
         self.sites_box = QVBoxLayout()
         self.sites_box.setSpacing(6)
         b.addLayout(self.sites_box)
@@ -238,11 +239,12 @@ class PostPage(QWidget):
         has_link = bool(links)
         self._sync_split_enabled(len(links))
         has_rule = self.store.has_format_content()
-        ok = bool(site and has_rule)
+        splitting = bool(self.split_check.isChecked() and self.split_check.isEnabled())
+        ok = bool(has_rule and (site or splitting))
         self.create_btn.setEnabled(ok and not getattr(self, "_splitting", False))
 
         problems: list[str] = []
-        if not site:
+        if not site and not splitting:
             problems.append("chưa chọn website")
         # link nguồn: CÓ THỂ để trống -> sẽ tạo job trống (không chạy AI)
 
@@ -291,6 +293,14 @@ class PostPage(QWidget):
 
     def _on_split_toggled(self, on: bool) -> None:
         self.split_count.setEnabled(bool(on) and self.split_check.isEnabled())
+        # tick "chia nhiều bài" -> ẨN mục chọn website (website chia tuần tự)
+        try:
+            self.site_label.setVisible(not on)
+            for row in getattr(self, "_rows", {}).values():
+                row.setVisible(not on)
+        except Exception:      # noqa: BLE001
+            pass
+        self._validate()
 
     def _split_count_value(self) -> int:
         try:
