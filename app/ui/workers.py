@@ -76,12 +76,13 @@ def _image_stem(rule: str, ctx: dict, index: int) -> str:
     return name
 
 
-def export_post_images(store, task) -> list[str]:
-    """Lưu ảnh vào thư mục tên = ID công việc (để upload lên website).
+def export_post_images(store, task, dest_dir: str = "") -> list[str]:
+    """Lưu ảnh để upload lên website.
 
     - Tên file: theo Rule ảnh (chỉ tên) + đuôi theo cấu hình AI ảnh.
     - Định dạng (PNG/JPG) và kích thước lấy từ Cài đặt → AI ảnh → Xử lý ảnh cục bộ.
     - Xuất TẤT CẢ ảnh đang có (kể cả ảnh thêm bằng nút "+ Thêm hình").
+    - dest_dir: nếu có -> xuất THẲNG vào thư mục đó; không thì dùng posts/<ID>.
     """
     from PIL import Image as _Img
 
@@ -91,7 +92,7 @@ def export_post_images(store, task) -> list[str]:
     images = r.get("images") or []
     if not images:
         return []
-    base = posts_dir() / task.id
+    base = Path(dest_dir) if str(dest_dir or "").strip() else (posts_dir() / task.id)
     base.mkdir(parents=True, exist_ok=True)
     rules = list(store.image_rules or [])
     pillow = ((store.ai_image or {}).get("pillow") or {})

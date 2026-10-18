@@ -7,6 +7,7 @@ from pathlib import Path
 from PySide6.QtCore import QSize, Qt, QTimer, QUrl
 from PySide6.QtGui import QDesktopServices, QIcon
 from PySide6.QtWidgets import (
+    QFileDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -1045,11 +1046,29 @@ class MainWindow(QMainWindow):
         self._start_images_worker(fresh, None, None, "Đang ghép lại toàn bộ ảnh…")
 
     def _on_export_images(self, task) -> None:
-        """Xuất ảnh vào thư mục bài (posts/<ID>) rồi MỞ THƯ MỤC cho người dùng."""
+        """Hỏi THƯ MỤC xuất ảnh -> xuất thẳng vào đó rồi MỞ THƯ MỤC."""
         self.jobs_page._save()
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        # hỏi nơi xuất (nhớ thư mục vừa chọn)
+        start = str(getattr(self, "_export_dir", "") or "")
+        if not start:
+            try:
+                start = str(Path.home())
+            except Exception:      # noqa: BLE001
+                start = ""
         try:
-            paths = export_post_images(self.store, fresh)
+            chosen = QFileDialog.getExistingDirectory(
+                self, "Chọn thư mục xuất ảnh", start,
+                QFileDialog.ShowDirsOnly | QFileDialog.DontResolveSymlinks,
+            )
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            return
+        if not chosen:                        # Huỷ -> KHÔNG xuất
+            return
+        self._export_dir = chosen
+        try:
+            paths = export_post_images(self.store, fresh, dest_dir=chosen)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self._log_err("Xuất ảnh", str(exc))
@@ -1067,7 +1086,7 @@ class MainWindow(QMainWindow):
             QDesktopServices.openUrl(QUrl.fromLocalFile(str(folder)))
         except Exception:
             pass
-        show_toast(self, f"Đã xuất {len(paths)} ảnh — đã mở thư mục bài", 3000)
+        show_toast(self, f"Đã xuất {len(paths)} ảnh vào {folder.name}/ — đã mở thư mục", 3200)
 
     def _on_stop_all(self) -> None:
         """Dừng TẤT CẢ: mọi việc đang chờ / đang tạo -> cancelled ("chưa tạo")."""
