@@ -897,8 +897,8 @@ class SplitWorker(TrackedThread):
     def run(self) -> None:
         try:
             from ..ai.manager import (_call_ai, apply_template_icons,
-                                      build_split_prompt, linkify_domains,
-                                      parse_split_articles)
+                                      build_split_prompt, clean_content_html,
+                                      linkify_domains, parse_split_articles)
 
             self.log.emit(f"Đang đọc link nguồn rồi chia thành {self.n} bài…")
             page = src.fetch_source(self.link)
@@ -919,7 +919,9 @@ class SplitWorker(TrackedThread):
             for a in arts:
                 if len(str(a).strip()) < 300:      # bài rỗng/quá ngắn -> bỏ (tránh tạo job rác)
                     continue
-                html = apply_template_icons(a)
+                # DỌN RÁC HTML ở đầu/cuối (```html, <!DOCTYPE>, <html>, <head>, <body>, chữ "html")
+                html = clean_content_html(a)
+                html = apply_template_icons(html)
                 html = linkify_domains(html, all_sites)
                 if html.strip():
                     out.append(html)
