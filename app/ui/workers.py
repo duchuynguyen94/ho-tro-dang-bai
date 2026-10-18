@@ -898,6 +898,7 @@ class SplitWorker(TrackedThread):
         try:
             from ..ai.manager import (_call_ai, apply_template_icons,
                                       build_split_prompt, clean_content_html,
+                                      extract_product_name, insert_title_links,
                                       linkify_domains, parse_split_articles)
 
             self.log.emit(f"Đang đọc link nguồn rồi chia thành {self.n} bài…")
@@ -921,8 +922,15 @@ class SplitWorker(TrackedThread):
                     continue
                 # DỌN RÁC HTML ở đầu/cuối (```html, <!DOCTYPE>, <html>, <head>, <body>, chữ "html")
                 html = clean_content_html(a)
+                # 0) icon đầu mục + icon dòng liên hệ (Rule_Content mục 5)
                 html = apply_template_icons(html)
+                # 1) mọi "www.<tên-miền>" -> link về ĐÚNG tên miền đó (bỏ www)
                 html = linkify_domains(html, all_sites)
+                # 2) link vào TIÊU ĐỀ MỤC: h2 đầu = website đang đăng; từ h2 thứ 2 = link cấu hình
+                html = insert_title_links(
+                    html, self.store.title_link_first, list(self.store.title_links),
+                    [extract_product_name(html, ""), "", "", ""],
+                )
                 if html.strip():
                     out.append(html)
             if not out:
@@ -930,7 +938,11 @@ class SplitWorker(TrackedThread):
                     "AI không trả về BÀI VIẾT nào (chỉ có dòng ngăn cách hoặc bài quá ngắn). "
                     "Xem câu trả lời thô ở output/last_split_reply.txt"
                 )
-            self.log.emit(f"Đã chia được {len(out)}/{self.n} bài.")
+            self.log.emit(
+                f"Đã chia được {len(out)}/{self.n} bài. Chèn link tiêu đề: h1/h2 đầu → "
+                f"{self.store.title_link_first or '(trống)'}, "
+                f"{len(self.store.title_links)} link cấu hình cho các mục sau."
+            )
             self.ok.emit(out)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
