@@ -1075,23 +1075,28 @@ class MainWindow(QMainWindow):
         if worker in self._workers:
             self._workers.remove(worker)
 
-    def shutdown_workers(self, timeout: int = 6000) -> None:
-        """Dừng & CHỜ mọi luồng nền kết thúc (tránh crash 'QThread destroyed while running')."""
+    def shutdown_workers(self, timeout: int = 15000) -> None:
+        """Dừng & CHỜ mọi luồng nền kết thúc (tránh crash 'QThread destroyed while running').
+
+        Dừng CẢ `cancel()` (worker nội dung dùng tên này) — không chỉ `stop()`.
+        """
         for w in list(self._workers):
-            try:
-                if hasattr(w, "stop"):
-                    w.stop()
-            except Exception:
-                pass
+            for name in ("stop", "cancel"):
+                try:
+                    fn = getattr(w, name, None)
+                    if callable(fn):
+                        fn()
+                except Exception:      # noqa: BLE001
+                    pass
         for w in list(self._workers):
             try:
                 if w.isRunning():
                     w.wait(timeout)
-            except Exception:
+            except Exception:      # noqa: BLE001
                 pass
         try:
             shutdown_all_threads(timeout)
-        except Exception:
+        except Exception:      # noqa: BLE001
             pass
 
     def closeEvent(self, event) -> None:  # noqa: N802

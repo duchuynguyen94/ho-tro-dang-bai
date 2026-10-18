@@ -157,7 +157,16 @@ def main() -> int:
         win.shutdown_workers()
     except Exception:      # noqa: BLE001
         pass
-    return code
+    # THOÁT "CỨNG": bỏ bước Python finalize — nếu còn luồng nền kịp dừng, Qt sẽ abort
+    # ("QThread: Destroyed while thread is still running"). Dữ liệu đã lưu xong ở trên.
+    try:
+        sys.stdout.flush()
+        sys.stderr.flush()
+    except Exception:      # noqa: BLE001
+        pass
+    import os as _os
+
+    _os._exit(int(code or 0))
 
 
 if __name__ == "__main__":
