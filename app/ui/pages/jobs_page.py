@@ -1247,7 +1247,10 @@ class JobsPage(QWidget):
         if not path or not self.current:
             return
         self._save()
-        r = self.current.result
+        fresh = self._fresh_current()
+        if fresh is None:
+            return
+        r = fresh.result
         lst = r.get("image_opts_list") or []
         while len(lst) <= index:
             lst.append({})
@@ -1715,7 +1718,10 @@ class JobsPage(QWidget):
         if not self.current or not paths:
             return
         self._save()
-        r = self.current.result
+        fresh = self._fresh_current()
+        if fresh is None:
+            return
+        r = fresh.result
         lst = r.get("image_opts_list") or []
         while len(lst) <= index:
             lst.append({})
@@ -1735,18 +1741,31 @@ class JobsPage(QWidget):
         self.recompose_image.emit(self.current, index)
         show_toast(self, f"Đã thêm {len(paths)} ảnh vào canvas", 2200)
 
+    def _fresh_current(self):
+        """Bản MỚI NHẤT của job đang mở (tránh ghi đè bằng bản cũ đang giữ trong UI)."""
+        if not self.current:
+            return None
+        fresh = next((t for t in self.store.tasks if t.id == self.current.id), None)
+        if fresh is None:
+            return self.current
+        self.current = fresh          # UI theo bản mới nhất
+        return fresh
+
     def _add_upload_component(self, path: str, index: int) -> None:
         """Thêm 1 ảnh (tải lên / dán / chọn từ nguồn) thành thành phần ở giữa canvas."""
         if not self.current or not path:
             return
         self._save()
-        r = self.current.result
+        fresh = self._fresh_current()
+        if fresh is None:
+            return
+        r = fresh.result
         lst = r.get("image_opts_list") or []
         while len(lst) <= index:
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
-        if len(ups) >= 3:
-            ups[-1] = {"path": path, "pos": [0.5, 0.5]}   # đủ 3 -> thay cái cuối
+        if len(ups) >= 8:
+            ups[-1] = {"path": path, "pos": [0.5, 0.5]}   # đủ 8 -> thay cái cuối
         else:
             ups.append({"path": path, "pos": [0.5, 0.5]})  # canh giữa
         lst[index]["uploads"] = ups
