@@ -111,7 +111,9 @@ class PostPage(QWidget):
         b.addWidget(self.source_url)
 
         # CHIA NHIỀU BÀI (ngay dưới ô nhập link): chỉ dùng khi có ĐÚNG 1 link
-        srow = QHBoxLayout()
+        self.split_box = QWidget()          # bọc lại -> ẩn là KHÔNG chiếm chỗ
+        srow = QHBoxLayout(self.split_box)
+        srow.setContentsMargins(0, 0, 0, 0)
         srow.setSpacing(12)              # cách ra cho thoáng (nút tick <-> ô số lượng)
         self.split_check = QCheckBox("Chia nhiều bài")
         self.split_check.setToolTip(
@@ -128,7 +130,8 @@ class PostPage(QWidget):
         dim_when_disabled(self.split_count, 0.45)     # MỜ khi chưa tick "chia nhiều bài"
         srow.addWidget(self.split_count)
         srow.addStretch(1)
-        b.addLayout(srow)
+        b.addWidget(self.split_box)
+        b.addSpacing(5)                  # giữ khoảng cách ~16px khi hàng này ẩn
         polish_combos(self)
 
         b.addWidget(QLabel("Logo thương hiệu (dự phòng — nếu AI không tìm thấy)"))
@@ -283,8 +286,7 @@ class PostPage(QWidget):
     def _sync_split_enabled(self, n_links: int) -> None:
         """Tick "chia nhiều bài" chỉ HIỆN khi có ĐÚNG 1 link (nhiều link / không link -> ẩn)."""
         only_one = (n_links == 1)
-        # ẨN hẳn khi không phải 1 link
-        self.split_check.setVisible(only_one)
+        self.split_box.setVisible(only_one)      # ẩn -> KHÔNG chiếm chỗ
         self.split_check.setEnabled(only_one)
         if not only_one and self.split_check.isChecked():
             self.split_check.setChecked(False)
