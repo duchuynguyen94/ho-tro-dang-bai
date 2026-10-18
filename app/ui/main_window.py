@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from .. import __version__
 from ..storage.models import (
     STATUS_CANCELLED,
     STATUS_ERROR,
@@ -74,6 +75,7 @@ class MainWindow(QMainWindow):
         self._post_workers: dict = {}        # task_id -> luồng đăng bài
         self._post_started: dict = {}        # task_id -> thời điểm bắt đầu đăng (giây)
         self._start_post_watchdog()          # lưới an toàn: Chrome tắt -> mở khoá nút
+        self._start_update_watch()           # kiểm tra cập nhật (chỉ Windows)
         self._build()
         try:                       # mở app là vào thẳng tab "Đăng bài"
             self._go(1)
@@ -792,6 +794,89 @@ class MainWindow(QMainWindow):
         worker.finished.connect(_post_done)
         self._workers.append(worker)
         worker.start()
+
+    # ---------------- kiểm tra cập nhật (CHỈ Windows) ---------------- #
+    def _start_update_watch(self) -> None:
+        """Tự kiểm tra bản mới: sau 5 giây + mỗi 10 phút (chỉ bản Windows)."""
+        try:
+            from .. import update as upd
+
+            if not upd.is_windows():
+                return
+        except Exception:      # noqa: BLE001
+            return
+        self._update_asked: set[str] = set()
+        self._update_worker = None
+        self._update_timer = QTimer(self)
+        self._update_timer.setInterval(10 * 60 * 1000)        # 10 phút
+        self._update_timer.timeout.connect(self._check_update_quiet)
+        QTimer.singleShot(5000, self._check_update_quiet)     # sau 5 giây
+        self._update_timer.start()
+
+    def _check_update_quiet(self) -> None:
+        try:
+            if getattr(self, "_update_worker", None) is not None and self._update_worker.isRunning():
+                return
+            w = UpdateWorker()
+        except Exception:      # noqa: BLE001
+            return
+        self._update_worker = w
+        w.checked.connect(self._on_update_checked)
+        w.failed.connect(lambda _e: None)                     # mất mạng -> im lặng
+
+        def _done() -> None:
+            if getattr(self, "_update_worker", None) is w:
+                self._update_worker = None
+            self._cleanup(w)
+
+        w.finished.connect(_done)
+        self._workers.append(w)
+        w.start()
+
+    def _on_update_checked(self, info: dict) -> None:
+        """Có bản mới -> hỏi Có/Không (mỗi phiên bản chỉ hỏi 1 lần)."""
+        try:
+            from .. import update as upd
+
+            ver = str((info or {}).get("version") or "").strip()
+            if not ver or not upd.is_newer(ver):
+                return
+            asked = getattr(self, "_update_asked", set())
+            if ver in asked:
+                return
+            asked.add(ver)
+            self._update_asked = asked
+            notes = str((info or {}).get("notes") or "").strip()
+            msg = (f"🎉 Có bản cập nhật mới!\n\n"
+                   f"Đang dùng:  {__version__}\n"
+                   f"Bản mới:    {ver}\n")
+            if notes:
+                msg += f"\n{notes[:800]}\n"
+            msg += "\nBạn có muốn cài đặt ngay không?"
+            ans = QMessageBox.question(self, "Cập nhật phần mềm", msg,
+                                       QMessageBox.Yes | QMessageBox.No, QMessageBox.Yes)
+            if ans == QMessageBox.Yes:
+                self._apply_update(info or {})
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+
+    def _apply_update(self, info: dict) -> None:
+        """Tải + cài bản mới rồi tắt app để hoàn tất."""
+        try:
+            w = UpdateWorker(apply_url=str(info.get("url") or ""))
+        except Exception:      # noqa: BLE001
+            return
+        w.log.connect(self.status)
+        w.applied.connect(self._on_update_applied)
+        w.failed.connect(lambda e: show_toast(self, f"Cập nhật lỗi: {str(e)[:120]}", 4000, ok=False))
+        w.finished.connect(lambda: self._cleanup(w))
+        self._workers.append(w)
+        w.start()
+        show_toast(self, "Đang tải bản cập nhật…", 3000)
+
+    def _on_update_applied(self, _tmp: str) -> None:
+        show_toast(self, "Đang khởi động lại phần mềm để hoàn tất cập nhật…", 3000)
+        QTimer.singleShot(1200, self.close)
 
     # ---------------- lưới an toàn cho nút "OK — Đăng bài" ---------------- #
     def _start_post_watchdog(self) -> None:
