@@ -946,15 +946,8 @@ def clean_content_html(html_text: str) -> str:
     t = _strip_trailing_junk(t)
     t = _strip_leading_junk(t)
 
-    # thẻ bao ngoài <article> … </article> (AI bọc cả bài) -> giữ phần thân
-    m = re.match(r"^\s*<article[^>]*>(.*)</article>\s*$", t, flags=re.I | re.S)
-    if m and len(m.group(1).strip()) > 50:
-        t = m.group(1).strip()
-
-    # thẻ <header> … </header> (AI bọc phần mở đầu) -> giữ phần thân
-    m = re.match(r"^\s*<header[^>]*>(.*)</header>\s*$", t, flags=re.I | re.S)
-    if m and len(m.group(1).strip()) > 50:
-        t = m.group(1).strip()
+    # BỎ thẻ <article> và <header> ở MỌI chỗ (giữ nguyên nội dung bên trong)
+    t = re.sub(r"</?(?:article|header)\b[^>]*>", "", t, flags=re.I)
 
     # ký hiệu đầu dòng trùng trong <li> (rule dùng ● nhưng <ul> đã tự có bullet)
     t = re.sub(r"(<li[^>]*>)\s*[●•▪◦‣·►▶]\s*", r"\1", t, flags=re.I)
