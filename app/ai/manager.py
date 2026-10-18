@@ -234,9 +234,10 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         f"đó thành {n} NHÓM, rồi viết MỖI NHÓM thành 1 BÀI VIẾT RIÊNG BIỆT hoàn chỉnh theo "
         f'file "rule_content.pdf" đã đính kèm (sources) trong Project này.\n'
         f"{rule_block}"
-        f"\n=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC) ===\n"
+        f"\n=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC) HTML (gom vào BLOCK) ===\n"
         f"Mỗi bài bắt đầu bằng ĐÚNG 1 dòng ngăn cách: === BÀI 1 ===, === BÀI 2 === … "
         f"=== BÀI {n} ===\n"
+        f"Mỗi bài: đặt TOÀN BỘ HTML trong 1 block ```html … ```\n"
         f"Nội dung mỗi bài là HTML thật (đủ các mục theo rule_content.pdf). "
         f"Không giải thích gì thêm.\n"
     )
