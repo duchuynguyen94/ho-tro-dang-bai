@@ -256,6 +256,16 @@ def _dismiss_overlays(page: Page) -> None:
 def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) -> None:
     for i, step in enumerate(script.steps, 1):
         action = step.action
+        # ĐIỀU KIỆN BƯỚC: có "when" mà render ra RỖNG -> BỎ QUA bước này
+        cond = str(getattr(step, "when", "") or "")
+        if cond:
+            try:
+                if not render(cond, ctx).strip():
+                    if log:
+                        log(f"[{i}/{len(script.steps)}] (bỏ qua: {step.note or action})")
+                    continue
+            except Exception:
+                pass
         if log:
             log(f"[{i}/{len(script.steps)}] {step.note or action}")
         try:

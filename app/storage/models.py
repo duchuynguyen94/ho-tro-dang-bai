@@ -82,6 +82,7 @@ class ScriptStep:
     source: str = "recorded"       # auto|recorded|fallback
     optional: bool = False         # True = không thấy phần tử thì BỎ QUA, không dừng
     force: bool = False            # True = điền/bấm kể cả khi phần tử đang bị ẩn
+    when: str = ""                 # điều kiện chạy bước: render ra RỖNG -> BỎ QUA bước
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -97,6 +98,7 @@ class ScriptStep:
             source=d.get("source", "recorded"),
             optional=bool(d.get("optional", False)),
             force=bool(d.get("force", False)),
+            when=str(d.get("when", "") or ""),
         )
 
 

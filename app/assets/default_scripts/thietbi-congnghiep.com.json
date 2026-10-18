@@ -359,7 +359,8 @@
       "note": "AI hình 2+ → bấm “Thêm ảnh thư viện sản phẩm”",
       "source": "auto",
       "optional": false,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "click",
@@ -372,7 +373,8 @@
       "note": "Chọn tab “Tải lên tệp mới” (thư viện)",
       "source": "auto",
       "optional": true,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "upload",
@@ -385,7 +387,8 @@
       "note": "Tải các ảnh còn lại lên (ảnh 2,3,4,5,6…)",
       "source": "auto",
       "optional": false,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "wait",
@@ -395,7 +398,8 @@
       "note": "Chờ ảnh tải lên xong",
       "source": "auto",
       "optional": false,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "type",
@@ -408,7 +412,8 @@
       "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
       "optional": true,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "type",
@@ -421,7 +426,8 @@
       "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
       "optional": true,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "type",
@@ -433,7 +439,8 @@
       "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
       "optional": true,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "type",
@@ -445,7 +452,8 @@
       "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
       "source": "auto",
       "optional": true,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     },
     {
       "action": "click",
@@ -460,7 +468,8 @@
       "note": "Thêm vào thư viện ảnh sản phẩm",
       "source": "auto",
       "optional": false,
-      "force": false
+      "force": false,
+      "when": "{{image_2}}"
     }
   ],
   "site": "thietbi-congnghiep.com"

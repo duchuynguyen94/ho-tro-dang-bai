@@ -1,466 +1,475 @@
 {
- "steps": [
-  {
-   "action": "type",
-   "selector": "#title",
-   "selectors": [
-    "#title",
-    "input[name='post_title']"
-   ],
-   "value": "{{title}}",
-   "note": "AI tiêu đề → Tên sản phẩm",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#excerpt-html",
-   "selectors": [
-    "#excerpt-html"
-   ],
-   "value": "",
-   "note": "Ô Mô tả ngắn → chuyển sang chế độ Mã (để điền chắc hơn)",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#excerpt",
-   "selectors": [
-    "#excerpt",
-    "textarea[name='excerpt']"
-   ],
-   "value": "{{description}}",
-   "note": "AI description → Mô tả ngắn của sản phẩm",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#excerpt-tmce",
-   "selectors": [
-    "#excerpt-tmce"
-   ],
-   "value": "",
-   "note": "Ô Mô tả ngắn → về Trực quan",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#content-html",
-   "selectors": [
-    "#content-html",
-    ".wp-switch-editor:has-text('Mã')"
-   ],
-   "value": "",
-   "note": "Ô Mô tả sản phẩm → chuyển sang chế độ Mã (để dán HTML)",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#content",
-   "selectors": [
-    "#content",
-    "textarea[name='content']"
-   ],
-   "value": "{{content_html}}",
-   "note": "AI content (HTML) → Mô tả sản phẩm",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#content-tmce",
-   "selectors": [
-    "#content-tmce",
-    ".wp-switch-editor:has-text('Trực quan')"
-   ],
-   "value": "",
-   "note": "Ô Mô tả sản phẩm → về Trực quan (xem lại dạng thật)",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "wait",
-   "selector": "",
-   "selectors": [],
-   "value": "1",
-   "note": "Chờ giao diện ổn định",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "open_panel",
-   "selector": "#rank_math_metabox .handlediv",
-   "selectors": [
-    "#rank_math_metabox .handlediv",
-    "#rank_math_metabox button.handlediv",
-    "#rank_math_metabox h2",
-    "#rank_math_metabox .hndle"
-   ],
-   "value": "input[placeholder='Ví dụ: Rank Math SEO']",
-   "note": "Mở card Rank Math SEO (nếu đang thu gọn)",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "tagify",
-   "selector": ".rank-math-focus-keyword .tagify__input",
-   "selectors": [
-    "#rank_math_metabox .rank-math-focus-keyword .tagify__input",
-    ".rank-math-focus-keyword .tagify__input",
-    "#rank_math_metabox .tagify__input",
-    ".tagify__input"
-   ],
-   "value": "{{focus_keyword}}",
-   "note": "AI focus keyword → Từ khoá chính (Rank Math)",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#new-tag-product_tag",
-   "selectors": [
-    "#new-tag-product_tag",
-    "#tagsdiv-product_tag input.newtag",
-    "#tagsdiv-product_tag input[type='text']",
-    "#tax-input-product_tag"
-   ],
-   "value": "{{tags}}",
-   "note": "AI search tags → Thẻ sản phẩm",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#tagsdiv-product_tag .tagadd",
-   "selectors": [
-    "#tagsdiv-product_tag .tagadd",
-    "#tagsdiv-product_tag input.tagadd",
-    "#tagsdiv-product_tag input[type='button']"
-   ],
-   "value": "",
-   "note": "Bấm “Thêm” để thêm thẻ sản phẩm",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "press",
-   "selector": "#title",
-   "selectors": [
-    "#title"
-   ],
-   "value": "Tab",
-   "note": "Rời ô tiêu đề để WP tạo đường dẫn",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "wait",
-   "selector": "",
-   "selectors": [],
-   "value": "2",
-   "note": "Chờ WP sinh đường dẫn",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#edit-slug-buttons .edit-slug",
-   "selectors": [
-    "#edit-slug-buttons .edit-slug",
-    "#edit-slug-box .edit-slug",
-    "button.edit-slug",
-    "button:has-text('Chỉnh sửa')"
-   ],
-   "value": "",
-   "note": "Bấm “Chỉnh sửa” cạnh đường dẫn",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#new-post-slug",
-   "selectors": [
-    "#new-post-slug",
-    "#edit-slug-box input[type='text']"
-   ],
-   "value": "{{slug}}",
-   "note": "Điền đường dẫn (slug) từ tiêu đề — dưới 60 ký tự",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#edit-slug-buttons .save",
-   "selectors": [
-    "#edit-slug-buttons .save",
-    "#edit-slug-box .save",
-    "button.save",
-    "button:has-text('Đồng ý')"
-   ],
-   "value": "",
-   "note": "Bấm “Đồng ý” để chốt đường dẫn (BẮT BUỘC)",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#set-post-thumbnail",
-   "selectors": [
-    "#set-post-thumbnail",
-    "a:has-text('Đặt ảnh sản phẩm')"
-   ],
-   "value": "",
-   "note": "AI hình 1 → bấm “Đặt ảnh sản phẩm”",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#menu-item-upload",
-   "selectors": [
-    "#menu-item-upload",
-    ".media-menu-item:has-text('Tải lên tệp mới')"
-   ],
-   "value": "",
-   "note": "Chọn tab “Tải lên tệp mới”",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "upload",
-   "selector": ".media-modal input[type='file']",
-   "selectors": [
-    ".media-modal input[type='file']",
-    "input[type='file']"
-   ],
-   "value": "{{image_1}}",
-   "note": "Tải ảnh 1 lên",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "wait",
-   "selector": "",
-   "selectors": [],
-   "value": "4",
-   "note": "Chờ ảnh tải lên xong",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-title",
-   "selectors": [
-    "#attachment-details-title",
-    ".media-sidebar input[type='text']"
-   ],
-   "value": "{{title}}",
-   "note": "Tiêu đề ảnh 1 ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-alt-text",
-   "selectors": [
-    "#attachment-details-alt-text",
-    ".media-sidebar textarea"
-   ],
-   "value": "{{title}}",
-   "note": "Văn bản thay thế (SEO) ảnh 1 ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-caption",
-   "selectors": [
-    "#attachment-details-caption"
-   ],
-   "value": "{{title}}",
-   "note": "Image Caption ảnh 1 ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-description",
-   "selectors": [
-    "#attachment-details-description"
-   ],
-   "value": "{{title}}",
-   "note": "Miêu tả ảnh 1 ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "button.media-button-select",
-   "selectors": [
-    "button.media-button-select",
-    ".media-toolbar-primary .media-button-select",
-    "button:has-text('Đặt ảnh sản phẩm')",
-    "button:has-text('Thêm vào thư viện')"
-   ],
-   "value": "",
-   "note": "Đặt làm ảnh sản phẩm",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "wait",
-   "selector": "",
-   "selectors": [],
-   "value": "2",
-   "note": "Chờ hộp ảnh đóng",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": ".add_product_images a",
-   "selectors": [
-    ".add_product_images a",
-    "a:has-text('Thêm ảnh thư viện sản phẩm')",
-    "#product_images_container a.add_product_images"
-   ],
-   "value": "",
-   "note": "AI hình 2+ → bấm “Thêm ảnh thư viện sản phẩm”",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "#menu-item-upload",
-   "selectors": [
-    "#menu-item-upload",
-    ".media-menu-item:has-text('Tải lên tệp mới')"
-   ],
-   "value": "",
-   "note": "Chọn tab “Tải lên tệp mới” (thư viện)",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "upload",
-   "selector": ".media-modal input[type='file']",
-   "selectors": [
-    ".media-modal input[type='file']",
-    "input[type='file']"
-   ],
-   "value": "{{image_2}}|{{image_3}}|{{image_4}}|{{image_5}}|{{image_6}}",
-   "note": "Tải các ảnh còn lại lên (ảnh 2,3,4,5,6…)",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "wait",
-   "selector": "",
-   "selectors": [],
-   "value": "5",
-   "note": "Chờ ảnh tải lên xong",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-title",
-   "selectors": [
-    "#attachment-details-title",
-    ".media-sidebar input[type='text']"
-   ],
-   "value": "{{title}}",
-   "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-alt-text",
-   "selectors": [
-    "#attachment-details-alt-text",
-    ".media-sidebar textarea"
-   ],
-   "value": "{{title}}",
-   "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-caption",
-   "selectors": [
-    "#attachment-details-caption"
-   ],
-   "value": "{{title}}",
-   "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "type",
-   "selector": "#attachment-details-description",
-   "selectors": [
-    "#attachment-details-description"
-   ],
-   "value": "{{title}}",
-   "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
-   "source": "auto",
-   "optional": true,
-   "force": false
-  },
-  {
-   "action": "click",
-   "selector": "button.media-button-select",
-   "selectors": [
-    "button.media-button-select",
-    ".media-toolbar-primary .media-button-select",
-    "button:has-text('Đặt ảnh sản phẩm')",
-    "button:has-text('Thêm vào thư viện')"
-   ],
-   "value": "",
-   "note": "Thêm vào thư viện ảnh sản phẩm",
-   "source": "auto",
-   "optional": false,
-   "force": false
-  }
- ]
+  "steps": [
+    {
+      "action": "type",
+      "selector": "#title",
+      "selectors": [
+        "#title",
+        "input[name='post_title']"
+      ],
+      "value": "{{title}}",
+      "note": "AI tiêu đề → Tên sản phẩm",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#excerpt-html",
+      "selectors": [
+        "#excerpt-html"
+      ],
+      "value": "",
+      "note": "Ô Mô tả ngắn → chuyển sang chế độ Mã (để điền chắc hơn)",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#excerpt",
+      "selectors": [
+        "#excerpt",
+        "textarea[name='excerpt']"
+      ],
+      "value": "{{description}}",
+      "note": "AI description → Mô tả ngắn của sản phẩm",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#excerpt-tmce",
+      "selectors": [
+        "#excerpt-tmce"
+      ],
+      "value": "",
+      "note": "Ô Mô tả ngắn → về Trực quan",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#content-html",
+      "selectors": [
+        "#content-html",
+        ".wp-switch-editor:has-text('Mã')"
+      ],
+      "value": "",
+      "note": "Ô Mô tả sản phẩm → chuyển sang chế độ Mã (để dán HTML)",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#content",
+      "selectors": [
+        "#content",
+        "textarea[name='content']"
+      ],
+      "value": "{{content_html}}",
+      "note": "AI content (HTML) → Mô tả sản phẩm",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#content-tmce",
+      "selectors": [
+        "#content-tmce",
+        ".wp-switch-editor:has-text('Trực quan')"
+      ],
+      "value": "",
+      "note": "Ô Mô tả sản phẩm → về Trực quan (xem lại dạng thật)",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "wait",
+      "selector": "",
+      "selectors": [],
+      "value": "1",
+      "note": "Chờ giao diện ổn định",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "open_panel",
+      "selector": "#rank_math_metabox .handlediv",
+      "selectors": [
+        "#rank_math_metabox .handlediv",
+        "#rank_math_metabox button.handlediv",
+        "#rank_math_metabox h2",
+        "#rank_math_metabox .hndle"
+      ],
+      "value": "input[placeholder='Ví dụ: Rank Math SEO']",
+      "note": "Mở card Rank Math SEO (nếu đang thu gọn)",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "tagify",
+      "selector": ".rank-math-focus-keyword .tagify__input",
+      "selectors": [
+        "#rank_math_metabox .rank-math-focus-keyword .tagify__input",
+        ".rank-math-focus-keyword .tagify__input",
+        "#rank_math_metabox .tagify__input",
+        ".tagify__input"
+      ],
+      "value": "{{focus_keyword}}",
+      "note": "AI focus keyword → Từ khoá chính (Rank Math)",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#new-tag-product_tag",
+      "selectors": [
+        "#new-tag-product_tag",
+        "#tagsdiv-product_tag input.newtag",
+        "#tagsdiv-product_tag input[type='text']",
+        "#tax-input-product_tag"
+      ],
+      "value": "{{tags}}",
+      "note": "AI search tags → Thẻ sản phẩm",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#tagsdiv-product_tag .tagadd",
+      "selectors": [
+        "#tagsdiv-product_tag .tagadd",
+        "#tagsdiv-product_tag input.tagadd",
+        "#tagsdiv-product_tag input[type='button']"
+      ],
+      "value": "",
+      "note": "Bấm “Thêm” để thêm thẻ sản phẩm",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "press",
+      "selector": "#title",
+      "selectors": [
+        "#title"
+      ],
+      "value": "Tab",
+      "note": "Rời ô tiêu đề để WP tạo đường dẫn",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "wait",
+      "selector": "",
+      "selectors": [],
+      "value": "2",
+      "note": "Chờ WP sinh đường dẫn",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#edit-slug-buttons .edit-slug",
+      "selectors": [
+        "#edit-slug-buttons .edit-slug",
+        "#edit-slug-box .edit-slug",
+        "button.edit-slug",
+        "button:has-text('Chỉnh sửa')"
+      ],
+      "value": "",
+      "note": "Bấm “Chỉnh sửa” cạnh đường dẫn",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#new-post-slug",
+      "selectors": [
+        "#new-post-slug",
+        "#edit-slug-box input[type='text']"
+      ],
+      "value": "{{slug}}",
+      "note": "Điền đường dẫn (slug) từ tiêu đề — dưới 60 ký tự",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#edit-slug-buttons .save",
+      "selectors": [
+        "#edit-slug-buttons .save",
+        "#edit-slug-box .save",
+        "button.save",
+        "button:has-text('Đồng ý')"
+      ],
+      "value": "",
+      "note": "Bấm “Đồng ý” để chốt đường dẫn (BẮT BUỘC)",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#set-post-thumbnail",
+      "selectors": [
+        "#set-post-thumbnail",
+        "a:has-text('Đặt ảnh sản phẩm')"
+      ],
+      "value": "",
+      "note": "AI hình 1 → bấm “Đặt ảnh sản phẩm”",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "#menu-item-upload",
+      "selectors": [
+        "#menu-item-upload",
+        ".media-menu-item:has-text('Tải lên tệp mới')"
+      ],
+      "value": "",
+      "note": "Chọn tab “Tải lên tệp mới”",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "upload",
+      "selector": ".media-modal input[type='file']",
+      "selectors": [
+        ".media-modal input[type='file']",
+        "input[type='file']"
+      ],
+      "value": "{{image_1}}",
+      "note": "Tải ảnh 1 lên",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "wait",
+      "selector": "",
+      "selectors": [],
+      "value": "4",
+      "note": "Chờ ảnh tải lên xong",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-title",
+      "selectors": [
+        "#attachment-details-title",
+        ".media-sidebar input[type='text']"
+      ],
+      "value": "{{title}}",
+      "note": "Tiêu đề ảnh 1 ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-alt-text",
+      "selectors": [
+        "#attachment-details-alt-text",
+        ".media-sidebar textarea"
+      ],
+      "value": "{{title}}",
+      "note": "Văn bản thay thế (SEO) ảnh 1 ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-caption",
+      "selectors": [
+        "#attachment-details-caption"
+      ],
+      "value": "{{title}}",
+      "note": "Image Caption ảnh 1 ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-description",
+      "selectors": [
+        "#attachment-details-description"
+      ],
+      "value": "{{title}}",
+      "note": "Miêu tả ảnh 1 ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": "button.media-button-select",
+      "selectors": [
+        "button.media-button-select",
+        ".media-toolbar-primary .media-button-select",
+        "button:has-text('Đặt ảnh sản phẩm')",
+        "button:has-text('Thêm vào thư viện')"
+      ],
+      "value": "",
+      "note": "Đặt làm ảnh sản phẩm",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "wait",
+      "selector": "",
+      "selectors": [],
+      "value": "2",
+      "note": "Chờ hộp ảnh đóng",
+      "source": "auto",
+      "optional": false,
+      "force": false
+    },
+    {
+      "action": "click",
+      "selector": ".add_product_images a",
+      "selectors": [
+        ".add_product_images a",
+        "a:has-text('Thêm ảnh thư viện sản phẩm')",
+        "#product_images_container a.add_product_images"
+      ],
+      "value": "",
+      "note": "AI hình 2+ → bấm “Thêm ảnh thư viện sản phẩm”",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "click",
+      "selector": "#menu-item-upload",
+      "selectors": [
+        "#menu-item-upload",
+        ".media-menu-item:has-text('Tải lên tệp mới')"
+      ],
+      "value": "",
+      "note": "Chọn tab “Tải lên tệp mới” (thư viện)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "upload",
+      "selector": ".media-modal input[type='file']",
+      "selectors": [
+        ".media-modal input[type='file']",
+        "input[type='file']"
+      ],
+      "value": "{{image_2}}|{{image_3}}|{{image_4}}|{{image_5}}|{{image_6}}",
+      "note": "Tải các ảnh còn lại lên (ảnh 2,3,4,5,6…)",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "wait",
+      "selector": "",
+      "selectors": [],
+      "value": "5",
+      "note": "Chờ ảnh tải lên xong",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-title",
+      "selectors": [
+        "#attachment-details-title",
+        ".media-sidebar input[type='text']"
+      ],
+      "value": "{{title}}",
+      "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-alt-text",
+      "selectors": [
+        "#attachment-details-alt-text",
+        ".media-sidebar textarea"
+      ],
+      "value": "{{title}}",
+      "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-caption",
+      "selectors": [
+        "#attachment-details-caption"
+      ],
+      "value": "{{title}}",
+      "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "type",
+      "selector": "#attachment-details-description",
+      "selectors": [
+        "#attachment-details-description"
+      ],
+      "value": "{{title}}",
+      "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "click",
+      "selector": "button.media-button-select",
+      "selectors": [
+        "button.media-button-select",
+        ".media-toolbar-primary .media-button-select",
+        "button:has-text('Đặt ảnh sản phẩm')",
+        "button:has-text('Thêm vào thư viện')"
+      ],
+      "value": "",
+      "note": "Thêm vào thư viện ảnh sản phẩm",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    }
+  ]
 }
