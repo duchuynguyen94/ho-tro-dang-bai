@@ -235,9 +235,7 @@ def info_state(task) -> tuple[bool, list[str]]:
         missing.append("Search tags")
     if not str(r.get("content_html") or "").strip():
         missing.append("Nội dung")
-    imgs = r.get("images") or []
-    if not any(str((im or {}).get("path") or "").strip() for im in imgs):
-        missing.append("Ảnh")
+    # ẢNH KHÔNG tính là "ô thông tin" (theo yêu cầu)
     return (not missing), missing
 
 
@@ -1882,3 +1880,4 @@ class JobsPage(QWidget):
         r["content_html"] = self.content_edit.get_html()
         self.store.upsert_task(self.current)
         self.store.save()
+        self.refresh_info()      # vừa gõ/lưu -> cập nhật ngay "Thông tin đã đầy đủ / Thiếu thông tin"
