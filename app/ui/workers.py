@@ -573,10 +573,12 @@ class PostWorker(TrackedThread):
         self._running = False
 
     def _wait_closed(self, page, br, timeout: int = 7200) -> None:
-        """Chờ người dùng đóng cửa sổ Chrome (tối đa 2 giờ).
+        """Chờ người dùng ĐÓNG HẾT TAB Chrome (tối đa 2 giờ).
 
-        Kiểm tra bằng DANH SÁCH TIẾN TRÌNH của profile (không hỏi Playwright — Playwright
-        vẫn báo "chưa đóng" sau khi người dùng tắt Chrome, phải chờ ~1 phút mới biết).
+        Mở khoá khi (cái nào tới trước):
+        - KHÔNG CÒN TAB NÀO  (đóng tab cuối / đóng cửa sổ / tắt Chrome) — kể cả khi
+          Chrome vẫn còn chạy nền.
+        - Hoặc tiến trình Chrome của profile đã tắt hẳn.
         """
         import time
 
@@ -589,18 +591,19 @@ class PostWorker(TrackedThread):
         deadline = time.time() + timeout
         while self._running and time.time() < deadline:
             time.sleep(3)
+            # (1) đã đóng HẾT TAB -> coi như xong (Chrome có thể vẫn chạy nền)
+            try:
+                if not page.context.pages:
+                    break
+            except Exception:      # noqa: BLE001
+                break                  # trình duyệt đã tắt hẳn -> cũng coi như xong
+            # (2) tiến trình Chrome của profile đã tắt hẳn
             if profile:
                 try:
                     if not _pids_using_profile(profile):
-                        break                    # Chrome đã tắt hẳn -> mở khoá ngay
+                        break
                 except Exception:      # noqa: BLE001
                     pass
-                continue
-            try:                                 # dự phòng khi không lấy được profile
-                if page.is_closed():
-                    break
-            except Exception:      # noqa: BLE001
-                break
         try:
             if br:
                 br.close()
