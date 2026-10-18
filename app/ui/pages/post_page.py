@@ -111,7 +111,6 @@ class PostPage(QWidget):
         b.addWidget(self.source_url)
 
         # CHIA NHIỀU BÀI (ngay dưới ô nhập link): chỉ dùng khi có ĐÚNG 1 link
-        b.addSpacing(4)
         srow = QHBoxLayout()
         srow.setSpacing(12)              # cách ra cho thoáng (nút tick <-> ô số lượng)
         self.split_check = QCheckBox("Chia nhiều bài")
@@ -132,7 +131,6 @@ class PostPage(QWidget):
         b.addLayout(srow)
         polish_combos(self)
 
-        b.addSpacing(4)
         b.addWidget(QLabel("Logo thương hiệu (dự phòng — nếu AI không tìm thấy)"))
         h = QHBoxLayout()
         self.brand_logo = QLineEdit()
