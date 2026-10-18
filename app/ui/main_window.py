@@ -515,6 +515,19 @@ class MainWindow(QMainWindow):
             self._refresh_jobs_keep(fresh)
         except Exception:      # noqa: BLE001
             traceback.print_exc()
+        # sửa link TIÊU ĐỀ ĐẦU của nội dung -> website MỚI
+        try:
+            from ..ai.manager import set_first_title_link
+
+            r2 = fresh.result = dict(fresh.result or {})
+            html2 = str(r2.get("content_html") or "")
+            if html2:
+                r2["content_html"] = set_first_title_link(html2, new_site.url or "")
+                self.store.upsert_task(fresh)
+                self.store.save()
+                self.jobs_page._load(fresh)      # cập nhật lại panel (editor thấy link mới)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
         self.status(f"Đã đổi website: {old.name if old else '?'} → {new_site.name}")
         # luôn GHÉP LẠI ẢNH theo website mới (logo site / watermark / thanh thông tin của site mới)
         self._start_images_worker(fresh, None, None, "Đang ghép lại ảnh theo website mới…")
@@ -583,6 +596,13 @@ class MainWindow(QMainWindow):
                 status=STATUS_FINISH,
             )
             slots = [{"path": "", "footer": ""} for _ in range(count)]
+            # link TIÊU ĐỀ ĐẦU = website mà job này SẼ ĐĂNG
+            try:
+                from ..ai.manager import set_first_title_link as _set_first
+
+                content = _set_first(content, site.url or "")
+            except Exception:      # noqa: BLE001
+                pass
             t.result = {"title": "", "focus_keyword": "", "description": "", "tags": "",
                         "content_html": content, "images": slots,
                         "image_opts_list": [{} for _ in slots], "product_images": []}

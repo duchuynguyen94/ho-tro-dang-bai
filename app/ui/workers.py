@@ -10,7 +10,7 @@ from PySide6.QtCore import QThread, Signal
 from .. import source as src
 from ..ai import generate_content
 from ..ai.manager import (apply_template_icons, extract_product_name,
-                             insert_title_links, linkify_domains)
+                             insert_title_links, linkify_domains, set_first_title_link)
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -392,12 +392,13 @@ class ContentWorker(TrackedThread):
                 raw_html, page.get("title", "") or data.get("title", "")
             )
             html_out = insert_title_links(
-                html_out, self.store.title_link_first, title_links,
+                html_out, (site.url or self.store.title_link_first), title_links,
                 [pname, data.get("focus_keyword", ""), data.get("title", ""),
                  page.get("title", "")],
             )
+            html_out = set_first_title_link(html_out, site.url or self.store.title_link_first)
             self.log.emit(
-                f"Chèn link tiêu đề: h1/h2 đầu → {self.store.title_link_first or '(trống)'}, "
+                f"Chèn link tiêu đề: h1/h2 đầu → {(site.url or self.store.title_link_first) or '(trống)'}, "
                 f"{len(title_links)} link cấu hình cho các mục sau."
             )
             data["content_html"] = html_out
@@ -926,9 +927,9 @@ class SplitWorker(TrackedThread):
                 html = apply_template_icons(html)
                 # 1) mọi "www.<tên-miền>" -> link về ĐÚNG tên miền đó (bỏ www)
                 html = linkify_domains(html, all_sites)
-                # 2) link vào TIÊU ĐỀ MỤC: h2 đầu = website đang đăng; từ h2 thứ 2 = link cấu hình
+                # 2) link các TIÊU ĐỀ MỤC (link tiêu đề ĐẦU sẽ đặt khi tạo job — lúc đó mới biết website)
                 html = insert_title_links(
-                    html, self.store.title_link_first, list(self.store.title_links),
+                    html, "", list(self.store.title_links),
                     [extract_product_name(html, ""), "", "", ""],
                 )
                 if html.strip():
@@ -939,9 +940,8 @@ class SplitWorker(TrackedThread):
                     "Xem câu trả lời thô ở output/last_split_reply.txt"
                 )
             self.log.emit(
-                f"Đã chia được {len(out)}/{self.n} bài. Chèn link tiêu đề: h1/h2 đầu → "
-                f"{self.store.title_link_first or '(trống)'}, "
-                f"{len(self.store.title_links)} link cấu hình cho các mục sau."
+                f"Đã chia được {len(out)}/{self.n} bài. Chèn {len(self.store.title_links)} "
+                f"link cấu hình cho các mục sau (link tiêu đề đầu đặt theo website khi tạo job)."
             )
             self.ok.emit(out)
         except Exception as exc:      # noqa: BLE001

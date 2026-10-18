@@ -235,6 +235,30 @@ def mark_auto_formatted(html_text: str) -> str:
     return f"<!-- auto-format -->\n{t}"
 
 
+def set_first_title_link(html_text: str, url: str) -> str:
+    """Đặt href của TIÊU ĐỀ ĐẦU TIÊN (h1, không có thì h2) = url website SẼ ĐĂNG.
+
+    - Tiêu đề đã có <a> -> CHỈ ĐỔI href (giữ nguyên chữ).
+    - Tiêu đề chưa có <a> -> bọc chữ thành link.
+    """
+    u = _norm_url(str(url or "").strip())
+    if not u or not html_text:
+        return html_text
+    m = re.search(r"<h([12])\b([^>]*)>(.*?)</h\1>", html_text, flags=re.I | re.S)
+    if not m:
+        return html_text
+    inner = m.group(3)
+    if "<a" in inner.lower():
+        new_inner = re.sub(r'(<a\b[^>]*?\bhref=)"[^"]*"', rf'\1"{u}"', inner, count=1, flags=re.I)
+        if new_inner == inner:
+            new_inner = re.sub(r"(<a\b[^>]*?\bhref=)'[^']*'", rf'\1"{u}"', inner, count=1, flags=re.I)
+    else:
+        lead, rest = split_leading_icon(inner)
+        body = rest.strip() or inner.strip()
+        new_inner = f'{lead}<a href="{u}">{body}</a>' if body else inner
+    return html_text[:m.start(3)] + new_inner + html_text[m.end(3):]
+
+
 def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> str:
     """Prompt CHIA DANH SÁCH SẢN PHẨM của 1 link nguồn thành N bài viết.
 

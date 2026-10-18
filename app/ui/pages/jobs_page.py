@@ -1602,7 +1602,7 @@ class JobsPage(QWidget):
             from ...ai.manager import (already_auto_formatted, apply_template_icons,
                                        clean_content_html, extract_product_name,
                                        insert_title_links, linkify_domains,
-                                       mark_auto_formatted)
+                                       mark_auto_formatted, set_first_title_link)
         except Exception:      # noqa: BLE001
             traceback.print_exc()
             return
@@ -1611,8 +1611,17 @@ class JobsPage(QWidget):
             if not html.strip():
                 show_toast(self, "Ô Nội dung đang trống", 2600, ok=False)
                 return
+            site = self.store.get_site(getattr(self.current, "site_id", ""))
+            site_url = str(getattr(site, "url", "") or "") if site else ""
             if already_auto_formatted(html):
-                show_toast(self, "Nội dung đã auto format rồi — không chèn lại", 2800)
+                # Đã format rồi -> CHỈ kiểm tra + sửa link tiêu đề đầu cho đúng website sẽ đăng
+                fixed = set_first_title_link(html, site_url)
+                if fixed != html:
+                    self.content_edit.set_html(fixed)
+                    self._save()
+                    show_toast(self, "Đã cập nhật link tiêu đề đầu theo website sẽ đăng", 3000)
+                else:
+                    show_toast(self, "Nội dung đã auto format rồi — không chèn lại", 2800)
                 return
             r = self.current.result or {}
             out = clean_content_html(html)                    # 1) dọn rác HTML
@@ -1620,11 +1629,12 @@ class JobsPage(QWidget):
             all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
             out = linkify_domains(out, all_sites)             # 3) www.<domain> -> link thật
             out = insert_title_links(                          # 4) link vào tiêu đề mục
-                out, self.store.title_link_first, list(self.store.title_links),
+                out, site_url, list(self.store.title_links),
                 [extract_product_name(out, ""), str(r.get("focus_keyword") or ""),
                  str(r.get("title") or ""), ""],
             )
-            out = mark_auto_formatted(out)                    # 5) gắn dấu đã auto format
+            out = set_first_title_link(out, site_url)         # 5) tiêu đề đầu -> website sẽ đăng
+            out = mark_auto_formatted(out)                    # 6) gắn dấu đã auto format
             self.content_edit.set_html(out)
             self._save()
             show_toast(self, "Đã auto format nội dung (icon + link)", 2600)
