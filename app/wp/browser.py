@@ -12,6 +12,25 @@ from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
 from ..config import sessions_dir
 
+def _no_window_kwargs() -> dict:
+    """Trên Windows: ẩn cửa sổ console khi gọi PowerShell/taskkill (tránh nháy cửa sổ)."""
+    if os.name != "nt":
+        return {}
+    kw: dict = {}
+    try:
+        kw["creationflags"] = subprocess.CREATE_NO_WINDOW      # type: ignore[attr-defined]
+    except Exception:
+        pass
+    try:      # dự phòng cho bản Python cũ
+        si = subprocess.STARTUPINFO()                          # type: ignore[attr-defined]
+        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW          # type: ignore[attr-defined]
+        si.wShowWindow = 0                                     # SW_HIDE
+        kw["startupinfo"] = si
+    except Exception:
+        pass
+    return kw
+
+
 # Ưu tiên dùng Chrome/Edge có sẵn; nếu không có thì dùng Chromium kèm theo.
 CHANNELS = ["chrome", "chrome-beta", "msedge", None]
 
@@ -59,7 +78,8 @@ def _pids_using_profile(user_data_dir: str) -> list[int]:
             ps = ("Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*"
                   + user_data_dir.replace("'", "''") + "*' } | ForEach-Object { $_.ProcessId }")
             out = subprocess.run(["powershell", "-NoProfile", "-Command", ps],
-                                 capture_output=True, text=True, timeout=20)
+                                 capture_output=True, text=True, timeout=20,
+                                 **_no_window_kwargs())
             for line in (out.stdout or "").splitlines():
                 line = line.strip()
                 if line.isdigit():
@@ -103,7 +123,7 @@ def _kill_profile_browsers(user_data_dir: str) -> int:
         try:
             if os.name == "nt":
                 subprocess.run(["taskkill", "/PID", str(pid), "/F"],
-                               capture_output=True, timeout=15)
+                               capture_output=True, timeout=15, **_no_window_kwargs())
             else:
                 os.kill(pid, signal.SIGTERM)
             killed += 1

@@ -567,7 +567,7 @@ class PostWorker(TrackedThread):
             profile = ""
         deadline = time.time() + timeout
         while self._running and time.time() < deadline:
-            time.sleep(2)
+            time.sleep(3)
             if profile:
                 try:
                     if not _pids_using_profile(profile):
