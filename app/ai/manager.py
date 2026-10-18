@@ -230,15 +230,9 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
             rule_block = f"\n=== RULE CONTENT (rule_content.pdf) ===\n{rc}\n"
     return (
         f"Đọc bài viết tại link nguồn sau:\n{link_line}\n\n"
-        f"Trong link nguồn có DANH SÁCH SẢN PHẨM. Hãy CHIA ĐỀU danh sách sản phẩm đó thành "
-        f"{n} NHÓM (giữ đúng thứ tự xuất hiện trong trang), rồi viết MỖI NHÓM thành "
-        f"1 BÀI VIẾT RIÊNG BIỆT hoàn chỉnh theo file \"rule_content.pdf\" đã đính kèm "
-        f"(sources) trong Project này.\n"
-        f"- Tổng số sản phẩm chia hết cho {n} → mỗi bài đúng (tổng ÷ {n}) sản phẩm.\n"
-        f"- Nếu chia KHÔNG hết → các bài ĐẦU nhận nhiều hơn 1 sản phẩm "
-        f"(ví dụ 10 sản phẩm chia 3 → bài 1: 4, bài 2: 3, bài 3: 3).\n"
-        f"- Mỗi bài CHỈ viết về sản phẩm của NHÓM MÌNH — KHÔNG viết lại sản phẩm của nhóm khác.\n"
-        f"- KHÔNG tạo JSON SEO, KHÔNG viết thông tin SEO.\n"
+        f"Trong link nguồn hãy lấy DANH SÁCH SẢN PHẨM. Sau đó CHIA ĐỀU danh sách sản phẩm "
+        f"đó thành {n} NHÓM, rồi viết MỖI NHÓM thành 1 BÀI VIẾT RIÊNG BIỆT hoàn chỉnh theo "
+        f'file "rule_content.pdf" đã đính kèm (sources) trong Project này.\n'
         f"{rule_block}"
         f"\n=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC) ===\n"
         f"Mỗi bài bắt đầu bằng ĐÚNG 1 dòng ngăn cách: === BÀI 1 ===, === BÀI 2 === … "
@@ -248,16 +242,23 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
     )
 
 
+# dòng ngăn cách "=== BÀI n ===" — chịu được cả tiêu đề markdown / in đậm / dấu hai chấm
+_MARK_RE = re.compile(
+    r"(?im)^[\s>*_#\-–—]*[=]{0,}\s*(?:B[ÀA]I|BAI)\s*[:\-–—]?\s*(\d+)\s*[=]{0,}[\s*_]*$"
+)
+
+
 def parse_split_articles(raw: str, n: int) -> list[str]:
     """Tách câu trả lời thành N bài viết (theo dòng ngăn cách === BÀI k ===)."""
     text = str(raw or "")
-    parts = re.split(r"\n?\s*={2,}\s*B[ÀA]I\s*(\d+)\s*={2,}\s*\n?", text, flags=re.IGNORECASE)
     out: list[str] = []
-    if len(parts) >= 3:                    # có dòng ngăn cách -> parts[1::2] là số, parts[2::2] là bài
-        for chunk in parts[2::2]:
-            c = _strip_fences(chunk).strip()
-            if c and len(c) > 80:
-                out.append(c)
+    marks = list(_MARK_RE.finditer(text))       # nhận cả "=== BÀI 1 ===" / "### BÀI 1" / "**BÀI 1**"
+    if len(marks) >= 2:
+        for i, m in enumerate(marks):
+            end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
+            chunk = _strip_fences(text[m.end():end]).strip()
+            if chunk:
+                out.append(chunk)
     if not out:                            # không có ngăn cách -> tách theo dòng trống lớn / thử cả bài
         c = _strip_fences(text).strip()
         if c and len(c) > 80:

@@ -905,16 +905,29 @@ class SplitWorker(TrackedThread):
             full = build_split_prompt(self.store.formats, page, self.n, with_rule=True)
             short = build_split_prompt(self.store.formats, page, self.n, with_rule=False)
             raw = _call_ai(self.store, full, short, self.log.emit)
+            # LƯU câu trả lời THÔ để soi khi cần
+            try:
+                from ..config import output_dir
+
+                (output_dir() / "last_split_reply.txt").write_text(str(raw or ""), encoding="utf-8")
+            except Exception:      # noqa: BLE001
+                pass
             arts = parse_split_articles(raw, self.n)
+            self.log.emit(f"AI trả về {len(str(raw or ''))} ký tự — tách được {len(arts)} bài.")
             all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
             out: list[str] = []
             for a in arts:
+                if len(str(a).strip()) < 300:      # bài rỗng/quá ngắn -> bỏ (tránh tạo job rác)
+                    continue
                 html = apply_template_icons(a)
                 html = linkify_domains(html, all_sites)
                 if html.strip():
                     out.append(html)
             if not out:
-                raise RuntimeError("AI không trả về bài viết nào.")
+                raise RuntimeError(
+                    "AI không trả về BÀI VIẾT nào (chỉ có dòng ngăn cách hoặc bài quá ngắn). "
+                    "Xem câu trả lời thô ở output/last_split_reply.txt"
+                )
             self.log.emit(f"Đã chia được {len(out)}/{self.n} bài.")
             self.ok.emit(out)
         except Exception as exc:      # noqa: BLE001
