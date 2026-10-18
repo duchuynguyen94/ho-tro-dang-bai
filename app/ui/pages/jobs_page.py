@@ -1264,7 +1264,7 @@ class JobsPage(QWidget):
             pass
         if comp.get("nobg"):
             item["nobg"] = True
-        if len(ups) >= 8:
+        if len(ups) >= 20:
             ups[-1] = item
         else:
             ups.append(item)
@@ -1729,7 +1729,7 @@ class JobsPage(QWidget):
         real = [p for p in paths if p]
         spots = self._find_free_spots(len(real))     # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng)
         for p, spot in zip(real, spots):
-            if len(ups) >= 8:
+            if len(ups) >= 20:
                 ups[-1] = {"path": p, "pos": spot}
             else:
                 ups.append({"path": p, "pos": spot})
@@ -1764,8 +1764,8 @@ class JobsPage(QWidget):
         while len(lst) <= index:
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
-        if len(ups) >= 8:
-            ups[-1] = {"path": path, "pos": [0.5, 0.5]}   # đủ 8 -> thay cái cuối
+        if len(ups) >= 20:
+            ups[-1] = {"path": path, "pos": [0.5, 0.5]}   # đủ 20 -> thay cái cuối
         else:
             ups.append({"path": path, "pos": [0.5, 0.5]})  # canh giữa
         lst[index]["uploads"] = ups
