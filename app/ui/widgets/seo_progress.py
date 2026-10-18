@@ -18,9 +18,11 @@ class SeoProgressOverlay(QWidget):
     def __init__(self, parent: QWidget) -> None:
         super().__init__(parent)
         self.setObjectName("seoOverlay")
+        self.setAttribute(Qt.WA_StyledBackground, True)     # cho nền của stylesheet hiện ra
         self.setStyleSheet(
-            "#seoOverlay { background: rgba(15, 23, 42, 0.45); }"
-            "#seoCard { background: #ffffff; border-radius: 14px; }"
+            # TRẮNG ĐẶC: không thấy app phía sau
+            "#seoOverlay { background: #ffffff; }"
+            "#seoCard { background: #ffffff; border: 1px solid #e2e8f0; border-radius: 14px; }"
         )
         self.setFocusPolicy(Qt.StrongFocus)
 
@@ -111,7 +113,14 @@ class SeoProgressOverlay(QWidget):
     def _cancel(self) -> None:
         self.cancelled.emit()
 
+    def focusNextPrevChild(self, nxt: bool) -> bool:      # noqa: N802
+        # CHẶN phím Tab / Shift+Tab: không cho nhảy sang ô phía sau lớp phủ
+        return True
+
     def keyPressEvent(self, ev) -> None:      # noqa: N802
+        if ev.key() in (Qt.Key_Tab, Qt.Key_Backtab):
+            ev.accept()                       # nuốt luôn phím Tab
+            return
         if ev.key() == Qt.Key_Escape:
             self._cancel()
             return
