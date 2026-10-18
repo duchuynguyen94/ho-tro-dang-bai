@@ -48,7 +48,7 @@ from .workers import (
 )
 
 # (chữ trên tab, chỉ số trang trong stack) — "Cài đặt" đã chuyển thành nút ⚙ góc phải trên
-NAV = [("Đăng bài", 1), ("Công việc đang làm", 2), ("Log lỗi", 3)]
+NAV = [("Đăng bài", 1), ("Công việc đang làm", 2)]      # Log lỗi đã chuyển vào Cài đặt
 GEAR_PAGE = 0      # trang "Cài đặt"
 
 
@@ -141,11 +141,10 @@ class MainWindow(QMainWindow):
         # nội dung
         self.stack = QStackedWidget()
         self.post_page = PostPage(self.store)
-        self.config_page = ConfigPage(self.store)
+        self.error_log_page = ErrorLogPage(self.store)     # nằm trong Cài đặt (sidebar)
+        self.config_page = ConfigPage(self.store, self.error_log_page)
         self.jobs_page = JobsPage(self.store)
-        self.error_log_page = ErrorLogPage(self.store)
-        for page in (self.config_page, self.post_page, self.jobs_page,
-                     self.error_log_page):
+        for page in (self.config_page, self.post_page, self.jobs_page):
             self.stack.addWidget(page)
         v.addWidget(self.stack, 1)
 
@@ -198,8 +197,6 @@ class MainWindow(QMainWindow):
             pass
         if index == 2:
             self.jobs_page.refresh()
-        elif index == 3:
-            self.error_log_page.refresh()
         elif index == 1:
             self.post_page.reload_sites()      # tab "Đăng bài"
 

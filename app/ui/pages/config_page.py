@@ -70,9 +70,10 @@ def _form(parent=None) -> QFormLayout:
 class ConfigPage(QWidget):
     changed = Signal()
 
-    def __init__(self, store, parent=None) -> None:
+    def __init__(self, store, error_page=None, parent=None) -> None:
         super().__init__(parent)
         self.store = store
+        self._error_page = error_page      # trang "Log lỗi" (đưa vào sidebar)
         self._panels: dict[str, QWidget] = {}
         self._nav_buttons: dict[str, QPushButton] = {}
         self._build()
@@ -145,13 +146,16 @@ class ConfigPage(QWidget):
         fmt = FormatPanel(self.store, self.changed.emit)
         tlinks = TitleLinksPanel(self.store, self.changed.emit)
         updt = UpdatePanel(self.store)
-        for key, panel, label in [
+        items = [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
             ("format", fmt, "Format Rule"),
             ("title_links", tlinks, "Link tiêu đề"),
-            ("update", updt, "Cập nhật phần mềm"),
-        ]:
+        ]
+        if self._error_page is not None:          # Log lỗi nằm TRÊN "Cập nhật phần mềm"
+            items.append(("error_log", self._error_page, "Log lỗi"))
+        items.append(("update", updt, "Cập nhật phần mềm"))
+        for key, panel, label in items:
             self._panels[key] = panel
             self.stack.addWidget(panel)
             nav_button(label, key)
@@ -165,6 +169,11 @@ class ConfigPage(QWidget):
     def _show(self, key: str) -> None:
         if key not in self._panels:
             return
+        if key == "error_log" and self._error_page is not None:
+            try:
+                self._error_page.refresh()      # nạp lại log mỗi lần mở
+            except Exception:      # noqa: BLE001
+                pass
         self.stack.setCurrentWidget(self._panels[key])
         for k, btn in getattr(self, "_nav_buttons", {}).items():
             btn.setChecked(k == key)
