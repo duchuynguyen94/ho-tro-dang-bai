@@ -278,8 +278,11 @@ class PostPage(QWidget):
         return out
 
     def _sync_split_enabled(self, n_links: int) -> None:
-        """Tick "chia nhiều bài" chỉ bật khi có ĐÚNG 1 link."""
+        """Tick "chia nhiều bài" chỉ HIỆN khi có ĐÚNG 1 link (nhiều link / không link -> ẩn)."""
         only_one = (n_links == 1)
+        # ẨN hẳn khi không phải 1 link
+        self.split_check.setVisible(only_one)
+        self.split_count.setVisible(only_one)
         self.split_check.setEnabled(only_one)
         if not only_one and self.split_check.isChecked():
             self.split_check.setChecked(False)
