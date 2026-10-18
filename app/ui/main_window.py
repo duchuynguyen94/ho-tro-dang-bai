@@ -834,17 +834,12 @@ class MainWindow(QMainWindow):
             paths = export_post_images(self.store, fresh)
             if paths:
                 fresh.result = dict(fresh.result or {})
+                # CHỈ dùng trong bộ nhớ để kịch bản upload ảnh — KHÔNG lưu vào job
                 fresh.result["post_images"] = paths
-                self.store.upsert_task(fresh)
-                self.store.save()
                 task = fresh
                 self.status(f"Đã lưu {len(paths)} ảnh vào thư mục {fresh.id[:8]}…")
-        except Exception as exc:
-            self._log_err("Lưu ảnh đăng bài", str(exc))
-
-        self.store.upsert_task(task)
-        self.store.save()
-        self.jobs_page.refresh()
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
 
         self.jobs_page.set_posting_locked(True)      # khoá nút OK — Đăng bài của mọi job
         worker = PostWorker(site, task.result or {})
@@ -986,8 +981,7 @@ class MainWindow(QMainWindow):
                 # Chrome đã tắt mà nút chưa mở khoá -> mở khoá ngay + dừng luồng kẹt
                 self.jobs_page.set_posting(tid, False)
                 self._stop_post_worker(tid)
-                changed = True
-                self._log_err("Đăng bài", "Chrome đã tắt — app tự mở khoá nút “OK — Đăng bài”.")
+                changed = True      # Chrome đã tắt -> tự mở khoá (không ghi Log lỗi)
             if changed and not any(getattr(self.jobs_page, "_posting", {}).values()):
                 self.jobs_page.set_posting_locked(False)
         except Exception:      # noqa: BLE001
@@ -1010,35 +1004,19 @@ class MainWindow(QMainWindow):
         self.status("")                              # xoá message ở thanh dưới
 
     def _on_post_ok(self, task, url: str) -> None:
+        # ĐĂNG BÀI: KHÔNG đụng gì vào job (không đổi trạng thái, KHÔNG lưu link kết quả, không ghi Log lỗi).
         # KHÔNG mở lại nút ở đây: chờ người dùng đóng trình duyệt (xem _on_post_closed)
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        fresh.result["result_url"] = url
-        # ĐĂNG THÀNH CÔNG: KHÔNG đổi trạng thái (giữ nguyên trạng thái cũ của job)
-        self.store.upsert_task(fresh)
-        self.store.save()
-        self.jobs_page.refresh()
-        self._refresh_count()
         self.status("Đã mở trình duyệt và điền thông tin — bạn tự bấm Đăng trên WordPress.")
 
     def _on_post_failed(self, task, err: str) -> None:
+        # KỊCH BẢN DỪNG GIỮA ĐƯỜNG: KHÔNG đụng gì vào job (không đổi trạng thái, không ghi Log lỗi,
+        # không hiện cảnh báo) — bạn tự điền nốt phần còn lại rồi bấm Đăng trên WordPress.
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        r = fresh.result or {}
-        has_content = bool(r.get("content_html") or r.get("title"))
-        # ĐĂNG LỖI: KHÔNG đổi trạng thái (chỉ ghi Log lỗi + giữ panel kết quả nếu đã có nội dung)
-        fresh.message = err
-        fresh.error_stage = "post" if has_content else "content"
-        self.store.upsert_task(fresh)
-        self.store.save()
-        self._log_err("Đăng bài", err)
         try:
             self._refresh_jobs_keep(fresh)
-        except Exception as exc:      # noqa: BLE001
+        except Exception:      # noqa: BLE001
             traceback.print_exc()
-            self._log_err("Hiển thị kết quả", str(exc))
-        self._refresh_count()
-        # KHÔNG hiện cảnh báo "không đăng được bài" (việc đăng do người dùng tự bấm trên
-        # WordPress). Lỗi vẫn được ghi vào tab Log lỗi để tra khi cần.
-        self.status("")          # xoá message ở thanh dưới
+        self.status("Kịch bản dừng giữa đường — bạn tự điền nốt rồi bấm Đăng trên WordPress.")
 
     def _log_err(self, source: str, message: str) -> None:
         self.store.log_error(source, message)
@@ -1225,9 +1203,8 @@ class MainWindow(QMainWindow):
             self.store.upsert_task(task)
             self.store.save()
             self.status(f"Đã auto format lại nội dung + link tiêu đề đầu → {site.name or site_url}")
-        except Exception as exc:      # noqa: BLE001
-            traceback.print_exc()
-            self._log_err("Auto format khi đăng", str(exc))
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()          # không ghi Log lỗi (việc đăng không đụng vào job)
 
     def _compose_images_for_site(self, task, site, timeout_ms: int = 180000) -> bool:
         """Ghép LẠI ảnh theo website vừa chọn rồi CHỜ xong mới cho mở Chrome đăng."""
@@ -1239,13 +1216,12 @@ class MainWindow(QMainWindow):
             worker = ImagesWorker(self.store, site, task, task.footer_mode, None)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
-            self._log_err("Ghép ảnh", str(exc))
+            show_toast(self, f"Ghép ảnh lỗi: {exc}", 4200, ok=False)   # báo lỗi, KHÔNG mở Chrome
             return False
         worker.log.connect(lambda m: self.status(m))
         worker.ok.connect(lambda images: (self._on_images_ok(task, images),
                                           state.update(ok=True), loop.quit()))
-        worker.failed.connect(lambda err: (self._log_err("Ghép ảnh", str(err)),
-                                           state.update(err=str(err)), loop.quit()))
+        worker.failed.connect(lambda err: (state.update(err=str(err)), loop.quit()))
         self._workers.append(worker)
         self.status(f"Đang ghép lại ảnh theo {site.name}… (xong mới mở Chrome)")
         worker.start()
@@ -1259,7 +1235,9 @@ class MainWindow(QMainWindow):
         self._cleanup(worker)
         if state["ok"]:
             return True
-        show_toast(self, f"Ghép ảnh lỗi: {state['err'][:80] or 'quá lâu'}", 4200, ok=False)
+        # LỖI GHÉP ẢNH -> DỪNG, KHÔNG mở Chrome; báo alert cho người dùng
+        show_toast(self, f"Ghép ảnh lỗi — không đăng: {state['err'][:90] or 'quá lâu'}",
+                   5000, ok=False)
         return False
 
     def _on_stop_all(self) -> None:
