@@ -786,8 +786,12 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                         raise
             elif action in ("add_gallery_images", "gallery_add_each"):
                 # Thêm ảnh vào thư viện TỪNG ẢNH MỘT (upload -> điền -> chèn) rồi kết thúc
-                files = [str(ctx.get(f"image_{i}") or "") for i in range(2, 9)]
-                files = [f for f in files if f and Path(f).exists()]
+                # lặp cho TỚI HẾT số ảnh (tối đa 20 ảnh như app cho phép)
+                files = []
+                for i in range(2, 21):
+                    fp = str(ctx.get(f"image_{i}") or "")
+                    if fp and Path(fp).exists():
+                        files.append(fp)
                 if files:
                     add_gallery_images_one_by_one(
                         page, files, fallback_title=render("{{title}}", ctx), log=log)
