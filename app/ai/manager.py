@@ -277,6 +277,20 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         rc = read_rule(rule_path(rules, "content"))
         if rc:
             rule_block = f"\n=== RULE CONTENT (rule_content.pdf) ===\n{rc}\n"
+    if not with_rule:
+        # CHATGPT: prompt gọn (rule_content.pdf nằm trong Project)
+        return (
+            f"Đọc bài viết tại link nguồn sau:\n{link_line}\n\n"
+            f'Lấy "danh sách sản phẩm" từ link nguồn. Sau đó chia đều danh sách sản phẩm '
+            f"thành {n} nhóm (mỗi mã sản phẩm chỉ thuộc 1 nhóm). Hãy viết mỗi nhóm 1 nội dung "
+            f'hoàn chỉnh theo file "rule_content.pdf" đã đính kèm trong Project này.\n\n\n'
+            f"=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC)  ===\n\n"
+            f"Mỗi nội dung ngăn cách nhau theo kiểu ví dụ: === Nội dung  1 ===, === Nội dung 2 ===\n"
+            f'Mỗi nội dung bài viết nằm trong 1 block và rule là  "HTML" theo “TEMPLATE” '
+            f"trong file “rule_content.pdf”.\n"
+            f"Không giải thích gì thêm.\n"
+        )
+
     return (
         f"Đọc bài viết tại link nguồn sau:\n{link_line}\n\n"
         f"Trong link nguồn hãy lấy DANH SÁCH SẢN PHẨM. Sau đó CHIA ĐỀU danh sách sản phẩm "
@@ -299,6 +313,10 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
 # dòng ngăn cách "=== BÀI n ===" — chịu được cả tiêu đề markdown / in đậm / dấu hai chấm
 _MARK_RE = re.compile(
     r"(?im)^[\s>*_#\-–—]*[=]{0,}\s*(?:B[ÀA]I|BAI)\s*[:\-–—]?\s*(\d+)\s*[=]{0,}[\s*_]*$"
+)
+# dòng ngăn cách kiểu mới: "=== Nội dung 1 ===" (bắt buộc có dấu = ở 2 đầu để tránh nhận nhầm)
+_MARK_RE_ND = re.compile(
+    r"(?im)^[\s>*_#\-–—]*[=]{1,}\s*N[ỘÔ]I\s*DUNG\s*[:\-–—]?\s*(\d+)\s*[=]{1,}[\s*_]*$"
 )
 
 
@@ -329,7 +347,9 @@ def parse_split_articles(raw: str, n: int) -> list[str]:
     """Tách câu trả lời thành N bài viết (theo dòng ngăn cách === BÀI k ===)."""
     text = str(raw or "")
     out: list[str] = []
-    marks = list(_MARK_RE.finditer(text))       # nhận cả "=== BÀI 1 ===" / "### BÀI 1" / "**BÀI 1**"
+    # nhận "=== BÀI 1 ===" / "### BÀI 1" / "**BÀI 1**" / "=== Nội dung 1 ===" (theo đúng thứ tự)
+    marks = sorted(list(_MARK_RE.finditer(text)) + list(_MARK_RE_ND.finditer(text)),
+                   key=lambda m: m.start())
     if len(marks) >= 2:
         for i, m in enumerate(marks):
             end = marks[i + 1].start() if i + 1 < len(marks) else len(text)
