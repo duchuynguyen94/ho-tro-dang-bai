@@ -475,6 +475,42 @@ def _taxonomy_terms(page: Page, tax: str) -> list:
         return []
 
 
+def split_term_names(raw: str, multi: bool = True) -> list:
+    """Tách chuỗi tên loại: "A; B; C" -> [A, B, C] (bỏ trùng, bỏ rỗng)."""
+    if not multi:
+        one = str(raw or "").strip()
+        return [one] if one else []
+    out, seen = [], set()
+    for part in re.split(r"[;,]", str(raw or "")):
+        t = part.strip(" \t-•*").strip()
+        k = _norm_vn(t)
+        if t and k and k not in seen:
+            seen.add(k)
+            out.append(t)
+    return out
+
+
+def pick_taxonomy_terms(page: Page, tax: str, raw: str, label: str = "",
+                        multi: bool = True, log=None) -> int:
+    """Chọn/thêm NHIỀU loại một lượt (mỗi loại làm 1 lần — WordPress chỉ thêm 1 term/lần)."""
+    names = split_term_names(raw, multi)
+    if not names:
+        if log:
+            log(f"  (bỏ qua {label} — để trống)")
+        return 0
+    done = 0
+    for i, name in enumerate(names, 1):
+        try:
+            if pick_taxonomy_term(page, tax, name, label=label, log=log):
+                done += 1
+        except Exception as exc:      # noqa: BLE001
+            if log:
+                log(f"  ({label}: lỗi “{name}” — {str(exc)[:60]})")
+    if log and len(names) > 1:
+        log(f"  ({label}: xong {done}/{len(names)} loại)")
+    return done
+
+
 def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=None) -> bool:
     """Chọn 1 term trong hộp taxonomy của WooCommerce (product_cat / product_brand).
 
@@ -541,7 +577,7 @@ def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=Non
                         page.locator(f"label[for='{hit['id']}']").first.click(timeout=4000)
             page.wait_for_timeout(300)
             if log:
-                log(f"  ({label}: đã chọn “{hit['text']}”)")
+                log(f"  ({label}: đã chọn có sẵn “{hit['text']}”")
             return True
         except Exception as exc:          # noqa: BLE001
             if log:
@@ -549,14 +585,21 @@ def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=Non
 
     # ---- CHƯA CÓ -> THÊM MỚI
     try:
-        toggle = page.locator(f"#{tax}-add-toggle").first
-        if toggle.count():
+        # ô "Thêm ... mới": CHỈ mở khi đang ĐÓNG (bấm toggle lúc đang mở sẽ đóng lại)
+        inp = page.locator(f"#new{tax}").first
+        for _ in range(3):
             try:
-                toggle.click(timeout=4000)
-                page.wait_for_timeout(400)
+                if inp.count() and inp.is_visible():
+                    break
             except Exception:
                 pass
-        inp = page.locator(f"#new{tax}").first
+            try:
+                toggle = page.locator(f"#{tax}-add-toggle").first
+                if toggle.count():
+                    toggle.click(timeout=4000)
+            except Exception:
+                pass
+            page.wait_for_timeout(400)
         if not inp.count():
             if log:
                 log(f"  ({label}: chưa có “{name}” và không thấy ô thêm mới — bỏ qua)")
@@ -1125,7 +1168,8 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 # Chọn danh mục / thương hiệu (chưa có thì THÊM MỚI)
                 tax = str(step.selector or "").strip() or "product_cat"
                 lab = "Thương hiệu" if "brand" in tax else "Danh mục"
-                pick_taxonomy_term(page, tax, render(step.value, ctx), label=lab, log=log)
+                pick_taxonomy_terms(page, tax, render(step.value, ctx), label=lab,
+                                    multi=("brand" not in tax), log=log)
             elif action in ("attachment_fields", "fill_attachment_now"):
                 # Điền 4 ô (Tiêu đề/Alt/Caption/Miêu tả) của ảnh đang hiện — MỘT LẦN
                 fill_current_attachment_fields(page, render(step.value or "{{title}}", ctx), log=log)
