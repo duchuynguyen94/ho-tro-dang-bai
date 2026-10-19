@@ -372,71 +372,79 @@ def _sidebar_attach_id(page: Page) -> int:
         return 0
 
 
-def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int:
-    """Điền các ô TRỐNG (Alt / Image Caption / Miêu tả) của bảng chi tiết ẢNH ĐANG HIỆN.
+_FILL_CURRENT_JS = r"""({val}) => {
+    const mods = Array.from(document.querySelectorAll('.media-modal'))
+                     .filter(m => (m.offsetWidth || m.offsetHeight));
+    const md = mods.length ? mods[mods.length - 1] : document;   // MODAL TRÊN CÙNG
+    const t = md.querySelector('#attachment-details-title');
+    const own = t ? (t.value || '').trim() : '';
+    const use = own || (val || '');
+    const res = {own: own, hasTitle: !!t, done: []};
+    if (!use) return res;
+    const patch = {};
+    [['#attachment-details-alt-text', 'alt'], ['#attachment-details-caption', 'caption'],
+     ['#attachment-details-description', 'description']].forEach(([sel, key]) => {
+        const el = md.querySelector(sel);
+        if (!el) return;
+        if ((el.value || '').trim()) return;                     // ô đã có nội dung -> giữ nguyên
+        el.value = use;
+        el.dispatchEvent(new Event('input', {bubbles: true}));
+        el.dispatchEvent(new Event('change', {bubbles: true}));
+        patch[key] = use;
+    });
+    try {      // lưu đúng MODEL của ảnh trong modal này
+        const e = md.querySelector('.edit-attachment');
+        const m = e && (e.getAttribute('href') || '').match(/post=(\d+)/);
+        if (m && Object.keys(patch).length) {
+            const model = wp.media.attachment(m[1]);
+            model.set(patch);
+            model.save();
+        }
+    } catch (err) {}
+    res.done = Object.keys(patch);
+    return res;
+}"""
 
-    Một lần duy nhất (thay cho 4 bước riêng) -> nhanh, không bị "khựng".
-    Giá trị = TIÊU ĐỀ CỦA CHÍNH ẢNH (ô Tiêu đề); ô nào đã có nội dung -> giữ nguyên.
+
+def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
+    """Điền các ô TRỐNG của bảng chi tiết trong MODAL TRÊN CÙNG.
+
+    Ưu tiên GIÁ TRỊ ô #attachment-details-title (tiêu đề CỦA CHÍNH ẢNH đó);
+    chỉ khi ô đó trống mới dùng `value` (tiêu đề bài viết).
     """
-    def visible(sel: str):
+    # CHỜ ô Tiêu đề có giá trị (WordPress đặt tiêu đề = tên file ngay sau khi upload)
+    for _w in range(12):
         try:
-            loc = page.locator(sel + ":visible").first
-            return loc if loc.count() else None
+            ok_title = page.evaluate(
+                """() => {
+                    const mods = Array.from(document.querySelectorAll('.media-modal'))
+                                     .filter(m => (m.offsetWidth || m.offsetHeight));
+                    const md = mods.length ? mods[mods.length - 1] : document;
+                    const t = md.querySelector('#attachment-details-title');
+                    return !!(t && (t.value || '').trim()); }"""
+            )
         except Exception:
-            return None
-
-    title_loc = visible("#attachment-details-title")
-    if title_loc is None:
-        if log:
-            log("  (không thấy bảng chi tiết ảnh — bỏ qua điền mô tả)")
-        return 0
+            ok_title = False
+        if ok_title:
+            break
+        page.wait_for_timeout(200)
     try:
-        own = str(title_loc.input_value(timeout=2000) or "").strip()
-    except Exception:
-        own = ""
-    use = own or str(value or "").strip()
-    if not use:
+        res = page.evaluate(_FILL_CURRENT_JS, {"val": str(value or "")}) or {}
+    except Exception as exc:      # noqa: BLE001
         if log:
-            log("  (ảnh chưa có tiêu đề — bỏ qua điền mô tả)")
+            log(f"  (lỗi điền mô tả ảnh: {str(exc)[:80]})")
         return 0
-    patch: dict = {}
-    for sel, key in (("#attachment-details-alt-text", "alt"),
-                     ("#attachment-details-caption", "caption"),
-                     ("#attachment-details-description", "description")):
-        loc = visible(sel)
-        if loc is None:
-            continue
-        try:
-            cur = str(loc.input_value(timeout=1500) or "").strip()
-        except Exception:
-            cur = ""
-        if cur:
-            continue                  # ô đã có nội dung -> giữ nguyên
-        try:
-            loc.fill(use, timeout=5000)
-            patch[key] = use
-        except Exception:
-            pass
-    if patch:
-        try:      # lưu qua API cho chắc
-            # CHỜ LƯU XONG (không bấm chèn khi còn đang lưu)
-            page.evaluate("""(patch) => new Promise(resolve => {
-                try {
-                    const a = document.querySelector('.media-sidebar .edit-attachment');
-                    const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
-                    if (!m) return resolve(false);
-                    const md = wp.media.attachment(m[1]);
-                    md.set(patch);
-                    const pr = md.save();
-                    if (pr && pr.always) { pr.always(() => resolve(true)); }
-                    else { resolve(true); }
-                } catch (e) { resolve(false); }
-            })""", patch)
-        except Exception:
-            pass
+    done = res.get("done") or []
     if log:
-        log(f"  (ảnh: điền {', '.join(sorted(patch)) or 'không có ô trống'})")
-    return len(patch)
+        own = str(res.get("own") or "")
+        log(f"  (ảnh: điền {', '.join(done) if done else 'không có ô trống'}"
+            + (f" | tiêu đề ảnh: {own[:30]}" if own else " | tiêu đề ảnh TRỐNG -> dùng tiêu đề bài") + ")")
+    return len(done)
+
+
+def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int:
+    """Điền 4 ô của ảnh đang hiện (modal TRÊN CÙNG) — 1 lần, ưu tiên tiêu đề của chính ảnh."""
+    return _fill_attachment_in_top_modal(page, value, log=log)
 
 
 def slug_if_needed(page: Page, new_slug: str, limit: int = 65, log=None) -> bool:
@@ -606,8 +614,7 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                     except Exception:
                         tabs = []
                     log(f"  ⚠ Chưa bấm được tab “Tải lên tệp mới” | tab đang có: {tabs}")
-            # 3) SAU KHI BẤM TAB -> chờ 0,2 giây rồi bấm chọn file
-            page.wait_for_timeout(200)
+            # 3) bấm chọn file (không delay)
             page.locator("input[type='file']").first.set_input_files(f)
             # 4) chờ bảng chi tiết hiện
             ok = False
@@ -620,48 +627,8 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                 except Exception:
                     pass
             if ok:
-                # 5) điền các ô TRỐNG = TIÊU ĐỀ CỦA CHÍNH ẢNH
-                try:
-                    own = str(page.locator("#attachment-details-title:visible").first
-                              .input_value(timeout=2000) or "").strip()
-                except Exception:
-                    own = ""
-                use = own or str(fallback_title or "").strip()   # ảnh chưa có tiêu đề -> dùng tiêu đề bài
-                patch: dict = {}
-                for sel, key in (("#attachment-details-title", "title"),
-                                 ("#attachment-details-alt-text", "alt"),
-                                 ("#attachment-details-caption", "caption"),
-                                 ("#attachment-details-description", "description")):
-                    loc = page.locator(sel + ":visible").first
-                    try:
-                        cur = str(loc.input_value(timeout=2000) or "").strip()
-                    except Exception:
-                        cur = ""
-                    if cur or not use:
-                        continue
-                    try:
-                        loc.fill(use, timeout=6000)
-                        patch[key] = use
-                    except Exception:
-                        pass
-                if patch:
-                    try:
-                        page.evaluate("""(patch) => new Promise(resolve => {
-                            try {
-                                const a = document.querySelector('.media-sidebar .edit-attachment');
-                                const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
-                                if (!m) return resolve(false);
-                                const md = wp.media.attachment(m[1]);
-                                md.set(patch);
-                                const pr = md.save();
-                                if (pr && pr.always) { pr.always(() => resolve(true)); }
-                                else { resolve(true); }
-                            } catch (e) { resolve(false); }
-                        })""", patch)
-                    except Exception:
-                        pass
-                if log:
-                    log(f"  (ảnh {Path(f).name}: điền {', '.join(sorted(patch)) or 'không có ô trống'})")
+                # 5) điền các ô TRỐNG — ƯU TIÊN tiêu đề của CHÍNH ẢNH trong modal này
+                _fill_attachment_in_top_modal(page, fallback_title, log=log)
             elif log:
                 log(f"  (ảnh {Path(f).name}: không thấy bảng chi tiết)")
             # 6) chèn vào thư viện (đóng modal)
