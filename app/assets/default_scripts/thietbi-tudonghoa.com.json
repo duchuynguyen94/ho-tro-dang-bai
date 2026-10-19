@@ -413,67 +413,13 @@
       "when": "{{image_2}}"
     },
     {
-      "action": "open_details",
+      "action": "attachment_fields_all",
       "selector": "",
       "selectors": [],
-      "value": "",
-      "note": "Mở bảng chi tiết ảnh (nếu chưa hiện)",
-      "source": "auto",
-      "optional": false,
-      "force": false,
-      "when": ""
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-title",
-      "selectors": [
-        "#attachment-details-title",
-        ".media-sidebar input[type='text']"
-      ],
       "value": "{{title}}",
-      "note": "Tiêu đề ảnh thư viện ← tiêu đề bài viết",
+      "note": "Điền Tiêu đề + Văn bản thay thế + Image Caption + Miêu tả cho TẤT CẢ ảnh thư viện",
       "source": "auto",
-      "optional": false,
-      "force": false,
-      "when": "{{image_2}}"
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-alt-text",
-      "selectors": [
-        "#attachment-details-alt-text",
-        ".media-sidebar textarea"
-      ],
-      "value": "{{title}}",
-      "note": "Văn bản thay thế (SEO) ảnh thư viện ← tiêu đề bài viết",
-      "source": "auto",
-      "optional": false,
-      "force": false,
-      "when": "{{image_2}}"
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-caption",
-      "selectors": [
-        "#attachment-details-caption"
-      ],
-      "value": "{{title}}",
-      "note": "Image Caption ảnh thư viện ← tiêu đề bài viết",
-      "source": "auto",
-      "optional": false,
-      "force": false,
-      "when": "{{image_2}}"
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-description",
-      "selectors": [
-        "#attachment-details-description"
-      ],
-      "value": "{{title}}",
-      "note": "Miêu tả ảnh thư viện ← tiêu đề bài viết",
-      "source": "auto",
-      "optional": false,
+      "optional": true,
       "force": false,
       "when": "{{image_2}}"
     },

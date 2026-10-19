@@ -301,6 +301,58 @@ def _fill_editor_iframe(page: Page, step: ScriptStep, value: str, log=None) -> b
     return False
 
 
+_ATTACH_FIELDS = ("#attachment-details-title", "#attachment-details-alt-text",
+                  "#attachment-details-caption", "#attachment-details-description")
+
+
+def fill_all_attachment_fields(page: Page, value: str, log=None) -> int:
+    """Điền 4 ô (Tiêu đề / Văn bản thay thế / Image Caption / Miêu tả) cho MỌI ảnh trong khung thư viện.
+
+    WP chỉ hiện bảng chi tiết khi CHỌN 1 ảnh -> lần lượt chọn từng ảnh rồi điền.
+    """
+    val = str(value or "").strip()
+    if not val:
+        return 0
+    try:
+        items = page.locator(".attachments .attachment, .attachment-preview")
+        total = items.count()
+    except Exception:
+        return 0
+    done = 0
+    for i in range(total):
+        try:
+            it = items.nth(i)
+            if not it.is_visible():
+                continue
+            try:
+                it.scroll_into_view_if_needed(timeout=3000)
+            except Exception:
+                pass
+            it.click(timeout=6000)
+            shown = False
+            for _ in range(12):                     # chờ bảng chi tiết hiện ra
+                try:
+                    if page.locator("#attachment-details-title").count():
+                        shown = True
+                        break
+                except Exception:
+                    pass
+                page.wait_for_timeout(200)
+            if not shown:
+                continue
+            for sel in _ATTACH_FIELDS:
+                try:
+                    page.locator(sel).first.fill(val, timeout=6000)
+                except Exception:
+                    pass
+            done += 1
+        except Exception:
+            continue
+    if log:
+        log(f"  (đã điền mô tả ảnh cho {done}/{total} ảnh trong thư viện)")
+    return done
+
+
 def _tagify_committed(loc, value: str) -> bool:
     """Ô tagify ĐÃ nhận giá trị chưa? (đọc tag hiển thị + input ẩn trong hộp .tagify)."""
     v = str(value or "").strip().lower()
@@ -524,6 +576,9 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("attachment_fields_all", "fill_attachment_all"):
+                # Điền 4 ô mô tả ảnh cho TẤT CẢ ảnh trong khung thư viện (ảnh 2, 3, 4…)
+                fill_all_attachment_fields(page, render(step.value or "{{title}}", ctx), log=log)
             elif action in ("open_details", "open_attachment_details"):
                 # Mở BẢNG CHI TIẾT ẢNH (chỉ bấm vào ảnh khi bảng CHƯA hiện —
                 # bấm lúc đã chọn sẽ bị BỎ CHỌN)
