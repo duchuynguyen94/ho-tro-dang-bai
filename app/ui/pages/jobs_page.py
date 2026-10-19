@@ -593,6 +593,10 @@ class JobsPage(QWidget):
             "Khi đăng: kịch bản tự chọn thương hiệu; nếu website chưa có thì tự THÊM MỚI."
         )
         ev2.addLayout(self._field("Thương hiệu", self.brand_edit))
+        self.models_edit = QLineEdit()
+        self.models_edit.setPlaceholderText("VD: BI15U-EM30WDTC-AP6X; BI10U-EM30WDTC-AP6X")
+        self.models_edit.setToolTip("Danh sách mã sản phẩm của nội dung (cách nhau bởi dấu chấm phẩy).")
+        ev2.addLayout(self._field("Mã sản phẩm", self.models_edit))
         self.content_edit = RichEditor()
         self.content_edit.changed.connect(self._sync_seo_btn)
         self.content_edit.changed.connect(self._queue_save)
@@ -1002,6 +1006,7 @@ class JobsPage(QWidget):
         self.tags_edit.setText(r.get("tags", ""))
         self.cat_edit.setText(r.get("category_name", ""))
         self.brand_edit.setText(r.get("brand_name", ""))
+        self.models_edit.setText(r.get("ma_san_pham", ""))
         self.content_edit.set_html(r.get("content_html", ""))
         self._loading = False             # nạp xong -> cho phép tự lưu lại
 
@@ -1875,7 +1880,7 @@ class JobsPage(QWidget):
         self._save_timer.setInterval(1000)
         self._save_timer.timeout.connect(self._autosave)
         for w in (self.title_edit, self.kw_edit, self.desc_edit, self.tags_edit,
-                  self.cat_edit, self.brand_edit):
+                  self.cat_edit, self.brand_edit, self.models_edit):
             try:
                 w.textChanged.connect(self._queue_save)
             except Exception:      # noqa: BLE001
@@ -1908,6 +1913,7 @@ class JobsPage(QWidget):
         r["tags"] = self.tags_edit.text()
         r["category_name"] = self.cat_edit.text()
         r["brand_name"] = self.brand_edit.text()
+        r["ma_san_pham"] = self.models_edit.text()
         r["content_html"] = self.content_edit.get_html()
         self.store.upsert_task(self.current)
         self.store.save()

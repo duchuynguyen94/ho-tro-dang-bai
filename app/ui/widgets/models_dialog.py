@@ -1,6 +1,8 @@
 """Popup “Product Models” — trích xuất Product Models từ link/file bằng ChatGPT."""
 from __future__ import annotations
 
+import re
+from html import escape as _esc, unescape
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -14,15 +16,50 @@ from ..workers import ModelsWorker
 FILE_FILTER = ("Tài liệu (*.pdf *.docx *.doc *.txt *.png *.jpg *.jpeg *.webp);;"
                "Tất cả tệp (*)")
 
+# tiêu đề <h2> được coi là mục FAQ
+FAQ_KEYS = ("faq", "hỏi đáp", "hỏi & đáp", "câu hỏi thường gặp", "câu hỏi đáp")
+
+
+def _plain(text: str) -> str:
+    """Bỏ thẻ HTML + viết thường + gộp khoảng trắng."""
+    t = re.sub(r"<[^>]+>", " ", str(text or ""))
+    t = unescape(t)                       # "&amp;" -> "&" (để khớp "Hỏi & Đáp")
+    t = re.sub(r"\s+", " ", t).strip().lower()
+    return t
+
+
+def insert_models_before_faq(html_text: str, models: list[str]) -> tuple[str, bool]:
+    """Chèn <ul><li>model</li>…</ul> NGAY TRƯỚC <h2> mục FAQ.
+
+    Không có mục FAQ -> chèn vào CUỐI BÀI.
+    Trả về (html mới, có_tìm_thấy_FAQ?).
+    """
+    html_text = str(html_text or "")
+    items = [str(m).strip() for m in (models or []) if str(m).strip()]
+    if not items:
+        return html_text, False
+    block = "<ul>" + "".join(f"<li>{_esc(m)}</li>" for m in items) + "</ul>"
+    for m in re.finditer(r"<h2\b[^>]*>(.*?)</h2>", html_text, re.I | re.S):
+        head = _plain(m.group(1))
+        if any(k in head for k in FAQ_KEYS):
+            i = m.start()
+            return html_text[:i] + block + "\n" + html_text[i:], True
+    tail = html_text.rstrip()
+    return (tail + ("\n" if tail else "") + block), False
+
 
 class ModelsDialog(QDialog):
     """Ô link + ô chọn file -> nút Xuất -> hiện danh sách Product Models."""
 
-    def __init__(self, store, parent=None) -> None:
+    def __init__(self, store, task_id: str = "", get_content=None,
+                 apply_content=None, parent=None) -> None:
         super().__init__(parent)
         self.store = store
         self.file_path = ""
         self._worker = None
+        self.task_id = str(task_id or "")
+        self._get_content = get_content
+        self._apply_content = apply_content
 
         self.setWindowTitle("Product Models")
         self.setMinimumWidth(660)
@@ -81,6 +118,14 @@ class ModelsDialog(QDialog):
         self.copy_btn.setProperty("class", "ghost")
         self.copy_btn.clicked.connect(self._copy)
         foot.addWidget(self.copy_btn)
+        self.insert_btn = QPushButton("Chèn trên FAQ")
+        self.insert_btn.setProperty("class", "ghost")
+        self.insert_btn.setToolTip(
+            "Chèn danh sách mã ở trên vào NỘI DUNG của công việc đang mở,\n"
+            "ngay TRƯỚC thẻ <h2> của mục FAQ (không có FAQ thì chèn cuối bài)."
+        )
+        self.insert_btn.clicked.connect(self._insert_to_content)
+        foot.addWidget(self.insert_btn)
         self.close_btn = QPushButton("Đóng")
         self.close_btn.clicked.connect(self.reject)
         foot.addWidget(self.close_btn)
@@ -149,6 +194,30 @@ class ModelsDialog(QDialog):
         self._worker = None
         self.export_btn.setEnabled(True)
         self.export_btn.setText("Xuất")
+
+    def _insert_to_content(self) -> None:
+        models = [ln.strip() for ln in self.out.toPlainText().splitlines() if ln.strip()]
+        if not models:
+            show_toast(self, "Chưa có Product Models để chèn", 2400, ok=False)
+            return
+        if not self.task_id or self._get_content is None or self._apply_content is None:
+            show_toast(self, "Chưa mở công việc nào để chèn", 2600, ok=False)
+            return
+        try:
+            cur = self._get_content() or ""
+        except Exception:      # noqa: BLE001
+            cur = ""
+        if not str(cur).strip():
+            show_toast(self, "Công việc chưa có nội dung", 2600, ok=False)
+            return
+        new_html, found = insert_models_before_faq(cur, models)
+        self._apply_content(self.task_id, new_html)
+        show_toast(
+            self,
+            ("Đã chèn %d mã TRÊN mục FAQ" % len(models)) if found
+            else ("Không thấy mục FAQ — đã chèn %d mã vào cuối bài" % len(models)),
+            3000,
+        )
 
     def _copy(self) -> None:
         text = self.out.toPlainText().strip()

@@ -14,7 +14,7 @@ API_PROVIDERS = ("gemini", "groq", "openai", "deepseek")
 
 REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags")
 # 2 trường MỚI: tùy chọn (AI thiếu cũng không báo lỗi)
-OPTIONAL_KEYS = ("category_name", "brand_name")
+OPTIONAL_KEYS = ("category_name", "brand_name", "ma_san_pham")
 
 # Kết quả bước 1 (theo Rule Content)
 CONTENT_OUTPUT_SPEC = (
@@ -114,7 +114,8 @@ SEO_JSON_SPEC = """{
   "description": "mô tả siêu ngắn ĐÚNG mục 3 của rule_seo, gồm 4 phần trên các dòng riêng: (1) câu mô tả: “<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc.”; (2) dòng liên hệ: “🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com”; (3) “Tên sản phẩm <Brand> models tiêu biểu”; (4) tối đa 5 model tiêu biểu, MỖI DÒNG 1 model theo mẫu “<Tên sản phẩm> <Hãng> <Model>” (vd: Cảm biến siêu âm Carlo Gavazzi UA18CAD04PM1)",
   "tags": "trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy; GỒM: tên sản phẩm + đồng nghĩa, thương hiệu, sản phẩm + model nổi bật, từ khoá địa phương/tiếng Việt thông dụng, thông tin công ty",
   "category_name": "Tên chủng loại sản phẩm, có thể có nhiều loại, mỗi loại cách nhau bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản phẩm cũng là con của nó; dấu chấm phẩy nằm TRONG chuỗi, không phải mảng)",
-  "brand_name": "Tên thương hiệu của sản phẩm (vd: Carlo Gavazzi)"
+  "brand_name": "Tên thương hiệu của sản phẩm (vd: Carlo Gavazzi)",
+  "ma_san_pham": "Danh sách mã sản phẩm của nội dung được viết (mỗi mã cách nhau bởi dấu chấm phẩy)"
 }"""
 
 
@@ -214,6 +215,7 @@ SEO_FIELDS_DETAIL = (
     'bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản phẩm '
     'cũng là con của nó).\n'
     '   - "brand_name": tên thương hiệu sản phẩm (vd: Carlo Gavazzi).\n'
+    '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết.\n'
 )
 
 
@@ -238,7 +240,7 @@ Sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Pr
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 
  Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf”.
- Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra và theo rule trong file "rule_seo.pdf" bao gồm {{title, description, focus_keyword, tags, category_name, brand_name}}
+ Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra và theo rule trong file "rule_seo.pdf" bao gồm {{title, description, focus_keyword, tags, category_name, brand_name, ma_san_pham}}
 {SEO_FIELDS_DETAIL}
 Không giải thích gì thêm."""
 
@@ -1050,7 +1052,7 @@ def _strip_trailing_junk(t: str) -> str:
     t = re.sub(r"\s*Writing\s*$", "", t)
     for _ in range(6):
         new = re.sub(r"\s*```\s*json\s*[\s\S]*$", "", t, flags=re.I)
-        new = re.sub(r"\s*\{\s*[\"']?(?:title|focus_keyword|description|tags|category_name|brand_name)[\s\S]*$",
+        new = re.sub(r"\s*\{\s*[\"']?(?:title|focus_keyword|description|tags|category_name|brand_name|ma_san_pham)[\s\S]*$",
                      "", new, flags=re.I)
         new = re.sub(r"\s*```[a-zA-Z]*\s*$", "", new)
         m = re.search(r"(\n|^)([^<\n]{1,120})$", new)
@@ -1199,14 +1201,14 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         # CHATGPT: prompt GỌN — mọi chi tiết nằm trong rule_seo.pdf của Project
         head = ('Tạo một khối JSON thông tin SEO được tạo DỰA TRÊN NỘI DUNG BÀI VIẾT bên dưới '
                 'và theo rule trong file "rule_seo.pdf" bao gồm '
-                '{title, description, focus_keyword, tags, category_name, brand_name}\n'
+                '{title, description, focus_keyword, tags, category_name, brand_name, ma_san_pham}\n'
                 + SEO_FIELDS_DETAIL)
         return (f"{head}Không giải thích gì thêm.\n"
                 f"\n=== NỘI DUNG BÀI VIẾT ===\n{body}\n")
 
     head = (
         "Tạo 1 khối JSON thông tin SEO theo file rule_seo.pdf đã đính kèm (sources) trong "
-        "Project này bao gồm: title, focus_keyword, description, tags, category_name, brand_name\n"
+        "Project này bao gồm: title, focus_keyword, description, tags, category_name, brand_name, ma_san_pham\n"
         "   - TOÀN BỘ thông tin SEO phải DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT Ở BÊN DƯỚI "
         "(đúng sản phẩm, thương hiệu, model, thông số trong bài; không bịa thêm).\n"
         '   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 '
@@ -1227,6 +1229,7 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         'bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản '
         'phẩm cũng là con của nó)\n'
         '   - "brand_name": tên thương hiệu sản phẩm (vd: Carlo Gavazzi)\n'
+        '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết\n'
     )
 
     seo_rule = read_rule(rule_path(rules, "seo"))

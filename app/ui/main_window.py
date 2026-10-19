@@ -234,6 +234,7 @@ class MainWindow(QMainWindow):
             slots = [{"path": "", "footer": ""} for _ in range(max(1, int(task.image_count or 3)))]
             task.result = {"title": "", "focus_keyword": "", "description": "",
                            "tags": "", "category_name": "", "brand_name": "",
+                           "ma_san_pham": "",
                            "content_html": "",
                            "images": slots, "image_opts_list": [{} for _ in slots],
                            "product_images": []}
@@ -343,7 +344,7 @@ class MainWindow(QMainWindow):
                 r.update({k: v for k, v in (result or {}).items()
                           if k in ("title", "focus_keyword", "description",
                                    "tags", "category_name", "brand_name",
-                                   "content_html")})
+                                   "ma_san_pham", "content_html")})
                 fresh.result = r
             else:
                 fresh.result = result
@@ -558,7 +559,7 @@ class MainWindow(QMainWindow):
             except Exception:      # noqa: BLE001
                 pass
             t.result = {"title": "", "focus_keyword": "", "description": "", "tags": "",
-                        "category_name": "", "brand_name": "",
+                        "category_name": "", "brand_name": "", "ma_san_pham": "",
                         "content_html": content, "images": slots,
                         "image_opts_list": [{} for _ in slots], "product_images": []}
             self.store.upsert_task(t)
@@ -639,7 +640,7 @@ class MainWindow(QMainWindow):
             return
         r = fresh.result = dict(fresh.result or {})
         for k in ("title", "description", "focus_keyword", "tags",
-                  "category_name", "brand_name"):
+                  "category_name", "brand_name", "ma_san_pham"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
@@ -702,7 +703,35 @@ class MainWindow(QMainWindow):
         """Nút "Product Models" -> popup trích xuất Product Models (ChatGPT Project)."""
         from .widgets.models_dialog import ModelsDialog
 
-        ModelsDialog(self.store, self).exec()
+        task = getattr(self.jobs_page, "current", None)
+        if task is None:
+            show_toast(self, "Chưa mở công việc nào", 2400, ok=False)
+            return
+        self.jobs_page._save()               # chốt nội dung đang gõ
+        task_id = task.id
+
+        def _content() -> str:
+            fresh = next((t for t in self.store.tasks if t.id == task_id), None)
+            return str(((fresh.result if fresh else None) or {}).get("content_html") or "")
+
+        ModelsDialog(self.store, task_id, get_content=_content,
+                     apply_content=self._apply_models_content, parent=self).exec()
+
+    def _apply_models_content(self, task_id: str, new_html: str) -> None:
+        """Ghi nội dung mới (đã chèn Product Models) vào công việc + cập nhật ô Nội dung."""
+        fresh = next((t for t in self.store.tasks if t.id == task_id), None)
+        if fresh is None:
+            return
+        r = fresh.result = dict(fresh.result or {})
+        r["content_html"] = str(new_html or "")
+        self.store.upsert_task(fresh)
+        self.store.save()
+        if getattr(self.jobs_page.current, "id", "") == task_id:
+            self.jobs_page.current = fresh
+            try:
+                self.jobs_page.content_edit.set_html(r["content_html"])
+            except Exception:      # noqa: BLE001
+                pass
 
     def _on_seo_json(self, task) -> None:
         """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""
@@ -736,7 +765,7 @@ class MainWindow(QMainWindow):
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         r = fresh.result = dict(fresh.result or {})
         for k in ("title", "description", "focus_keyword", "tags",
-                  "category_name", "brand_name"):
+                  "category_name", "brand_name", "ma_san_pham"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
