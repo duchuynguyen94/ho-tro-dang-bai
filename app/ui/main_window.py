@@ -43,7 +43,6 @@ from .workers import (
     export_post_images,
     ImageRefetchWorker,
     _opts_list_of,
-    FieldWorker,
     ImageEditWorker,
     ImagesWorker,
     PostWorker,
@@ -752,48 +751,12 @@ class MainWindow(QMainWindow):
         # Ghi lại các trường đã sửa trước khi tạo lại
         self.jobs_page._save()
 
-        if field == "images" or not field:
-            if not field:
-                # "Random lại": CHỈ tạo lại NỘI DUNG — nếu job đã có ảnh thì GIỮ NGUYÊN ảnh
-                r = task.result or {}
-                if list(r.get("images") or []):
-                    self._content_only_ids.add(task.id)
-            self._on_create_task(task)
-            return
-
-        value_map = {
-            "title": self.jobs_page.title_edit,
-            "focus_keyword": self.jobs_page.kw_edit,
-            "description": self.jobs_page.desc_edit,
-            "tags": self.jobs_page.tags_edit,
-            "content_html": self.jobs_page.content_edit,
-        }
-        if field == "content_html":
-            current = self.jobs_page.content_edit.get_text()
-        else:
-            widget = value_map.get(field)
-            current = (
-                widget.toPlainText() if hasattr(widget, "toPlainText") else widget.text()
-            ) if widget else ""
-
-        worker = FieldWorker(self.store, site, task, field, current)
-        worker.log.connect(self._on_worker_log)
-        worker.ok.connect(lambda f, v: self._on_field_ok(task, f, v))
-        worker.failed.connect(lambda err: (self._log_err("Tạo nội dung", err), self.status("Sẵn sàng")))
-        worker.finished.connect(lambda: self._cleanup(worker))
-        self._workers.append(worker)
-        worker.start()
-        self.status(f"Đang tạo lại {field}…")
-
-    def _on_field_ok(self, task, field: str, value: str) -> None:
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
-        fresh.result[field] = value
-        self.store.upsert_task(fresh)
-        self.store.save()
-        self.current_task = fresh
-        self.jobs_page.current = fresh
-        self.jobs_page._load(fresh)
-        self.status("Đã tạo lại xong.")
+        # "Random lại" / "Thử tạo lại": tạo lại TOÀN BỘ nội dung
+        # (nếu job đã có ảnh thì GIỮ NGUYÊN ảnh đang có)
+        r = task.result or {}
+        if list(r.get("images") or []):
+            self._content_only_ids.add(task.id)
+        self._on_create_task(task)
 
     def _on_post_task(self, task) -> None:
         # Mỗi công việc chỉ mở 1 Chrome: nếu đang đăng thì bỏ qua lần bấm sau

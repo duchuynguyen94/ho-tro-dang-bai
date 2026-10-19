@@ -1263,60 +1263,6 @@ def generate_content(store, source: dict, log=None, should_stop=None) -> dict:
 # --------------------------------------------------------------------------- #
 # Random 1 trường
 # --------------------------------------------------------------------------- #
-FIELD_RULES = {
-    "title": ("Tiêu đề SEO", "seo"),
-    "focus_keyword": ("Từ khóa chính", "seo"),
-    "description": ("Mô tả ngắn", "seo"),
-    "tags": ("Thẻ sản phẩm (tags)", "seo"),
-    "content_html": ("Nội dung bài viết", "content"),
-}
-
-
-def build_field_prompt(rules, source: dict, field: str, current: str = "") -> str:
-    label, rule_key = FIELD_RULES.get(field, ("Nội dung", "content"))
-    rule = read_rule(rule_path(rules, rule_key))
-    return f"""Bạn là chuyên gia SEO tiếng Việt. Hãy tạo lại DUY NHẤT trường "{label}".
-
-=== QUY ĐỊNH ({rule_key.upper()}) ===
-{rule or "(Không có quy định riêng.)"}
-
-=== BÀI VIẾT NGUỒN ===
-Tiêu đề gốc: {source.get('title', '')}
-URL: {source.get('url', '')}
-Nội dung:
-{source.get('text', '')[:5000]}
-
-=== BẢN HIỆN TẠI (cần viết lại KHÁC đi, hay hơn) ===
-{current}
-
-CHỈ trả về đúng nội dung của trường "{label}", không thêm nhãn, không giải thích.
-"""
-
-
-def generate_field(store, source: dict, field: str, current: str = "", log=None) -> str:
-    rules = store.formats
-    label, rule_key = FIELD_RULES.get(field, ("Nội dung", "content"))
-    full = build_field_prompt(rules, source, field, current)
-    if rule_key == "seo":
-        short = (
-            f"Dựa vào bài viết tại link dưới đây, hãy tạo DUY NHẤT trường “{label}” theo đúng "
-            "tài liệu đã đính kèm (sources) trong Project này — cụ thể là file **rule_seo.pdf**.\n"
-            f"Link bài viết nguồn: {source.get('url', '')}\n"
-            f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
-        )
-    else:
-        short = (
-            f"Dựa vào bài viết tại link dưới đây, hãy viết lại DUY NHẤT trường “{label}” theo đúng "
-            "tài liệu đã đính kèm (sources) trong Project này — cụ thể là file **rule_content.pdf**.\n"
-            f"Link bài viết nguồn: {source.get('url', '')}\n"
-            f"Chỉ trả về nội dung của trường đó, không thêm nhãn, không giải thích."
-        )
-    value = _call_ai(store, full, short, log).strip()
-    if field == "description":
-        value = normalize_description(value)
-    return value
-
-
 def parse_json_response(text: str) -> dict:  # tương thích ngược
     return providers.parse_json_response(text)
 

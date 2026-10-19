@@ -419,7 +419,6 @@ class JobsPage(QWidget):
         self.store = store
         self.current = None
         self._posting: dict[str, bool] = {}      # task_id -> đang mở Chrome để đăng
-        self._field_btns: list = []              # các nút "↻ Random" từng trường
         self._ai_busy = False
         self._posting_locked = False      # task_id -> đang mở Chrome để đăng
         self._rows: dict[str, TaskRow] = {}
@@ -656,7 +655,7 @@ class JobsPage(QWidget):
         outer.addWidget(split)
         polish_combos(self)
 
-    def _field(self, label: str, widget: QWidget, field: str | None = None,
+    def _field(self, label: str, widget: QWidget,
                extra: tuple[str, object] | None = None) -> QVBoxLayout:
         box = QVBoxLayout()
         row = QHBoxLayout()
@@ -670,12 +669,6 @@ class JobsPage(QWidget):
             ebtn.setProperty("class", "ghost")
             ebtn.clicked.connect(fn)
             row.addWidget(ebtn)
-        if field:
-            btn = QPushButton("↻ Random")
-            btn.setProperty("class", "ghost")
-            btn.clicked.connect(lambda: self.current and self.regenerate.emit(self.current, field))
-            row.addWidget(btn)
-            self._field_btns.append(btn)      # để khoá khi ChatGPT đang bận
         box.addLayout(row)
         box.addWidget(widget)
         return box
@@ -782,7 +775,6 @@ class JobsPage(QWidget):
             b = getattr(self, name, None)
             if b is not None:
                 out.append(b)
-        out.extend(list(getattr(self, "_field_btns", [])))
         return out
 
     def _recompute_busy(self) -> None:

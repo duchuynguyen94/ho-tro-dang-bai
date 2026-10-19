@@ -2,7 +2,6 @@
 from .manager import (
     build_combined_prompt,
     generate_content,
-    generate_field,
     read_rule,
     text_to_html,
 )
@@ -10,7 +9,6 @@ from .providers import AIError
 
 __all__ = [
     "generate_content",
-    "generate_field",
     "build_combined_prompt",
     "read_rule",
     "text_to_html",

@@ -479,34 +479,6 @@ class ContentWorker(TrackedThread):
             self.failed.emit(str(exc))
 
 
-class FieldWorker(TrackedThread):
-    """Tạo lại 1 trường duy nhất (nút Random riêng từng phần)."""
-
-    log = Signal(str)
-    ok = Signal(str, str)      # (field, value)
-    failed = Signal(str)
-
-    def __init__(self, store, site, task, field: str, current: str = "") -> None:
-        super().__init__()
-        self.store = store
-        self.site = site
-        self.task = task
-        self.field = field
-        self.current = current
-
-    def run(self) -> None:
-        from ..ai.manager import generate_field
-
-        try:
-            self.log.emit(f"Đang tạo lại: {self.field}…")
-            page = src.fetch_source(self.task.source_url)
-            value = generate_field(self.store, page, self.field, self.current, log=self.log.emit)
-            self.ok.emit(self.field, value)
-        except Exception as exc:
-            traceback.print_exc()
-            self.failed.emit(str(exc))
-
-
 class ImagesWorker(TrackedThread):
     """Tạo lại ảnh theo mẫu (đổi thanh thông tin) mà không cần gọi lại AI."""
 
