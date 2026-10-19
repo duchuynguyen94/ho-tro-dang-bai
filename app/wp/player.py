@@ -353,6 +353,19 @@ def fill_all_attachment_fields(page: Page, value: str, log=None) -> int:
     return done
 
 
+def _sidebar_attach_id(page: Page) -> int:
+    """Mã ảnh mà BẢNG CHI TIẾT bên phải đang hiển thị (0 nếu chưa hiện)."""
+    try:
+        return int(page.evaluate(
+            r"""() => { const a = document.querySelector('.media-sidebar .edit-attachment');
+                if (!a) return 0;
+                const m = (a.getAttribute('href') || '').match(/post=(\d+)/);
+                return m ? parseInt(m[1], 10) : 0; }"""
+        ) or 0)
+    except Exception:
+        return 0
+
+
 def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                                      expect: int = 0, log=None) -> int:
     """Điền các ô CÒN TRỐNG cho ĐÚNG những ảnh VỪA UPLOAD (không đụng ảnh cũ trong thư viện).
@@ -390,17 +403,22 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
     if not targets and expect:
         targets = [i for i, _d, _s in rows][:max(0, int(expect))]
     done = 0
+    by_index = {i: did for i, did, _s in rows}
     for i in targets:
         try:
             it = items.nth(i)
+            want_id = int(by_index.get(i) or 0)
             try:
                 it.scroll_into_view_if_needed(timeout=3000)
             except Exception:
                 pass
-            # Bấm để HIỆN bảng chi tiết của ĐÚNG ảnh này.
-            # QUAN TRỌNG: KIỂM TRA TRƯỚC — ảnh nào ĐANG mở bảng rồi thì KHÔNG bấm
-            # (bấm vào ảnh đang mở là TẮT bảng -> ảnh đó bị bỏ qua, không điền được).
+            # Đảm bảo BẢNG CHI TIẾT đang hiển thị ĐÚNG ảnh này.
+            # - Kiểm tra mã ảnh đang hiện (link "Sửa" có post=<id>) + class 'details'.
+            # - Bấm vào ảnh ĐANG mở là TẮT bảng -> nên chỉ bấm khi chưa đúng.
             for _try in range(3):
+                cur = _sidebar_attach_id(page)
+                if want_id and cur and cur == want_id:
+                    break
                 try:
                     if it.evaluate("el => el.classList.contains('details')"):
                         break
@@ -413,12 +431,13 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                 page.wait_for_timeout(600)
             shown = False
             for _ in range(12):
-                try:
-                    if page.locator("#attachment-details-title").count():
-                        shown = True
-                        break
-                except Exception:
-                    pass
+                cur = _sidebar_attach_id(page)
+                if want_id and cur and cur == want_id:
+                    shown = True
+                    break
+                if not want_id and page.locator("#attachment-details-title").count():
+                    shown = True
+                    break
                 page.wait_for_timeout(200)
             if not shown:
                 continue
