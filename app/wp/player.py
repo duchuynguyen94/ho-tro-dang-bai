@@ -383,21 +383,23 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
     js = """({val, expect}) => {
         try {
             if (!window.wp || !wp.media) return {err: 'khong co wp.media'};
-            let models = [];
-            const frame = wp.media.frame;
-            if (frame) {
-                const sel = frame.state().get('selection');
-                sel.each(m => models.push(m));
+            const n = Math.max(parseInt(expect, 10) || 1, 1);
+            const models = [];
+            const seen = {};
+            const add = (m) => { if (m && m.id && !seen[m.id]) { seen[m.id] = 1; models.push(m); } };
+            // 1) ẢNH ĐANG ĐƯỢC CHỌN trong khung (ảnh vừa upload)
+            try {
+                const frame = wp.media.frame;
+                if (frame) frame.state().get('selection').each(add);
+            } catch (e) {}
+            // 2) BÙ THÊM cho đủ N ảnh: lấy các ảnh MỚI NHẤT trong khung thư viện
+            if (models.length < n) {
+                Array.from(document.querySelectorAll('li.attachment'))
+                     .forEach(li => { if (models.length < n) add(wp.media.attachment(li.getAttribute('data-id'))); });
             }
-            if (!models.length) {
-                // dự phòng: N ảnh đầu trong khung thư viện
-                const lis = Array.from(document.querySelectorAll('li.attachment'))
-                                 .slice(0, expect || 0);
-                models = lis.map(li => wp.media.attachment(li.getAttribute('data-id')))
-                            .filter(Boolean);
-            }
+            const use = models.slice(0, n);
             let done = 0;
-            models.forEach(m => {
+            use.forEach(m => {
                 const t = ((m.get('title') || '').trim()) || val;
                 if (!t) return;
                 const patch = {};
@@ -410,7 +412,7 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                     done += 1;
                 }
             });
-            return {total: models.length, done: done};
+            return {total: use.length, done: done, ids: use.map(m => m.id)};
         } catch (e) { return {err: String(e)}; }
     }"""
     try:
