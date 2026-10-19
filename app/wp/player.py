@@ -388,12 +388,34 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
             # 1) mở modal thư viện
             page.locator("a.add_product_images, a:has-text('Thêm ảnh thư viện sản phẩm')").first.click(timeout=12000)
             page.wait_for_timeout(1200)
-            # 2) tab "Tải lên tệp mới"
-            try:
-                page.locator(".media-menu-item:has-text('Tải lên tệp mới')").first.click(timeout=6000)
-                page.wait_for_timeout(800)
-            except Exception:
-                pass
+            # 2) BẮT BUỘC chọn tab "Tải lên tệp mới" (bấm + kiểm tra đã active, thử 3 lần)
+            ok_tab = False
+            for _try in range(3):
+                for sel in (".media-menu-item:has-text('Tải lên tệp mới')",
+                            "#menu-item-upload",
+                            "button.media-menu-item#menu-item-upload",
+                            ".media-frame-router .media-menu-item:has-text('Tải lên')",
+                            ".media-menu-item:has-text('Tải lên')"):
+                    try:
+                        loc = page.locator(sel).first
+                        if not loc.count():
+                            continue
+                        loc.click(timeout=6000)
+                        page.wait_for_timeout(700)
+                        if page.locator(
+                            ".media-menu-item.active:has-text('Tải lên'), #menu-item-upload.active,"
+                            " .media-menu-item.active:has-text('Upload')"
+                        ).count():
+                            ok_tab = True
+                            break
+                    except Exception:
+                        continue
+                if ok_tab:
+                    break
+                page.wait_for_timeout(500)
+            if log:
+                log("  (đã bấm tab “Tải lên tệp mới”)" if ok_tab
+                    else "  ⚠ Chưa bấm được tab “Tải lên tệp mới”")
             # 3) upload CHỈ 1 ảnh
             page.locator("input[type='file']").first.set_input_files(f)
             # 4) chờ bảng chi tiết hiện
