@@ -487,6 +487,8 @@ def split_term_names(raw: str, multi: bool = True) -> list:
         if t and k and k not in seen:
             seen.add(k)
             out.append(t)
+        if len(out) >= 3:               # tối đa 3 loại (1 chính + 2 con)
+            break
     return out
 
 
