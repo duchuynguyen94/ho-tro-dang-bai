@@ -190,6 +190,25 @@ Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 """
 
 
+# Chi tiết 4 trường SEO — thêm ngay dưới dòng nhắc "rule_seo.pdf"
+SEO_FIELDS_DETAIL = (
+    '   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 USP '
+    "trong danh sách: Chính hãng / Giá tốt / CO/CQ đầy đủ / Báo giá nhanh / Hàng sẵn / "
+    "Giao nhanh / Đại lý / Phân phối / Bảo hành chính hãng / Tổng kho.\n"
+    '   - "focus_keyword": 01 từ khoá chính duy nhất = Model của sản phẩm '
+    "(vd: BI15U-EM30WDTC-AP6X).\n"
+    '   - "description": 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được phân '
+    "phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> "
+    '<Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc."; dòng liên hệ '
+    "🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com; "
+    '"Tên sản phẩm <Brand> models tiêu biểu"; rồi tối đa 5 model tiêu biểu, MỖI DÒNG 1 model '
+    'dạng "<Tên sản phẩm> <Hãng> <Model>".\n'
+    '   - "tags": trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy, gồm: tên sản '
+    "phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa phương/tiếng Việt "
+    "thông dụng; thông tin công ty.\n"
+)
+
+
 def build_combined_short_prompt(source: dict) -> str:
     """Prompt cho ChatGPT (2 file rule nằm trong Project đã đính kèm)."""
     urls = [str(u) for u in (source.get("urls") or []) if str(u).strip()]
@@ -212,7 +231,7 @@ Sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Pr
 
  Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf”.
  Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra và theo rule trong file "rule_seo.pdf" bao gồm {{title, description, focus_keyword, tags}}
-
+{SEO_FIELDS_DETAIL}
 Không giải thích gì thêm."""
 
 
@@ -1172,7 +1191,8 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         # CHATGPT: prompt GỌN — mọi chi tiết nằm trong rule_seo.pdf của Project
         head = ('Tạo một khối JSON thông tin SEO được tạo DỰA TRÊN NỘI DUNG BÀI VIẾT bên dưới '
                 'và theo rule trong file "rule_seo.pdf" bao gồm '
-                '{title, description, focus_keyword, tags}\n')
+                '{title, description, focus_keyword, tags}\n'
+                + SEO_FIELDS_DETAIL)
         return (f"{head}Không giải thích gì thêm.\n"
                 f"\n=== NỘI DUNG BÀI VIẾT ===\n{body}\n")
 
