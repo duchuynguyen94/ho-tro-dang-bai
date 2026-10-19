@@ -369,19 +369,26 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
         total = items.count()
     except Exception:
         return 0
-    rows: list[tuple[int, int]] = []
+    rows: list[tuple[int, int, bool]] = []
     for i in range(total):
         try:
             it = items.nth(i)
             if not it.is_visible():
                 continue
             did = int(it.get_attribute("data-id") or "0") or 0
+            try:      # ảnh ĐANG ĐƯỢC CHỌN (có dấu tick) -> class 'selected'
+                sel = bool(it.evaluate("el => el.classList.contains('selected')"))
+            except Exception:
+                sel = False
         except Exception:
-            did = 0
-        rows.append((i, did))
-    targets = [i for i, did in rows if min_id and did and did > min_id]
+            did, sel = 0, False
+        rows.append((i, did, sel))
+    # Ưu tiên: CÓ TICK + là ảnh MỚI -> nếu không có thì theo mã ảnh -> cuối cùng là N ảnh đầu
+    targets = [i for i, did, sel in rows if sel and min_id and did and did > min_id]
+    if not targets:
+        targets = [i for i, did, _s in rows if min_id and did and did > min_id]
     if not targets and expect:
-        targets = [i for i, _d in rows][:max(0, int(expect))]
+        targets = [i for i, _d, _s in rows][:max(0, int(expect))]
     done = 0
     for i in targets:
         try:
@@ -390,7 +397,19 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                 it.scroll_into_view_if_needed(timeout=3000)
             except Exception:
                 pass
-            it.click(timeout=6000)
+            # Bấm để HIỆN bảng chi tiết của ĐÚNG ảnh này.
+            # (bấm lần 2 vào cùng ảnh là TẮT bảng -> kiểm tra class 'details' rồi bấm lại)
+            for _try in range(2):
+                try:
+                    it.click(timeout=6000)
+                except Exception:
+                    pass
+                page.wait_for_timeout(400)
+                try:
+                    if it.evaluate("el => el.classList.contains('details')"):
+                        break
+                except Exception:
+                    break
             shown = False
             for _ in range(12):
                 try:
