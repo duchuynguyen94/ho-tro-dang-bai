@@ -419,11 +419,19 @@ def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int
             pass
     if patch:
         try:      # lưu qua API cho chắc
-            page.evaluate("""(patch) => { try {
-                const a = document.querySelector('.media-sidebar .edit-attachment');
-                const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
-                if (m) { const md = wp.media.attachment(m[1]); md.set(patch); md.save(); }
-            } catch (e) {} }""", patch)
+            # CHỜ LƯU XONG (không bấm chèn khi còn đang lưu)
+            page.evaluate("""(patch) => new Promise(resolve => {
+                try {
+                    const a = document.querySelector('.media-sidebar .edit-attachment');
+                    const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
+                    if (!m) return resolve(false);
+                    const md = wp.media.attachment(m[1]);
+                    md.set(patch);
+                    const pr = md.save();
+                    if (pr && pr.always) { pr.always(() => resolve(true)); }
+                    else { resolve(true); }
+                } catch (e) { resolve(false); }
+            })""", patch)
         except Exception:
             pass
     if log:
@@ -638,11 +646,18 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                         pass
                 if patch:
                     try:
-                        page.evaluate("""(patch) => { try {
-                            const a = document.querySelector('.media-sidebar .edit-attachment');
-                            const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
-                            if (m) { const md = wp.media.attachment(m[1]); md.set(patch); md.save(); }
-                        } catch (e) {} }""", patch)
+                        page.evaluate("""(patch) => new Promise(resolve => {
+                            try {
+                                const a = document.querySelector('.media-sidebar .edit-attachment');
+                                const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
+                                if (!m) return resolve(false);
+                                const md = wp.media.attachment(m[1]);
+                                md.set(patch);
+                                const pr = md.save();
+                                if (pr && pr.always) { pr.always(() => resolve(true)); }
+                                else { resolve(true); }
+                            } catch (e) { resolve(false); }
+                        })""", patch)
                     except Exception:
                         pass
                 if log:
@@ -650,6 +665,7 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
             elif log:
                 log(f"  (ảnh {Path(f).name}: không thấy bảng chi tiết)")
             # 6) chèn vào thư viện (đóng modal)
+            page.wait_for_timeout(300)      # chờ WordPress lưu xong rồi mới chèn
             # nút "Thêm vào thư viện" — CHỈ nút trong modal ĐANG HIỆN
             page.locator("button.media-button-select:visible, .media-toolbar-primary .media-button-select:visible").first.click(timeout=20000)
             page.wait_for_timeout(1500)
