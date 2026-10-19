@@ -124,29 +124,94 @@ def _make(page: Page, sel: str):
     return page.locator(sel)
 
 
-def _auto_open_panel(page: Page, el) -> bool:
-    """Nếu phần tử nằm trong 1 bảng (metabox) đang THU GỌN -> tự bấm mở bảng đó."""
+_PANEL_STATE_JS = r"""el => {
+    let node = el;
+    while (node && node !== document.body) {
+        const cls = (node.className || '').toString();
+        if (/(^|\s)postbox(\s|$)/.test(cls)) {
+            const inside = node.querySelector('.inside');
+            if (!inside) return true;                       // không có .inside -> coi như mở
+            return getComputedStyle(inside).display !== 'none'
+                   && !/(^|\s)closed(\s|$)/.test(cls);
+        }
+        node = node.parentElement;
+    }
+    return true;                                            // không nằm trong card nào
+}"""
+
+_PANEL_OPEN_JS = r"""el => {
+    let node = el;
+    while (node && node !== document.body) {
+        const cls = (node.className || '').toString();
+        if (/(^|\s)postbox(\s|$)/.test(cls)) {
+            const btn = node.querySelector('.handlediv') || node.querySelector('button.handlediv');
+            if (btn) { btn.click(); return true; }
+            return false;
+        }
+        node = node.parentElement;
+    }
+    return false;
+}"""
+
+
+def _in_postbox(el) -> bool:
+    """Phần tử có nằm trong 1 card (postbox) không?"""
     try:
         return bool(el.evaluate(
-            """el => {
-                let node = el;
-                while (node && node !== document.body) {
-                    const cls = (node.className || '').toString();
-                    if (cls.indexOf('postbox') >= 0) {
-                        const inside = node.querySelector('.inside');
-                        const hiddenInside = inside && getComputedStyle(inside).display === 'none';
-                        const closed = cls.indexOf('closed') >= 0 || hiddenInside;
-                        const btn = node.querySelector('.handlediv') || node.querySelector('button.handlediv');
-                        if (closed && btn) { btn.click(); return true; }
-                        return false;
-                    }
-                    node = node.parentElement;
+            r"""el => { let n = el;
+                while (n && n !== document.body) {
+                    if (/(^|\s)postbox(\s|$)/.test((n.className || '').toString())) return true;
+                    n = n.parentElement;
                 }
-                return false;
-            }"""
+                return false; }"""
         ))
     except Exception:
         return False
+
+
+def _panel_open_state(el) -> bool:
+    """Card (postbox) chứa phần tử này đã MỞ chưa?"""
+    try:
+        return bool(el.evaluate(_PANEL_STATE_JS))
+    except Exception:
+        return True
+
+
+def _ensure_panel_open(page: Page, el, tries: int = 3) -> bool:
+    """Mở card (postbox) đang thu gọn chứa `el` — BẤM RỒI KIỂM TRA LẠI (thử tối đa `tries` lần).
+
+    - Bấm nút `.handlediv` bằng Playwright (bấm thật, đã thử chạy được).
+    - KHÔNG bấm khi card đang mở (nút này là TOGGLE -> bấm nữa là ĐÓNG lại).
+    """
+    ok = _panel_open_state(el)
+    for _ in range(max(1, int(tries))):
+        if ok:
+            return True
+        clicked = False
+        try:      # nút mở card = .handlediv trong .postbox chứa phần tử này
+            btn = el.locator(
+                "xpath=ancestor-or-self::*[contains(@class,'postbox')][1]"
+                "//*[contains(@class,'handlediv')]"
+            ).first
+            btn.click(force=True, timeout=5000)
+            clicked = True
+        except Exception:
+            clicked = False
+        if not clicked:
+            try:
+                el.evaluate(_PANEL_OPEN_JS)
+            except Exception:
+                pass
+        page.wait_for_timeout(500)
+        ok = _panel_open_state(el)
+    return ok
+
+
+def _auto_open_panel(page: Page, el) -> bool:
+    """Nếu phần tử nằm trong 1 bảng (metabox) đang THU GỌN -> mở bảng đó (có kiểm tra lại)."""
+    if _panel_open_state(el):
+        return False                    # đang mở -> không cần làm gì
+    return _ensure_panel_open(page, el)
 
 
 def _auto_editor_text_mode(page: Page, el) -> bool:
@@ -231,6 +296,28 @@ def _fill_editor_iframe(page: Page, step: ScriptStep, value: str, log=None) -> b
         except Exception:
             continue
     return False
+
+
+def _tagify_committed(loc, value: str) -> bool:
+    """Ô tagify ĐÃ nhận giá trị chưa? (đọc tag hiển thị + input ẩn trong hộp .tagify)."""
+    v = str(value or "").strip().lower()
+    if not v:
+        return True
+    try:
+        got = loc.evaluate(
+            """el => {
+                const box = el.closest('.tagify');
+                if (!box) return '';
+                const tags = Array.from(box.querySelectorAll('.tagify__tag'))
+                    .map(t => (t.innerText || '').trim()).join(' | ');
+                const wrap = box.parentElement || box;
+                const hid = wrap.querySelector('input[type=hidden], input[type=text][style*="display"]');
+                return tags + ' || ' + (hid ? (hid.value || '') : '');
+            }"""
+        )
+    except Exception:
+        return False
+    return v in str(got or "").lower()
 
 
 def _locate(page: Page, step: ScriptStep):
@@ -433,51 +520,50 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 # Ô nhập kiểu Tagify (Rank Math focus keyword): gõ rồi Enter để chốt.
                 # TUYỆT ĐỐI không gõ "mù" vào ô đang focus (sẽ chèn nhầm vào ô Mô tả…).
                 value = render(step.value, ctx)
-                loc = _locate(page, step)
-                try:
-                    loc.scroll_into_view_if_needed(timeout=5000)
-                except Exception:
-                    pass
-                ok_click = False
-                try:
-                    loc.click(force=True, timeout=8000)
-                    ok_click = True
-                except Exception:
-                    pass
                 ok_fill = False
-                if ok_click:
+                # Ô tagify hay "chưa sẵn sàng" (metabox vừa mở) -> gõ rồi KIỂM TRA, chưa vào thì gõ lại.
+                for _attempt in range(3):
+                    loc = _locate(page, step)
+                    _ensure_panel_open(page, loc)     # ô nằm trong card đang đóng -> mở trước
+                    loc = _locate(page, step)         # tìm lại sau khi mở (ô có thể vừa hiện)
+                    try:
+                        loc.scroll_into_view_if_needed(timeout=5000)
+                    except Exception:
+                        pass
+                    try:
+                        loc.click(force=True, timeout=8000)
+                    except Exception:
+                        pass
                     try:
                         loc.fill(value, timeout=8000)
-                        ok_fill = True
                     except Exception:
                         try:      # gõ vào CHÍNH ô này (không phải ô đang focus)
                             loc.press_sequentially(value, timeout=8000)
-                            ok_fill = True
                         except Exception:
-                            ok_fill = False
-                if not ok_fill:
-                    if log:
-                        log("⚠ Ô nhập từ khoá (tagify) không điền được — BỎ QUA bước này.")
-                else:
+                            pass
                     try:
                         page.keyboard.press("Enter")
                     except Exception:
                         pass
-                time.sleep(0.5)
+                    if _tagify_committed(loc, value):
+                        ok_fill = True
+                        break
+                    page.wait_for_timeout(600)      # chờ ô sẵn sàng rồi gõ lại
+                if not ok_fill and log:
+                    log("⚠ Ô nhập từ khoá (tagify) không điền được — BỎ QUA bước này.")
+                time.sleep(0.4)
             elif action in ("panel", "open_panel"):
-                # Mở bảng (metabox) nếu phần tử bên trong đang bị ẩn
-                check = render(step.value or "", ctx)
-                need = True
-                if check:
+                # Mở card (metabox) nếu đang THU GỌN.
+                # LƯU Ý: nút này là TOGGLE -> chỉ bấm khi đang ĐÓNG (bấm lúc đang mở là ĐÓNG lại!)
+                el = _locate(page, step)
+                if _in_postbox(el):
+                    _ensure_panel_open(page, el)       # mở + KIỂM TRA LẠI (tối đa 3 lần)
+                else:
                     try:
-                        loc = _make(page, check)
-                        n = min(loc.count(), 5)
-                        need = not any(loc.nth(i).is_visible() for i in range(n))
+                        el.click(force=True, timeout=8000)
                     except Exception:
-                        need = True
-                if need:
-                    _locate(page, step).click(force=True, timeout=8000)
-                    time.sleep(0.6)
+                        pass
+                time.sleep(0.2)
             elif action in ("fill_attachment", "attachment_fields"):
                 # Điền cả 4 ô chi tiết ảnh (Tiêu đề, Văn bản thay thế, Caption, Miêu tả)
                 value = render(step.value, ctx)
