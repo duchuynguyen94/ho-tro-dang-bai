@@ -191,24 +191,27 @@ Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 
 
 def build_combined_short_prompt(source: dict) -> str:
-    """1 prompt ngắn cho ChatGPT (2 file rule nằm trong Project đã đính kèm)."""
+    """Prompt cho ChatGPT (2 file rule nằm trong Project đã đính kèm)."""
     urls = [str(u) for u in (source.get("urls") or []) if str(u).strip()]
+    if not urls:
+        u = str(source.get("url", "") or "").strip()
+        urls = [u] if u else []
     if len(urls) > 1:
-        link_line = ("Đọc các bài viết tại CÁC link nguồn sau:\n"
-                     + "\n".join(f"- {u}" for u in urls)
-                     + "\nTỔNG HỢP các nguồn trên thành 1 BÀI VIẾT MỚI")
+        head = ("Đọc bài viết tại các nguồn sau:\n"
+                + "\n".join(f"- {u}" for u in urls)
+                + "\nSau đó tổng hợp các nguồn trên và tạo thành 1 bài nội dung "
+                  'theo file "rule_content.pdf" đã đính kèm trong Project này')
     else:
-        link_line = f"Đọc bài viết tại link nguồn {source.get('url', '')}"
-    return f"""{link_line} theo file "rule_content.pdf" đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này. theo file "rule_content.pdf" đã đính kèm (sources) trong Project này, sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này.
+        head = (f"Đọc bài viết tại link nguồn {urls[0] if urls else ''}\n"
+                'Sau đó tạo nội dung theo file "rule_content.pdf" đã đính kèm '
+                "trong Project này.")
+    return f"""{head}
+Sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này.
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
-1) ĐẦU TIÊN: TOÀN BỘ NỘI DUNG BÀI VIẾT dưới dạng "HTML" theo template trong rule_content.pdf
-2) SAU CÙNG: 1 khối JSON thông tin SEO theo file rule_seo.pdf bao gồm: title, focus_keyword, description, tags
-   - TOÀN BỘ thông tin SEO phải DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT Ở MỤC 1 (đúng sản phẩm, thương hiệu, model, thông số trong bài; không bịa thêm).
-   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 USP trong danh sách: Chính hãng / Giá tốt / CO/CQ đầy đủ / Báo giá nhanh / Hàng sẵn / Giao nhanh / Đại lý / Phân phối / Hỗ trợ kỹ thuật / Bảo hành chính hãng / Tổng kho
-   - "focus_keyword": 01 từ khoá chính duy nhất = Model của sản phẩm (vd: BI15U-EM30WDTC-AP6X)
-   - "description": 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc."; dòng liên hệ 🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com; "Tên sản phẩm <Brand> models tiêu biểu"; rồi tối đa 5 model tiêu biểu, MỖI DÒNG 1 model dạng "<Tên sản phẩm> <Hãng> <Model>"
-   - "tags": trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy, gồm: tên sản phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa phương/tiếng Việt thông dụng; thông tin công ty
+
+ Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf”.
+ Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra.
 
 Không giải thích gì thêm."""
 
