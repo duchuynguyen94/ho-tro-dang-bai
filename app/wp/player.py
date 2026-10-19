@@ -357,7 +357,13 @@ def _sidebar_attach_id(page: Page) -> int:
     """Mã ảnh mà BẢNG CHI TIẾT bên phải đang hiển thị (0 nếu chưa hiện)."""
     try:
         return int(page.evaluate(
-            r"""() => { const a = document.querySelector('.media-sidebar .edit-attachment');
+            r"""() => {
+                const links = Array.from(document.querySelectorAll('.media-sidebar .edit-attachment'));
+                const vis = links.filter(a => {
+                    const md = a.closest('.media-modal');
+                    return md ? !!(md.offsetWidth || md.offsetHeight) : true;
+                });
+                const a = vis[0] || null;
                 if (!a) return 0;
                 const m = (a.getAttribute('href') || '').match(/post=(\d+)/);
                 return m ? parseInt(m[1], 10) : 0; }"""
@@ -368,142 +374,101 @@ def _sidebar_attach_id(page: Page) -> int:
 
 def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                                      expect: int = 0, log=None) -> int:
-    """Điền ô TRỐNG (Alt / Image Caption / Miêu tả) cho các ảnh VỪA UPLOAD.
+    """Điền ô TRỐNG (Alt / Image Caption / Miêu tả) cho các ảnh VỪA UPLOAD — qua API WordPress.
 
-    Cách làm (theo yêu cầu):
-    - Lấy các thẻ <li class="attachment selected"> (= ảnh vừa upload) -> BẤM LẦN LƯỢT từng cái.
-    - Mở bảng chi tiết -> lấy TIÊU ĐỀ CỦA CHÍNH ẢNH (ô #attachment-details-title)
-      -> điền vào các ô ĐANG TRỐNG (ô đã có nội dung thì giữ nguyên).
-    - Bấm xong PHẢI GIỮ ảnh trong danh sách đã chọn (class selected) -> "Thêm vào thư viện" mới chèn đủ ảnh.
+    KHÔNG bấm vào ảnh: bấm vào ảnh là ĐỔI TRẠNG THÁI CHỌN -> mất lựa chọn -> "Thêm vào thư viện"
+    chỉ chèn được 1 ảnh.
+
+    - Chờ "Đang tải lên" biến mất (tối đa 120 giây).
+    - Ảnh cần điền = các <li class="attachment selected"> TRONG MODAL ĐANG HIỆN (ảnh vừa upload);
+      không có -> lấy theo danh sách đang chọn của wp.media; cuối cùng -> N ảnh đầu.
+    - Giá trị = TIÊU ĐỀ CỦA CHÍNH ẢNH; ô nào đã có nội dung -> giữ nguyên.
     """
     val = str(value or "").strip()
-    # CHỜ ẢNH TẢI LÊN XONG: chờ tới khi trong khung thư viện ĐÃ CÓ ảnh và KHÔNG còn đang tải
-    # (trước đây chạy ngay -> khung còn trống -> "không thấy ảnh nào vừa upload")
     want = max(1, int(expect or 1))
+    # 1) CHỜ upload xong: hết chữ "Đang tải lên" + đã có ảnh được chọn
     deadline = time.time() + 120
     while time.time() < deadline:
         try:
             st = page.evaluate(
-                """() => ({ all: document.querySelectorAll('li.attachment').length,
-                            sel: document.querySelectorAll('li.attachment.selected').length,
-                            pick: (() => { try { return (window.wp && wp.media && wp.media.frame)
-                                       ? wp.media.frame.state().get('selection').length : 0; } catch (e) { return 0; } })(),
-                            up: (() => { const e = document.querySelector('.media-uploader-status');
-                                          return !!(e && (e.offsetWidth || e.offsetHeight)); })() })"""
+                """() => { const md = Array.from(document.querySelectorAll('.media-modal'))
+                                        .find(m => m.offsetWidth || m.offsetHeight);
+                    const root = md || document;
+                    let pick = 0;
+                    try { pick = (window.wp && wp.media && wp.media.frame)
+                                ? wp.media.frame.state().get('selection').length : 0; } catch (e) {}
+                    const up = Array.from(document.querySelectorAll('.media-uploader-status'))
+                                   .some(e => e.offsetWidth || e.offsetHeight);
+                    return { all: root.querySelectorAll('li.attachment').length,
+                             sel: root.querySelectorAll('li.attachment.selected').length,
+                             pick: pick, up: up }; }"""
             ) or {}
         except Exception:
             st = {}
-        n_all = int(st.get("all") or 0)
-        n_sel = int(st.get("sel") or 0)
-        n_pick = int(st.get("pick") or 0)      # số ảnh ĐANG ĐƯỢC CHỌN (đọc qua API, không cần khung hiện)
-        if n_all >= want and not st.get("up"):
-            break                     # đã có đủ ảnh + không còn tải -> xong
-        if (n_all >= 1 or n_pick >= 1) and (n_sel >= 1 or n_pick >= 1) and not st.get("up"):
-            break                     # có ảnh được chọn + không còn tải
-        if n_pick >= want and not st.get("up"):
-            break                     # đã chọn đủ số ảnh vừa upload -> xong
-        time.sleep(0.5)
+        if int(st.get("pick") or 0) >= want:
+            break
+        if not st.get("up") and (int(st.get("pick") or 0) >= 1 or int(st.get("sel") or 0) >= 1):
+            break
+        time.sleep(0.3)
+    # 2) LẤY MÃ ẢNH (chỉ trong modal đang hiện)
     js_ids = """(expect) => {
         const out = [];
-        document.querySelectorAll('li.attachment.selected').forEach(li => {
-            const id = li.getAttribute('data-id'); if (id) out.push(id);
+        const md = Array.from(document.querySelectorAll('.media-modal')).find(m => m.offsetWidth || m.offsetHeight);
+        const root = md || document;
+        root.querySelectorAll('li.attachment.selected').forEach(li => {
+            const id = li.getAttribute('data-id'); if (id) out.push(String(id));
         });
         if (!out.length && window.wp && wp.media && wp.media.frame) {
-            try {                       // khung chưa hiện -> lấy từ danh sách ĐANG ĐƯỢC CHỌN
-                wp.media.frame.state().get('selection').each(m => { if (m && m.id) out.push(String(m.id)); });
-            } catch (e) {}
+            try { wp.media.frame.state().get('selection').each(m => { if (m && m.id) out.push(String(m.id)); }); } catch (e) {}
         }
-        if (!out.length) {          // vẫn không có -> lấy N ảnh đầu
-            document.querySelectorAll('li.attachment').forEach((li, i) => {
-                if (i < (expect || 0)) { const id = li.getAttribute('data-id'); if (id) out.push(id); }
+        if (!out.length) {
+            root.querySelectorAll('li.attachment').forEach((li, i) => {
+                if (i < (expect || 0)) { const id = li.getAttribute('data-id'); if (id) out.push(String(id)); }
             });
         }
         return out;
     }"""
     try:
-        ids = list(page.evaluate(js_ids, int(expect or 0)) or [])
+        ids = [str(x) for x in (page.evaluate(js_ids, want) or [])]
     except Exception:
         ids = []
     if not ids:
         if log:
             log("  (không thấy ảnh vừa upload để điền mô tả)")
         return 0
-    # BẤM TỪ ẢNH MỚI NHẤT TRỞ VỀ (4 -> 3 -> 2): mã ảnh giảm dần
     try:
-        ids = sorted(ids, key=lambda x: int(x), reverse=True)
+        ids = sorted(set(ids), key=lambda x: int(x), reverse=True)      # mới nhất trước: 4 -> 3 -> 2
     except Exception:
-        ids = list(reversed(ids))
-
-    fields = ("#attachment-details-title", "#attachment-details-alt-text",
-              "#attachment-details-caption", "#attachment-details-description")
-    done = 0
-    for tid in ids:
-        try:
-            # 1) Bấm vào ảnh (chỉ khi bảng chưa hiện đúng ảnh này)
-            shown = False
-            for _try in range(3):
-                if _sidebar_attach_id(page) == int(tid):
-                    shown = True
-                    break
-                try:
-                    page.evaluate("""(id) => { const li = Array.from(document.querySelectorAll('li.attachment'))
-                        .find(x => x.getAttribute('data-id') === id); if (li) li.click(); }""", tid)
-                except Exception:
-                    pass
-                for _w in range(15):
-                    page.wait_for_timeout(200)
-                    if _sidebar_attach_id(page) == int(tid):
-                        shown = True
-                        break
-                    if not _sidebar_attach_id(page) and page.locator("#attachment-details-title").count():
-                        shown = True
-                        break
-                if shown:
-                    break
-            if not shown:
-                continue
-            # 2) Tiêu đề CỦA CHÍNH ẢNH -> điền các ô ĐANG TRỐNG
-            try:
-                own = str(page.locator("#attachment-details-title").first.input_value(timeout=2000) or "").strip()
-            except Exception:
-                own = ""
-            use = own or val
-            patch = {}
-            for sel in fields:
-                loc = page.locator(sel).first
-                try:
-                    cur = str(loc.input_value(timeout=2000) or "").strip()
-                except Exception:
-                    cur = ""
-                if cur:
-                    continue                     # ô đã có nội dung -> giữ nguyên
-                try:
-                    loc.fill(use, timeout=6000)
-                    if sel.endswith("-alt-text"):
-                        patch["alt"] = use
-                    elif sel.endswith("-caption"):
-                        patch["caption"] = use
-                    elif sel.endswith("-description"):
-                        patch["description"] = use
-                    else:
-                        patch["title"] = use
-                except Exception:
-                    pass
-            # 3) Lưu qua API (chắc ăn) + GIỮ ảnh trong danh sách đã chọn
-            try:
-                page.evaluate("""([id, patch]) => { try {
-                    const m = wp.media.attachment(id);
-                    if (Object.keys(patch).length) { m.set(patch); m.save(); }
-                    const f = wp.media.frame;
-                    if (f) { const sel = f.state().get('selection'); sel.add(m); }
-                } catch (e) {} }""", [str(tid), patch])
-            except Exception:
-                pass
-            done += 1
-        except Exception:
-            continue
+        ids = list(dict.fromkeys(reversed(ids)))
+    # 3) ĐIỀN QUA API (không bấm ảnh -> giữ nguyên lựa chọn để chèn đủ ảnh)
+    js_fill = """({ids, val}) => {
+        const res = {done: 0, fields: []}; const fset = new Set();
+        ids.forEach(id => {
+            try {
+                const m = wp.media.attachment(id);
+                const t = ((m.get('title') || '').trim()) || val;
+                if (!t) return;
+                const patch = {};
+                if (!((m.get('alt') || '').trim())) { patch.alt = t; fset.add('alt'); }
+                if (!((m.get('caption') || '').trim())) { patch.caption = t; fset.add('caption'); }
+                if (!((m.get('description') || '').trim())) { patch.description = t; fset.add('description'); }
+                if (Object.keys(patch).length) { m.set(patch); m.save(); res.done += 1; }
+            } catch (e) {}
+        });
+        res.fields = Array.from(fset);
+        return res;
+    }"""
+    try:
+        res = page.evaluate(js_fill, {"ids": ids, "val": val}) or {}
+    except Exception as exc:      # noqa: BLE001
+        if log:
+            log(f"  (không điền được mô tả ảnh: {str(exc)[:80]})")
+        return 0
+    done = int(res.get("done") or 0)
+    fields = res.get("fields") or []
     if log:
-        log(f"  (đã điền mô tả cho {done}/{len(ids)} ảnh vừa upload — chỉ điền ô trống)")
+        log(f"  (đã điền mô tả cho {done}/{len(ids)} ảnh vừa upload — chỉ điền ô trống"
+            + (f" | ô đã điền: {', '.join(fields)}" if fields else "") + ")")
     return done
 
 
