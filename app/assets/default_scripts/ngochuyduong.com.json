@@ -252,54 +252,15 @@
       "when": ""
     },
     {
-      "action": "type",
-      "selector": "#attachment-details-title",
-      "selectors": [
-        "#attachment-details-title",
-        ".media-sidebar input[type='text']"
-      ],
+      "action": "attachment_fields",
+      "selector": "",
+      "selectors": [],
       "value": "{{title}}",
-      "note": "Tiêu đề ảnh 1 ← tiêu đề bài viết",
+      "note": "Điền Tiêu đề + Văn bản thay thế + Image Caption + Miêu tả (1 lần)",
       "source": "auto",
-      "optional": false,
-      "force": false
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-alt-text",
-      "selectors": [
-        "#attachment-details-alt-text",
-        ".media-sidebar textarea"
-      ],
-      "value": "{{title}}",
-      "note": "Văn bản thay thế (SEO) ảnh 1 ← tiêu đề bài viết",
-      "source": "auto",
-      "optional": false,
-      "force": false
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-caption",
-      "selectors": [
-        "#attachment-details-caption"
-      ],
-      "value": "{{title}}",
-      "note": "Image Caption ảnh 1 ← tiêu đề bài viết",
-      "source": "auto",
-      "optional": false,
-      "force": false
-    },
-    {
-      "action": "type",
-      "selector": "#attachment-details-description",
-      "selectors": [
-        "#attachment-details-description"
-      ],
-      "value": "{{title}}",
-      "note": "Miêu tả ảnh 1 ← tiêu đề bài viết",
-      "source": "auto",
-      "optional": false,
-      "force": false
+      "optional": true,
+      "force": false,
+      "when": ""
     },
     {
       "action": "click",

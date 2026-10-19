@@ -372,6 +372,65 @@ def _sidebar_attach_id(page: Page) -> int:
         return 0
 
 
+def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int:
+    """Điền các ô TRỐNG (Alt / Image Caption / Miêu tả) của bảng chi tiết ẢNH ĐANG HIỆN.
+
+    Một lần duy nhất (thay cho 4 bước riêng) -> nhanh, không bị "khựng".
+    Giá trị = TIÊU ĐỀ CỦA CHÍNH ẢNH (ô Tiêu đề); ô nào đã có nội dung -> giữ nguyên.
+    """
+    def visible(sel: str):
+        try:
+            loc = page.locator(sel + ":visible").first
+            return loc if loc.count() else None
+        except Exception:
+            return None
+
+    title_loc = visible("#attachment-details-title")
+    if title_loc is None:
+        if log:
+            log("  (không thấy bảng chi tiết ảnh — bỏ qua điền mô tả)")
+        return 0
+    try:
+        own = str(title_loc.input_value(timeout=2000) or "").strip()
+    except Exception:
+        own = ""
+    use = own or str(value or "").strip()
+    if not use:
+        if log:
+            log("  (ảnh chưa có tiêu đề — bỏ qua điền mô tả)")
+        return 0
+    patch: dict = {}
+    for sel, key in (("#attachment-details-alt-text", "alt"),
+                     ("#attachment-details-caption", "caption"),
+                     ("#attachment-details-description", "description")):
+        loc = visible(sel)
+        if loc is None:
+            continue
+        try:
+            cur = str(loc.input_value(timeout=1500) or "").strip()
+        except Exception:
+            cur = ""
+        if cur:
+            continue                  # ô đã có nội dung -> giữ nguyên
+        try:
+            loc.fill(use, timeout=5000)
+            patch[key] = use
+        except Exception:
+            pass
+    if patch:
+        try:      # lưu qua API cho chắc
+            page.evaluate("""(patch) => { try {
+                const a = document.querySelector('.media-sidebar .edit-attachment');
+                const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
+                if (m) { const md = wp.media.attachment(m[1]); md.set(patch); md.save(); }
+            } catch (e) {} }""", patch)
+        except Exception:
+            pass
+    if log:
+        log(f"  (ảnh: điền {', '.join(sorted(patch)) or 'không có ô trống'})")
+    return len(patch)
+
+
 def slug_if_needed(page: Page, new_slug: str, limit: int = 65, log=None) -> bool:
     """Chỉnh đường dẫn (slug) — CHỈ KHI slug hiện tại DÀI TỪ `limit` ký tự trở lên.
 
@@ -931,6 +990,9 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("attachment_fields", "fill_attachment_now"):
+                # Điền 4 ô (Tiêu đề/Alt/Caption/Miêu tả) của ảnh đang hiện — MỘT LẦN
+                fill_current_attachment_fields(page, render(step.value or "{{title}}", ctx), log=log)
             elif action in ("slug_if_needed", "slug_auto"):
                 # Chỉnh slug CHỈ KHI slug hiện tại >= 65 ký tự
                 slug_if_needed(page, render(step.value or "{{slug}}", ctx), log=log)
