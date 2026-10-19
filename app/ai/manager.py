@@ -115,7 +115,7 @@ SEO_JSON_SPEC = """{
   "tags": "trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy; GỒM: tên sản phẩm + đồng nghĩa, thương hiệu, sản phẩm + model nổi bật, từ khoá địa phương/tiếng Việt thông dụng, thông tin công ty",
   "category_name": "Tên chủng loại sản phẩm, có thể có nhiều loại, mỗi loại cách nhau bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản phẩm cũng là con của nó; dấu chấm phẩy nằm TRONG chuỗi, không phải mảng)",
   "brand_name": "Tên thương hiệu của sản phẩm (vd: Carlo Gavazzi)",
-  "ma_san_pham": "Danh sách mã sản phẩm của nội dung được viết (mỗi mã cách nhau bởi dấu chấm phẩy)"
+  "ma_san_pham": "Danh sách mã sản phẩm của nội dung được viết, mỗi mã cách nhau bởi dấu phẩy (dấu phẩy nằm TRONG chuỗi, không phải mảng)"
 }"""
 
 
@@ -215,7 +215,8 @@ SEO_FIELDS_DETAIL = (
     'bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản phẩm '
     'cũng là con của nó).\n'
     '   - "brand_name": tên thương hiệu sản phẩm (vd: Carlo Gavazzi).\n'
-    '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết.\n'
+    '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết, '
+    'mỗi mã cách nhau bởi dấu phẩy.\n'
 )
 
 
@@ -1229,7 +1230,8 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         'bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản '
         'phẩm cũng là con của nó)\n'
         '   - "brand_name": tên thương hiệu sản phẩm (vd: Carlo Gavazzi)\n'
-        '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết\n'
+        '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết, '
+        'mỗi mã cách nhau bởi dấu phẩy\n'
     )
 
     seo_rule = read_rule(rule_path(rules, "seo"))
