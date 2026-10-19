@@ -377,12 +377,43 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
     - Bấm xong PHẢI GIỮ ảnh trong danh sách đã chọn (class selected) -> "Thêm vào thư viện" mới chèn đủ ảnh.
     """
     val = str(value or "").strip()
+    # CHỜ ẢNH TẢI LÊN XONG: chờ tới khi trong khung thư viện ĐÃ CÓ ảnh và KHÔNG còn đang tải
+    # (trước đây chạy ngay -> khung còn trống -> "không thấy ảnh nào vừa upload")
+    want = max(1, int(expect or 1))
+    deadline = time.time() + 120
+    while time.time() < deadline:
+        try:
+            st = page.evaluate(
+                """() => ({ all: document.querySelectorAll('li.attachment').length,
+                            sel: document.querySelectorAll('li.attachment.selected').length,
+                            pick: (() => { try { return (window.wp && wp.media && wp.media.frame)
+                                       ? wp.media.frame.state().get('selection').length : 0; } catch (e) { return 0; } })(),
+                            up: (() => { const e = document.querySelector('.media-uploader-status');
+                                          return !!(e && (e.offsetWidth || e.offsetHeight)); })() })"""
+            ) or {}
+        except Exception:
+            st = {}
+        n_all = int(st.get("all") or 0)
+        n_sel = int(st.get("sel") or 0)
+        n_pick = int(st.get("pick") or 0)      # số ảnh ĐANG ĐƯỢC CHỌN (đọc qua API, không cần khung hiện)
+        if n_all >= want and not st.get("up"):
+            break                     # đã có đủ ảnh + không còn tải -> xong
+        if (n_all >= 1 or n_pick >= 1) and (n_sel >= 1 or n_pick >= 1) and not st.get("up"):
+            break                     # có ảnh được chọn + không còn tải
+        if n_pick >= want and not st.get("up"):
+            break                     # đã chọn đủ số ảnh vừa upload -> xong
+        time.sleep(0.5)
     js_ids = """(expect) => {
         const out = [];
         document.querySelectorAll('li.attachment.selected').forEach(li => {
             const id = li.getAttribute('data-id'); if (id) out.push(id);
         });
-        if (!out.length) {          // không có ảnh nào được chọn -> lấy N ảnh đầu
+        if (!out.length && window.wp && wp.media && wp.media.frame) {
+            try {                       // khung chưa hiện -> lấy từ danh sách ĐANG ĐƯỢC CHỌN
+                wp.media.frame.state().get('selection').each(m => { if (m && m.id) out.push(String(m.id)); });
+            } catch (e) {}
+        }
+        if (!out.length) {          // vẫn không có -> lấy N ảnh đầu
             document.querySelectorAll('li.attachment').forEach((li, i) => {
                 if (i < (expect || 0)) { const id = li.getAttribute('data-id'); if (id) out.push(id); }
             });
@@ -395,8 +426,13 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
         ids = []
     if not ids:
         if log:
-            log("  (không thấy ảnh nào vừa upload để điền mô tả)")
+            log("  (không thấy ảnh vừa upload để điền mô tả)")
         return 0
+    # BẤM TỪ ẢNH MỚI NHẤT TRỞ VỀ (4 -> 3 -> 2): mã ảnh giảm dần
+    try:
+        ids = sorted(ids, key=lambda x: int(x), reverse=True)
+    except Exception:
+        ids = list(reversed(ids))
 
     fields = ("#attachment-details-title", "#attachment-details-alt-text",
               "#attachment-details-caption", "#attachment-details-description")
