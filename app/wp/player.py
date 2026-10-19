@@ -372,6 +372,68 @@ def _sidebar_attach_id(page: Page) -> int:
         return 0
 
 
+def slug_if_needed(page: Page, new_slug: str, limit: int = 65, log=None) -> bool:
+    """Chỉnh đường dẫn (slug) — CHỈ KHI slug hiện tại DÀI TỪ `limit` ký tự trở lên.
+
+    Slug hiện tại < 65 ký tự -> BỎ QUA (giữ nguyên slug WordPress tự tạo).
+    """
+    cur = ""
+    try:
+        cur = str(page.evaluate(
+            """() => {
+                const el = document.querySelector('#editable-post-name');
+                if (el) return (el.innerText || el.textContent || '').trim();
+                const p = document.querySelector('#sample-permalink');
+                return p ? (p.innerText || p.textContent || '').trim() : ''; }"""
+        ) or "").strip()
+    except Exception:
+        cur = ""
+    if cur and "/" in cur:
+        cur = cur.rstrip("/").split("/")[-1]
+    if cur and len(cur) < int(limit):
+        if log:
+            log(f"  (bỏ qua chỉnh slug — slug hiện tại {len(cur)} ký tự < {limit}: {cur[:40]})")
+        return False
+    if not str(new_slug or "").strip():
+        return False
+    try:
+        # mở ô chỉnh slug
+        opened = False
+        for sel in ("#edit-slug-buttons .edit-slug", "#edit-slug-box .edit-slug", "button.edit-slug"):
+            try:
+                loc = page.locator(sel).first
+                if loc.count():
+                    loc.click(timeout=6000)
+                    page.wait_for_timeout(500)
+                    if page.locator("#new-post-slug:visible").count():
+                        opened = True
+                        break
+            except Exception:
+                continue
+        if not opened:
+            if log:
+                log("  (không mở được ô chỉnh slug — bỏ qua)")
+            return False
+        page.locator("#new-post-slug:visible").first.fill(str(new_slug), timeout=6000)
+        page.wait_for_timeout(200)
+        for sel in ("#edit-slug-buttons .save", "#edit-slug-box .save", "button.save"):
+            try:
+                loc = page.locator(sel).first
+                if loc.count():
+                    loc.click(timeout=6000)
+                    break
+            except Exception:
+                continue
+        page.wait_for_timeout(600)
+        if log:
+            log(f"  (đã chỉnh slug: {cur[:30] or '(trống)'} -> {str(new_slug)[:40]})")
+        return True
+    except Exception as exc:      # noqa: BLE001
+        if log:
+            log(f"  (lỗi chỉnh slug: {str(exc)[:80]})")
+        return False
+
+
 def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: str = "",
                                   log=None) -> int:
     """Thêm ảnh vào THƯ VIỆN ảnh sản phẩm — TỪNG ẢNH MỘT (giống cách làm ảnh đại diện).
@@ -869,6 +931,9 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("slug_if_needed", "slug_auto"):
+                # Chỉnh slug CHỈ KHI slug hiện tại >= 65 ký tự
+                slug_if_needed(page, render(step.value or "{{slug}}", ctx), log=log)
             elif action in ("add_gallery_images", "gallery_add_each"):
                 # Thêm ảnh vào thư viện TỪNG ẢNH MỘT (upload -> điền -> chèn) rồi kết thúc
                 # lặp cho TỚI HẾT số ảnh (tối đa 20 ảnh như app cho phép)

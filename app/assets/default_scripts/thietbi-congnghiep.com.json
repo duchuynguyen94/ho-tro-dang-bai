@@ -181,47 +181,15 @@
       "force": false
     },
     {
-      "action": "click",
-      "selector": "#edit-slug-buttons .edit-slug",
-      "selectors": [
-        "#edit-slug-buttons .edit-slug",
-        "#edit-slug-box .edit-slug",
-        "button.edit-slug",
-        "button:has-text('Chỉnh sửa')"
-      ],
-      "value": "#new-post-slug",
-      "note": "Bấm “Chỉnh sửa” cạnh đường dẫn",
-      "source": "auto",
-      "optional": true,
-      "force": false
-    },
-    {
-      "action": "type",
-      "selector": "#new-post-slug",
-      "selectors": [
-        "#new-post-slug",
-        "#edit-slug-box input[type='text']"
-      ],
+      "action": "slug_if_needed",
+      "selector": "",
+      "selectors": [],
       "value": "{{slug}}",
-      "note": "Điền đường dẫn (slug) từ tiêu đề — dưới 60 ký tự",
+      "note": "Chỉnh đường dẫn (slug) — chỉ khi slug hiện tại >= 65 ký tự",
       "source": "auto",
       "optional": true,
-      "force": false
-    },
-    {
-      "action": "click",
-      "selector": "#edit-slug-buttons .save",
-      "selectors": [
-        "#edit-slug-buttons .save",
-        "#edit-slug-box .save",
-        "button.save",
-        "button:has-text('Đồng ý')"
-      ],
-      "value": "",
-      "note": "Bấm “Đồng ý” để chốt đường dẫn (BẮT BUỘC)",
-      "source": "auto",
-      "optional": true,
-      "force": false
+      "force": false,
+      "when": ""
     },
     {
       "action": "click",
