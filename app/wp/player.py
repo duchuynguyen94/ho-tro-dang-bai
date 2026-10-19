@@ -379,7 +379,10 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
         cond = str(getattr(step, "when", "") or "")
         if cond:
             try:
-                if not render(cond, ctx).strip():
+                cond_val = render(cond, ctx).strip()
+                # Biến KHÔNG tồn tại (vd {{image_2}} khi job chỉ có 1 ảnh) -> coi như RỖNG -> BỎ QUA bước.
+                # (render giữ nguyên "{{image_2}}" nếu thiếu key -> trước đây tưởng là CÓ nên vẫn chạy)
+                if (not cond_val) or ("{{" in cond_val):
                     if log:
                         log(f"[{i}/{len(script.steps)}] (bỏ qua: {step.note or action})")
                     continue
