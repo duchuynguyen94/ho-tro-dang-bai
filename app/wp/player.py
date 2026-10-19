@@ -412,39 +412,30 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                 it.scroll_into_view_if_needed(timeout=3000)
             except Exception:
                 pass
-            # Đảm bảo BẢNG CHI TIẾT đang hiển thị ĐÚNG ảnh này.
-            # - Kiểm tra mã ảnh đang hiện (link "Sửa" có post=<id>) + class 'details'.
-            # - Bấm vào ảnh ĐANG mở là TẮT bảng -> nên chỉ bấm khi chưa đúng.
+            # BẤM LẦN LƯỢT từng ảnh (1 -> 2 -> 3 -> 4) cho tới khi bảng thông tin hiện ĐÚNG ảnh đó.
+            # Chỉ tin vào MÃ ẢNH đang hiện (link "Sửa" có post=<id>), KHÔNG dựa vào class 'details'
+            # (ảnh đang được chọn có thể có class 'details' mà bảng vẫn chưa hiện).
+            shown = False
             for _try in range(3):
-                cur = _sidebar_attach_id(page)
-                if want_id and cur and cur == want_id:
-                    break
-                try:
-                    if it.evaluate("el => el.classList.contains('details')"):
-                        break
-                except Exception:
+                if want_id and _sidebar_attach_id(page) == want_id:
+                    shown = True
                     break
                 try:
                     it.click(timeout=6000)
                 except Exception:
                     pass
                 page.wait_for_timeout(600)
-            shown = False
-            for _ in range(12):
-                cur = _sidebar_attach_id(page)
-                if want_id and cur and cur == want_id:
-                    shown = True                    # bảng đang hiện ĐÚNG ảnh này
+                if want_id and _sidebar_attach_id(page) == want_id:
+                    shown = True
                     break
-                if not cur:
-                    # Không đọc được mã ảnh -> dùng dấu hiệu: ảnh có class 'details' + ô tiêu đề đã hiện
+                if not want_id:
+                    # Không đọc được mã ảnh -> chỉ cần ô tiêu đề đã hiện là đủ
                     try:
-                        if (it.evaluate("el => el.classList.contains('details')")
-                                and page.locator("#attachment-details-title").count()):
+                        if page.locator("#attachment-details-title").count():
                             shown = True
                             break
                     except Exception:
                         pass
-                page.wait_for_timeout(200)
             if not shown:
                 continue
             # TIÊU ĐỀ của CHÍNH ẢNH = giá trị ô #attachment-details-title (KHÔNG phải tên file)
