@@ -398,18 +398,19 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
             except Exception:
                 pass
             # Bấm để HIỆN bảng chi tiết của ĐÚNG ảnh này.
-            # (bấm lần 2 vào cùng ảnh là TẮT bảng -> kiểm tra class 'details' rồi bấm lại)
-            for _try in range(2):
-                try:
-                    it.click(timeout=6000)
-                except Exception:
-                    pass
-                page.wait_for_timeout(400)
+            # QUAN TRỌNG: KIỂM TRA TRƯỚC — ảnh nào ĐANG mở bảng rồi thì KHÔNG bấm
+            # (bấm vào ảnh đang mở là TẮT bảng -> ảnh đó bị bỏ qua, không điền được).
+            for _try in range(3):
                 try:
                     if it.evaluate("el => el.classList.contains('details')"):
                         break
                 except Exception:
                     break
+                try:
+                    it.click(timeout=6000)
+                except Exception:
+                    pass
+                page.wait_for_timeout(600)
             shown = False
             for _ in range(12):
                 try:
