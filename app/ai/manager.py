@@ -317,7 +317,7 @@ _MARK_RE = re.compile(
 # dòng ngăn cách kiểu mới: "=== Nội dung 1 ===" (bắt buộc có dấu = ở 2 đầu để tránh nhận nhầm)
 _MARK_RE_ND = re.compile(
     r"(?im)^[\s>*_#\-–—]*[=]{1,}\s*N[ỘÔ]I\s*DUNG\s*[:\-–—]?\s*(\d+)\s*[=]{1,}[\s*_]*$"
-    r"|(?im)^[\s>*_#\-–—]*[*_#]{1,}\s*N[ỘÔ]I\s*DUNG\s*[:\-–—]?\s*(\d+)\s*[*_#]*$"
+    r"|^[\s>*_#\-–—]*[*_#]{1,}\s*N[ỘÔ]I\s*DUNG\s*[:\-–—]?\s*(\d+)\s*[*_#]*$"
 )
 
 
