@@ -1816,10 +1816,12 @@ class JobsPage(QWidget):
         while len(lst) <= index:
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
+        # TÌM CHỖ TRỐNG (giống tải lên / hình tự tìm) — không dán vào chính giữa nữa
+        spot = (self._find_free_spots(1) or [[0.5, 0.5]])[0]
         if len(ups) >= 20:
-            ups[-1] = {"path": path, "pos": [0.5, 0.5]}   # đủ 20 -> thay cái cuối
+            ups[-1] = {"path": path, "pos": spot}         # đủ 20 -> thay cái cuối
         else:
-            ups.append({"path": path, "pos": [0.5, 0.5]})  # canh giữa
+            ups.append({"path": path, "pos": spot})
         lst[index]["uploads"] = ups
         r["image_opts_list"] = lst
         self.store.upsert_task(self.current)
