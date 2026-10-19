@@ -396,10 +396,11 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
         except Exception:
             did, sel = 0, False
         rows.append((i, did, sel))
-    # Ưu tiên: CÓ TICK + là ảnh MỚI -> nếu không có thì theo mã ảnh -> cuối cùng là N ảnh đầu
-    targets = [i for i, did, sel in rows if sel and min_id and did and did > min_id]
-    if not targets:
-        targets = [i for i, did, _s in rows if min_id and did and did > min_id]
+    # CHỌN ẢNH CẦN ĐIỀN: ưu tiên ảnh có class 'attachment selected' (= ảnh VỪA upload)
+    # -> không có thì theo mã ảnh mới -> cuối cùng là N ảnh đầu (thư viện xếp mới nhất trước)
+    targets = [i for i, _d, sel in rows if sel]
+    if not targets and min_id:
+        targets = [i for i, did, _s in rows if did and did > min_id]
     if not targets and expect:
         targets = [i for i, _d, _s in rows][:max(0, int(expect))]
     done = 0
@@ -418,24 +419,24 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
             shown = False
             for _try in range(3):
                 if want_id and _sidebar_attach_id(page) == want_id:
-                    shown = True
+                    shown = True                     # bảng đã hiện ĐÚNG ảnh này
                     break
                 try:
                     it.click(timeout=6000)
                 except Exception:
                     pass
-                page.wait_for_timeout(600)
-                if want_id and _sidebar_attach_id(page) == want_id:
-                    shown = True
+                # CHỜ ô thông tin HIỆN LÊN (ưu tiên đúng mã ảnh; không đọc được mã thì chờ ô tiêu đề)
+                for _w in range(15):
+                    page.wait_for_timeout(200)
+                    cur = _sidebar_attach_id(page)
+                    if want_id and cur == want_id:
+                        shown = True
+                        break
+                    if not cur and page.locator("#attachment-details-title").count():
+                        shown = True
+                        break
+                if shown:
                     break
-                if not want_id:
-                    # Không đọc được mã ảnh -> chỉ cần ô tiêu đề đã hiện là đủ
-                    try:
-                        if page.locator("#attachment-details-title").count():
-                            shown = True
-                            break
-                    except Exception:
-                        pass
             if not shown:
                 continue
             # TIÊU ĐỀ của CHÍNH ẢNH = giá trị ô #attachment-details-title (KHÔNG phải tên file)
