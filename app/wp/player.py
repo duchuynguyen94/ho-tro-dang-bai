@@ -416,7 +416,8 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
             if log:
                 log("  (đã bấm tab “Tải lên tệp mới”)" if ok_tab
                     else "  ⚠ Chưa bấm được tab “Tải lên tệp mới”")
-            # 3) upload CHỈ 1 ảnh
+            # 3) SAU KHI BẤM TAB -> chờ 0,2 giây rồi bấm chọn file
+            page.wait_for_timeout(200)
             page.locator("input[type='file']").first.set_input_files(f)
             # 4) chờ bảng chi tiết hiện
             ok = False
