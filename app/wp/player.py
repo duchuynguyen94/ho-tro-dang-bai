@@ -372,6 +372,95 @@ def _sidebar_attach_id(page: Page) -> int:
         return 0
 
 
+def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: str = "",
+                                  log=None) -> int:
+    """Thêm ảnh vào THƯ VIỆN ảnh sản phẩm — TỪNG ẢNH MỘT (giống cách làm ảnh đại diện).
+
+    Mỗi ảnh: mở "Thêm ảnh thư viện" -> tab "Tải lên tệp mới" -> upload 1 ảnh
+             -> chờ bảng chi tiết -> điền các ô TRỐNG (tiêu đề của chính ảnh)
+             -> bấm "Thêm vào thư viện" (chèn + đóng modal) -> ảnh kế tiếp.
+    """
+    done = 0
+    for f in files:
+        try:
+            if not f or not Path(f).exists():
+                continue
+            # 1) mở modal thư viện
+            page.locator("a.add_product_images, a:has-text('Thêm ảnh thư viện sản phẩm')").first.click(timeout=12000)
+            page.wait_for_timeout(1200)
+            # 2) tab "Tải lên tệp mới"
+            try:
+                page.locator(".media-menu-item:has-text('Tải lên tệp mới')").first.click(timeout=6000)
+                page.wait_for_timeout(800)
+            except Exception:
+                pass
+            # 3) upload CHỈ 1 ảnh
+            page.locator("input[type='file']").first.set_input_files(f)
+            # 4) chờ bảng chi tiết hiện
+            ok = False
+            for _ in range(80):
+                page.wait_for_timeout(500)
+                try:
+                    if page.locator("#attachment-details-title:visible").count():
+                        ok = True
+                        break
+                except Exception:
+                    pass
+            if ok:
+                # 5) điền các ô TRỐNG = TIÊU ĐỀ CỦA CHÍNH ẢNH
+                try:
+                    own = str(page.locator("#attachment-details-title:visible").first
+                              .input_value(timeout=2000) or "").strip()
+                except Exception:
+                    own = ""
+                use = own or str(fallback_title or "").strip()   # ảnh chưa có tiêu đề -> dùng tiêu đề bài
+                patch: dict = {}
+                for sel, key in (("#attachment-details-title", "title"),
+                                 ("#attachment-details-alt-text", "alt"),
+                                 ("#attachment-details-caption", "caption"),
+                                 ("#attachment-details-description", "description")):
+                    loc = page.locator(sel + ":visible").first
+                    try:
+                        cur = str(loc.input_value(timeout=2000) or "").strip()
+                    except Exception:
+                        cur = ""
+                    if cur or not use:
+                        continue
+                    try:
+                        loc.fill(use, timeout=6000)
+                        patch[key] = use
+                    except Exception:
+                        pass
+                if patch:
+                    try:
+                        page.evaluate("""(patch) => { try {
+                            const a = document.querySelector('.media-sidebar .edit-attachment');
+                            const m = a && (a.getAttribute('href') || '').match(/post=(\\d+)/);
+                            if (m) { const md = wp.media.attachment(m[1]); md.set(patch); md.save(); }
+                        } catch (e) {} }""", patch)
+                    except Exception:
+                        pass
+                if log:
+                    log(f"  (ảnh {Path(f).name}: điền {', '.join(sorted(patch)) or 'không có ô trống'})")
+            elif log:
+                log(f"  (ảnh {Path(f).name}: không thấy bảng chi tiết)")
+            # 6) chèn vào thư viện (đóng modal)
+            page.locator("button.media-button-select, .media-toolbar-primary .media-button-select").first.click(timeout=20000)
+            page.wait_for_timeout(1500)
+            done += 1
+        except Exception as exc:      # noqa: BLE001
+            if log:
+                log(f"  (lỗi thêm ảnh {Path(f).name}: {str(exc)[:80]})")
+            try:
+                page.keyboard.press("Escape")
+                page.wait_for_timeout(600)
+            except Exception:
+                pass
+    if log:
+        log(f"  (đã thêm {done}/{len(files)} ảnh vào thư viện — làm TỪNG ẢNH)")
+    return done
+
+
 def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                                      expect: int = 0, log=None) -> int:
     """Điền ô TRỐNG (Alt / Image Caption / Miêu tả) cho các ảnh VỪA UPLOAD — qua API WordPress.
@@ -695,6 +784,15 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("add_gallery_images", "gallery_add_each"):
+                # Thêm ảnh vào thư viện TỪNG ẢNH MỘT (upload -> điền -> chèn) rồi kết thúc
+                files = [str(ctx.get(f"image_{i}") or "") for i in range(2, 9)]
+                files = [f for f in files if f and Path(f).exists()]
+                if files:
+                    add_gallery_images_one_by_one(
+                        page, files, fallback_title=render("{{title}}", ctx), log=log)
+                elif log:
+                    log("  (không có ảnh nào để thêm vào thư viện)")
             elif action in ("attachment_fields_uploaded", "fill_attachment_uploaded"):
                 # Điền ô TRỐNG cho ĐÚNG những ảnh VỪA upload (không đụng ảnh cũ trong thư viện)
                 fill_uploaded_attachment_fields(
