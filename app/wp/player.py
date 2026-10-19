@@ -385,35 +385,78 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
         try:
             if not f or not Path(f).exists():
                 continue
-            # 1) mở modal thư viện
-            page.locator("a.add_product_images, a:has-text('Thêm ảnh thư viện sản phẩm')").first.click(timeout=12000)
-            # CHỜ modal hiện đủ (có thanh tab) rồi mới bấm tab — lần đầu modal mở chậm nên dễ bấm hụt
+            # 0) ĐÓNG modal cũ (có thể còn mở từ bước ảnh đại diện) -> tránh bấm nhầm / tab không bấm được
+            try:
+                for _ in range(4):
+                    if page.locator(".media-modal:visible").count() == 0:
+                        break
+                    try:
+                        page.locator(".media-modal-close:visible").first.click(timeout=3000)
+                    except Exception:
+                        try:
+                            page.keyboard.press("Escape")
+                        except Exception:
+                            pass
+                    page.wait_for_timeout(600)
+            except Exception:
+                pass
+            # 1) mở modal thư viện — BẤM RỒI KIỂM TRA modal đã mở chưa (bấm lại tối đa 3 lần)
+            opened = False
+            for _try in range(3):
+                try:
+                    page.locator("a.add_product_images, a:has-text('Thêm ảnh thư viện sản phẩm')").first.click(timeout=12000)
+                except Exception:
+                    pass
+                for _w in range(40):
+                    page.wait_for_timeout(200)
+                    try:
+                        if page.locator(".media-modal:visible").count():
+                            opened = True
+                            break
+                    except Exception:
+                        pass
+                if opened:
+                    break
+                page.wait_for_timeout(800)
+            if log:
+                log("  (đã mở khung thư viện ảnh)" if opened else "  ⚠ KHÔNG mở được khung thư viện ảnh")
+            # XOÁ LỰA CHỌN CŨ (để chỉ ảnh vừa upload được tick, không dính ảnh trước)
+            try:
+                page.evaluate("""() => { try {
+                    if (window.wp && wp.media && wp.media.frame) {
+                        wp.media.frame.state().get('selection').reset();
+                    }
+                    document.querySelectorAll('li.attachment.selected').forEach(li => li.classList.remove('selected'));
+                } catch (e) {} }""")
+            except Exception:
+                pass
+            # chờ thanh tab hiện
             for _w in range(40):
                 page.wait_for_timeout(200)
                 try:
-                    if page.locator(".media-frame-router .media-menu-item, .media-menu-item").count():
+                    if page.locator(".media-menu-item:visible").count():
                         break
                 except Exception:
                     pass
-            page.wait_for_timeout(400)
+            page.wait_for_timeout(300)
             # 2) BẮT BUỘC chọn tab "Tải lên tệp mới" (bấm + kiểm tra đã active, thử 3 lần)
             ok_tab = False
             for _try in range(3):
-                for sel in (".media-menu-item:has-text('Tải lên tệp mới')",
-                            "#menu-item-upload",
-                            "button.media-menu-item#menu-item-upload",
-                            ".media-frame-router .media-menu-item:has-text('Tải lên')",
-                            ".media-menu-item:has-text('Tải lên')"):
+                for sel in (".media-menu-item:has-text('Tải lên tệp mới'):visible",
+                            "#menu-item-upload:visible",
+                            "button.media-menu-item#menu-item-upload:visible",
+                            ".media-frame-router .media-menu-item:has-text('Tải lên'):visible",
+                            ".media-menu-item:has-text('Tải lên'):visible"):
                     try:
                         loc = page.locator(sel).first
                         if not loc.count():
                             continue
                         loc.click(timeout=6000)
-                        page.wait_for_timeout(700)
-                        if page.locator(
-                            ".media-menu-item.active:has-text('Tải lên'), #menu-item-upload.active,"
-                            " .media-menu-item.active:has-text('Upload')"
-                        ).count():
+                        page.wait_for_timeout(600)
+                        # KIỂM TRA: khung tải lên hiện HOẶC tab đã active
+                        if (page.locator(".uploader-inline:visible").count()
+                                or page.locator("#menu-item-upload.active,"
+                                                " .media-menu-item.active:has-text('Tải lên')").count()):
                             ok_tab = True
                             break
                     except Exception:
@@ -422,8 +465,18 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                     break
                 page.wait_for_timeout(500)
             if log:
-                log("  (đã bấm tab “Tải lên tệp mới”)" if ok_tab
-                    else "  ⚠ Chưa bấm được tab “Tải lên tệp mới”")
+                if ok_tab:
+                    log("  (đã bấm tab “Tải lên tệp mới”)")
+                else:
+                    try:
+                        tabs = page.evaluate(
+                            """() => Array.from(document.querySelectorAll('.media-menu-item'))
+                                .map(b => ((b.innerText || '').trim().slice(0, 24)) + '|' + (b.id || '')
+                                          + ((b.className || '').toString().indexOf('active') >= 0 ? '*' : ''))"""
+                        )
+                    except Exception:
+                        tabs = []
+                    log(f"  ⚠ Chưa bấm được tab “Tải lên tệp mới” | tab đang có: {tabs}")
             # 3) SAU KHI BẤM TAB -> chờ 0,2 giây rồi bấm chọn file
             page.wait_for_timeout(200)
             page.locator("input[type='file']").first.set_input_files(f)
@@ -476,7 +529,8 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
             elif log:
                 log(f"  (ảnh {Path(f).name}: không thấy bảng chi tiết)")
             # 6) chèn vào thư viện (đóng modal)
-            page.locator("button.media-button-select, .media-toolbar-primary .media-button-select").first.click(timeout=20000)
+            # nút "Thêm vào thư viện" — CHỈ nút trong modal ĐANG HIỆN
+            page.locator("button.media-button-select:visible, .media-toolbar-primary .media-button-select:visible").first.click(timeout=20000)
             page.wait_for_timeout(1500)
             done += 1
         except Exception as exc:      # noqa: BLE001
