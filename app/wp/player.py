@@ -368,101 +368,64 @@ def _sidebar_attach_id(page: Page) -> int:
 
 def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                                      expect: int = 0, log=None) -> int:
-    """Điền các ô CÒN TRỐNG cho ĐÚNG những ảnh VỪA UPLOAD (không đụng ảnh cũ trong thư viện).
+    """Điền các ô CÒN TRỐNG (Alt / Image Caption / Miêu tả) cho các ảnh VỪA UPLOAD.
 
-    - Ảnh vừa upload = ảnh có data-id LỚN HƠN mã lớn nhất trước khi upload.
-    - Không đọc được data-id -> lấy N ảnh đầu (thư viện xếp mới nhất trước).
-    - Ô nào đã có nội dung -> GIỮ NGUYÊN, chỉ điền ô trống.
+    DÙNG API CỦA WORDPRESS — TUYỆT ĐỐI KHÔNG BẤM VÀO ẢNH:
+    bấm vào ảnh là ĐỔI TRẠNG THÁI CHỌN -> bấm hết thì chỉ còn 1 ảnh được chọn
+    -> lúc "Thêm vào thư viện" chỉ chèn được 1 ảnh.
+
+    - Ảnh cần điền = các ảnh ĐANG ĐƯỢC CHỌN trong khung thư viện (ảnh vừa upload).
+    - Không có ảnh nào được chọn -> dự phòng N ảnh đầu (thư viện xếp mới nhất trước).
+    - Giá trị điền = TIÊU ĐỀ CỦA CHÍNH ẢNH (ô #attachment-details-title của ảnh đó).
+    - Ô nào đã có nội dung -> GIỮ NGUYÊN.
     """
     val = str(value or "").strip()
-    if not val:
-        return 0
+    js = """({val, expect}) => {
+        try {
+            if (!window.wp || !wp.media) return {err: 'khong co wp.media'};
+            let models = [];
+            const frame = wp.media.frame;
+            if (frame) {
+                const sel = frame.state().get('selection');
+                sel.each(m => models.push(m));
+            }
+            if (!models.length) {
+                // dự phòng: N ảnh đầu trong khung thư viện
+                const lis = Array.from(document.querySelectorAll('li.attachment'))
+                                 .slice(0, expect || 0);
+                models = lis.map(li => wp.media.attachment(li.getAttribute('data-id')))
+                            .filter(Boolean);
+            }
+            let done = 0;
+            models.forEach(m => {
+                const t = ((m.get('title') || '').trim()) || val;
+                if (!t) return;
+                const patch = {};
+                if (!((m.get('alt') || '').trim())) patch.alt = t;
+                if (!((m.get('caption') || '').trim())) patch.caption = t;
+                if (!((m.get('description') || '').trim())) patch.description = t;
+                if (Object.keys(patch).length) {
+                    m.set(patch);
+                    m.save();
+                    done += 1;
+                }
+            });
+            return {total: models.length, done: done};
+        } catch (e) { return {err: String(e)}; }
+    }"""
     try:
-        items = page.locator(".attachments .attachment, .attachment-preview")
-        total = items.count()
-    except Exception:
+        res = page.evaluate(js, {"val": val, "expect": int(expect or 0)}) or {}
+    except Exception as exc:      # noqa: BLE001
+        if log:
+            log(f"  (không điền được mô tả ảnh: {str(exc)[:80]})")
         return 0
-    rows: list[tuple[int, int, bool]] = []
-    for i in range(total):
-        try:
-            it = items.nth(i)
-            if not it.is_visible():
-                continue
-            did = int(it.get_attribute("data-id") or "0") or 0
-            try:      # ảnh ĐANG ĐƯỢC CHỌN (có dấu tick) -> class 'selected'
-                sel = bool(it.evaluate("el => el.classList.contains('selected')"))
-            except Exception:
-                sel = False
-        except Exception:
-            did, sel = 0, False
-        rows.append((i, did, sel))
-    # CHỌN ẢNH CẦN ĐIỀN: ưu tiên ảnh có class 'attachment selected' (= ảnh VỪA upload)
-    # -> không có thì theo mã ảnh mới -> cuối cùng là N ảnh đầu (thư viện xếp mới nhất trước)
-    targets = [i for i, _d, sel in rows if sel]
-    if not targets and min_id:
-        targets = [i for i, did, _s in rows if did and did > min_id]
-    if not targets and expect:
-        targets = [i for i, _d, _s in rows][:max(0, int(expect))]
-    done = 0
-    by_index = {i: did for i, did, _s in rows}
-    for i in targets:
-        try:
-            it = items.nth(i)
-            want_id = int(by_index.get(i) or 0)
-            try:
-                it.scroll_into_view_if_needed(timeout=3000)
-            except Exception:
-                pass
-            # BẤM LẦN LƯỢT từng ảnh (1 -> 2 -> 3 -> 4) cho tới khi bảng thông tin hiện ĐÚNG ảnh đó.
-            # Chỉ tin vào MÃ ẢNH đang hiện (link "Sửa" có post=<id>), KHÔNG dựa vào class 'details'
-            # (ảnh đang được chọn có thể có class 'details' mà bảng vẫn chưa hiện).
-            shown = False
-            for _try in range(3):
-                if want_id and _sidebar_attach_id(page) == want_id:
-                    shown = True                     # bảng đã hiện ĐÚNG ảnh này
-                    break
-                try:
-                    it.click(timeout=6000)
-                except Exception:
-                    pass
-                # CHỜ ô thông tin HIỆN LÊN (ưu tiên đúng mã ảnh; không đọc được mã thì chờ ô tiêu đề)
-                for _w in range(15):
-                    page.wait_for_timeout(200)
-                    cur = _sidebar_attach_id(page)
-                    if want_id and cur == want_id:
-                        shown = True
-                        break
-                    if not cur and page.locator("#attachment-details-title").count():
-                        shown = True
-                        break
-                if shown:
-                    break
-            if not shown:
-                continue
-            # TIÊU ĐỀ của CHÍNH ẢNH = giá trị ô #attachment-details-title (KHÔNG phải tên file)
-            try:
-                own = str(page.locator("#attachment-details-title").first
-                          .input_value(timeout=2000) or "").strip()
-            except Exception:
-                own = ""
-            use = own or val          # ảnh chưa có tiêu đề -> dùng giá trị dự phòng (tiêu đề bài viết)
-            for sel in _ATTACH_FIELDS:
-                loc = page.locator(sel).first
-                try:
-                    cur = str(loc.input_value(timeout=2000) or "").strip()
-                except Exception:
-                    cur = ""
-                if cur:
-                    continue                    # ô đã có nội dung -> KHÔNG ghi đè
-                try:
-                    loc.fill(use, timeout=6000)
-                except Exception:
-                    pass
-            done += 1
-        except Exception:
-            continue
+    total = int(res.get("total") or 0)
+    done = int(res.get("done") or 0)
     if log:
-        log(f"  (đã điền mô tả cho {done}/{len(targets)} ảnh VỪA upload — chỉ điền ô trống)")
+        if res.get("err"):
+            log(f"  (không điền được mô tả ảnh: {res['err'][:80]})")
+        else:
+            log(f"  (đã điền mô tả cho {done}/{total} ảnh vừa upload — chỉ điền ô trống)")
     return done
 
 
