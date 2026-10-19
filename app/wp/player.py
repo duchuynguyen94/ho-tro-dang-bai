@@ -387,7 +387,15 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                 continue
             # 1) mở modal thư viện
             page.locator("a.add_product_images, a:has-text('Thêm ảnh thư viện sản phẩm')").first.click(timeout=12000)
-            page.wait_for_timeout(1200)
+            # CHỜ modal hiện đủ (có thanh tab) rồi mới bấm tab — lần đầu modal mở chậm nên dễ bấm hụt
+            for _w in range(40):
+                page.wait_for_timeout(200)
+                try:
+                    if page.locator(".media-frame-router .media-menu-item, .media-menu-item").count():
+                        break
+                except Exception:
+                    pass
+            page.wait_for_timeout(400)
             # 2) BẮT BUỘC chọn tab "Tải lên tệp mới" (bấm + kiểm tra đã active, thử 3 lần)
             ok_tab = False
             for _try in range(3):
