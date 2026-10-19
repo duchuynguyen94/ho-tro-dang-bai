@@ -1147,3 +1147,32 @@ class ImageEditWorker(TrackedThread):
             traceback.print_exc()
             self.failed.emit(str(exc))
 
+
+
+class ModelsWorker(TrackedThread):
+    """Trích xuất Product Models từ link/file bằng chatbox ChatGPT (Project)."""
+
+    log = Signal(str)
+    ok = Signal(str)
+    failed = Signal(str)
+
+    def __init__(self, store, prompt: str, files: list | None = None) -> None:
+        super().__init__()
+        self.store = store
+        self.prompt = str(prompt or "")
+        self.files = list(files or [])
+
+    def run(self) -> None:      # noqa: D401
+        try:
+            from ..ai.chatgpt_browser import extract_product_models
+
+            cfg = self.store.ai_content or {}
+            pcfg = dict((cfg.get("providers") or {}).get("chatgpt") or {})
+            show = bool(pcfg.get("show_browser", False))
+            text = extract_product_models(
+                pcfg, self.prompt, self.files, log=self.log.emit, show_browser=show
+            )
+            self.ok.emit(str(text or ""))
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))

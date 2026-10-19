@@ -435,6 +435,7 @@ class JobsPage(QWidget):
     regenerate = Signal(object, str)         # (task, field)
     regenerate_images = Signal(object, str)  # (task, footer_mode)
     post = Signal(object)                    # (task)
+    models_extract = Signal()                # nút "Product Models" -> popup trích xuất
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
     refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
@@ -689,6 +690,14 @@ class JobsPage(QWidget):
         )
         self.seo_btn.hide()
         f.addWidget(self.seo_btn)                # ngay BÊN TRÁI nút "OK — Đăng bài"
+        self.models_btn = QPushButton("Product Models")
+        self.models_btn.setProperty("class", "ghost")
+        self.models_btn.setToolTip(
+            "Trích xuất danh sách Product Models từ link hoặc file (pdf/docx/ảnh)\n"
+            "bằng chatbox ChatGPT (dùng URL Project trong Cài đặt)."
+        )
+        self.models_btn.clicked.connect(lambda: self.models_extract.emit())
+        f.addWidget(self.models_btn)             # sát trái nút "OK — Đăng bài"
         self.post_btn = QPushButton("OK — Đăng bài")
         self.post_btn.setProperty("class", "green")
         self.post_btn.clicked.connect(self._emit_post)
@@ -819,7 +828,7 @@ class JobsPage(QWidget):
     def _busy_targets(self) -> list:
         """Các nút bị khoá khi có tiến trình chạy."""
         out = []
-        for name in ("post_btn", "seo_btn", "regen_all_btn", "retry_btn"):
+        for name in ("post_btn", "seo_btn", "regen_all_btn", "retry_btn", "models_btn"):
             b = getattr(self, name, None)
             if b is not None:
                 out.append(b)

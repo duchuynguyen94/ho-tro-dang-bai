@@ -1328,3 +1328,39 @@ def parse_json_response(text: str) -> dict:  # tương thích ngược
 
 
 
+
+
+# --------------------------------------------------------------------------- #
+# Trích xuất Product Models (nút "Product Models" — chatbox ChatGPT)
+# --------------------------------------------------------------------------- #
+MODELS_RULES = """Chỉ lấy các Product Models thực tế xuất hiện trong dữ liệu nguồn.
+Quy tắc: Chỉ trả về Product Models. Mỗi Product Model trên một dòng riêng.
+Không đánh số thứ tự. Không sử dụng bảng. Không thêm ký hiệu đầu dòng (-, •, *).
+Không thêm tiêu đề. Không thêm giải thích. Không thêm thông số kỹ thuật.
+Không thêm tên thương hiệu. Không tự tạo hoặc suy luận Product Model.
+Giữ nguyên chính tả và ký tự của Product Model. Loại bỏ các Product Models trùng lặp.
+Giữ nguyên thứ tự xuất hiện trong tài liệu nếu có thể.
+Output ví dụ:
+BI15U-EM30WDTC-AP6X
+BI10U-EM30WDTC-AP6X
+BI8U-EM30WDTC-AP6X
+BI5U-EM30WDTC-AP6X
+BI2U-EM30WDTC-AP6X
+BI15U-Q20-AP6X
+BI10U-Q20-AP6X
+BI8U-Q20-AP6X"""
+
+
+def build_models_prompt(urls: list, has_file: bool = False) -> str:
+    """Prompt trích xuất Product Models — câu mở đầu TÙY theo nguồn (link / file)."""
+    links = [str(u).strip() for u in (urls or []) if str(u).strip()]
+    if links:
+        src = " và ".join(links)
+        if has_file:
+            src += " và file đính kèm"
+        head = f"Trích xuất toàn bộ Product Models có trong dữ liệu trong {src}."
+    elif has_file:
+        head = "Trích xuất toàn bộ Product Models có trong dữ liệu trong file đính kèm."
+    else:
+        head = "Trích xuất toàn bộ Product Models có trong dữ liệu."
+    return f"{head}\n\n{MODELS_RULES}"

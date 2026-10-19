@@ -399,6 +399,17 @@ def _send(page, text: str) -> None:
         page.keyboard.type(text[:4000])
     page.wait_for_timeout(500)
 
+    # CHỜ nút "Send" SẴN SÀNG (file đính kèm có thể còn đang xử lý -> nút bị khoá)
+    try:
+        btn = page.locator('button[aria-label="Send"], button[aria-label="Gửi"]').last
+        if btn.count():
+            for _ in range(85):          # tối đa ~60 giây
+                if btn.is_enabled():
+                    break
+                page.wait_for_timeout(700)
+    except Exception:      # noqa: BLE001
+        pass
+
     # Gửi (thử nút Gửi, nếu không có thì Enter) + kiểm tra đã gửi
     for _ in range(4):
         _click_send(page)
@@ -666,4 +677,115 @@ def generate_two_step(pcfg: dict, content_prompt: str, seo_prompt: str,
         try:
             br.close()
         except Exception:
+            pass
+
+
+# --------------------------------------------------------------------------- #
+# Trích xuất Product Models (nút "Product Models") — dùng PROJECT + đính kèm file
+# --------------------------------------------------------------------------- #
+def _attach_files(page, files, log=None, timeout: float = 180.0) -> int:
+    """Đính kèm file vào CHATBOX ChatGPT (nút "Add files and more").
+
+    Trả về số file đã đính kèm. Chờ tới khi file hiện trong chatbox và không còn
+    trạng thái "đang tải lên".
+    """
+    from pathlib import Path as _Path
+
+    paths = [str(f) for f in (files or []) if f and _Path(f).exists()]
+    if not paths:
+        return 0
+    loc = None
+    for sel in ("form input[type=file][accept='']", "input[type=file][accept='']",
+                "form input[type=file]", "input[type=file]"):
+        try:
+            cand = page.locator(sel)
+            if cand.count():
+                loc = cand.last
+                break
+        except Exception:      # noqa: BLE001
+            continue
+    if loc is None:
+        raise AIError(
+            "Không thấy ô đính kèm file của ChatGPT. "
+            "Hãy mở ChatGPT bằng tay, đính kèm file rồi thử lại."
+        )
+    if log:
+        log(f"Đang đính kèm {len(paths)} file vào chatbox…")
+    loc.set_input_files(paths)
+    stems = [_Path(p).stem.lower()[:24] for p in paths]
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        page.wait_for_timeout(1000)
+        try:
+            body = page.evaluate("() => (document.body.innerText || '').toLowerCase()")
+        except Exception:      # noqa: BLE001
+            body = ""
+        uploading = any(k in body for k in ("uploading", "đang tải lên"))
+        got = sum(1 for s in stems if s and s in body)
+        if got >= len(stems) and not uploading:
+            page.wait_for_timeout(800)
+            if log:
+                log("Đã đính kèm xong file.")
+            return len(stems)
+    if log:
+        log("(Chưa chắc file đã tải xong — vẫn gửi yêu cầu)")
+    return len(stems)
+
+
+def _wait_plain_reply(page, prompt: str, timeout: int = 300,
+                      should_stop=None, log=None) -> str:
+    """Chờ câu trả lời dạng VĂN BẢN THƯỜNG (không cần JSON) viết xong."""
+    deadline = time.time() + timeout
+    last = ""
+    stable = 0
+    next_log = time.time() + 6.0
+    while time.time() < deadline:
+        if should_stop and should_stop():
+            raise AIError("Đã dừng theo yêu cầu.")
+        page.wait_for_timeout(1200)
+        text = _reply_text(page, prompt)
+        if log and time.time() >= next_log:
+            next_log = time.time() + 6.0
+            left = max(0, int(deadline - time.time()))
+            log(f"ChatGPT đang trả lời… đã nhận {len(text)} ký tự (còn tối đa {left}s)."
+                if text else f"Đang chờ ChatGPT trả lời… (còn tối đa {left}s).")
+        if text.strip():
+            if text == last and not _is_streaming(page):
+                stable += 1
+                if stable >= 2:
+                    return text
+            else:
+                stable = 0
+            last = text
+        if _limit_reached(page):
+            raise AIError(LIMIT_MSG)
+    if last.strip():
+        return last
+    raise AIError("ChatGPT không trả lời. Thử lại giúp.")
+
+
+def extract_product_models(pcfg: dict, prompt: str, files=None, log=None,
+                           timeout: int = 300, should_stop=None,
+                           show_browser: bool = False) -> str:
+    """Mở PROJECT ChatGPT -> đính kèm file (nếu có) -> gửi prompt -> lấy kết quả."""
+    from ..wp import WPBrowser
+
+    project_url = str((pcfg or {}).get("project_url", "") or "").strip()
+    if not project_url:
+        raise AIError(
+            "Chưa có URL Project. Vào Cài đặt → AI nội dung → ChatGPT "
+            "và dán URL Project rồi thử lại."
+        )
+    br = WPBrowser(headless=not show_browser, site_id="chatgpt", log=log)
+    try:
+        page = _open_page(br, project_url, log, should_stop)
+        _attach_files(page, files, log)
+        if log:
+            log("Đang gửi yêu cầu trích xuất Product Models…")
+        _send(page, prompt)
+        return _wait_plain_reply(page, prompt, timeout, should_stop, log=log)
+    finally:
+        try:
+            br.close()
+        except Exception:      # noqa: BLE001
             pass

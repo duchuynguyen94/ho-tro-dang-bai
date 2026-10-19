@@ -180,6 +180,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.cancel_task.connect(self._on_cancel_task)
         self.jobs_page.status_msg.connect(self.status)
         self.jobs_page.seo_json.connect(self._on_seo_json)
+        self.jobs_page.models_extract.connect(self._on_models_extract)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -696,6 +697,12 @@ class MainWindow(QMainWindow):
             pass
         self._log_err("Chia nhiều bài", err)
         show_toast(self, f"Chia bài lỗi: {str(err)[:80]}", 4000, ok=False)
+
+    def _on_models_extract(self) -> None:
+        """Nút "Product Models" -> popup trích xuất Product Models (ChatGPT Project)."""
+        from .widgets.models_dialog import ModelsDialog
+
+        ModelsDialog(self.store, self).exec()
 
     def _on_seo_json(self, task) -> None:
         """Nút "Tạo JSON SEO" (job trống): gọi AI tạo SEO từ NỘI DUNG đang soạn."""
