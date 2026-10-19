@@ -894,6 +894,8 @@ class ImageEditorPanel(QFrame):
         self._layout_products()
         self._layout_uploads()
         self._layout_watermark()
+        # PHÁT tín hiệu để app LƯU + ghép lại ảnh (trước đây thiếu -> đổi ảnh khác là mất)
+        self._emit_opts()
 
     def _emit_opts(self) -> None:
         self._emitting = True
