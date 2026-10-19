@@ -647,6 +647,10 @@ class PostWorker(TrackedThread):
                     "focus_keyword": self.result.get("focus_keyword", ""),
                     "description": self.result.get("description", ""),
                     "tags": self.result.get("tags", ""),
+                    "category_name": self.result.get("category_name", ""),
+                    "brand_name": self.result.get("brand_name", ""),
+                    "category": self.result.get("category_name", ""),
+                    "brand": self.result.get("brand_name", ""),
                     "__upload_files": uploads,
                 }
                 # cho phép kịch bản dùng {{image_1}}, {{image_2}}… để tải từng ảnh

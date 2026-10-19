@@ -159,6 +159,28 @@
       "force": false
     },
     {
+      "action": "taxonomy_pick",
+      "selector": "product_cat",
+      "selectors": [],
+      "value": "{{category_name}}",
+      "note": "Chọn DANH MỤC sản phẩm (chưa có thì tự thêm mới)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": ""
+    },
+    {
+      "action": "taxonomy_pick",
+      "selector": "product_brand",
+      "selectors": [],
+      "value": "{{brand_name}}",
+      "note": "Chọn THƯƠNG HIỆU (chưa có thì tự thêm mới)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": ""
+    },
+    {
       "action": "press",
       "selector": "#title",
       "selectors": [

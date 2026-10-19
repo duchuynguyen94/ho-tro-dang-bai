@@ -578,6 +578,20 @@ class JobsPage(QWidget):
         ev2.addLayout(self._field("Description (mô tả SEO)", self.desc_edit))
         self.tags_edit = QLineEdit()
         ev2.addLayout(self._field("Search tags (cách nhau bởi dấu phẩy)", self.tags_edit))
+        self.cat_edit = QLineEdit()
+        self.cat_edit.setPlaceholderText("VD: Cảm biến tiệm cận")
+        self.cat_edit.setToolTip(
+            "Chủng loại (danh mục sản phẩm) trên website.\n"
+            "Khi đăng: kịch bản tự chọn danh mục này; nếu website chưa có thì tự THÊM MỚI."
+        )
+        ev2.addLayout(self._field("Chủng loại (danh mục sản phẩm)", self.cat_edit))
+        self.brand_edit = QLineEdit()
+        self.brand_edit.setPlaceholderText("VD: Carlo Gavazzi")
+        self.brand_edit.setToolTip(
+            "Thương hiệu sản phẩm.\n"
+            "Khi đăng: kịch bản tự chọn thương hiệu; nếu website chưa có thì tự THÊM MỚI."
+        )
+        ev2.addLayout(self._field("Thương hiệu", self.brand_edit))
         self.content_edit = RichEditor()
         self.content_edit.changed.connect(self._sync_seo_btn)
         self.content_edit.changed.connect(self._queue_save)
@@ -977,6 +991,8 @@ class JobsPage(QWidget):
         self.kw_edit.setText(r.get("focus_keyword", ""))
         self.desc_edit.setPlainText(r.get("description", ""))
         self.tags_edit.setText(r.get("tags", ""))
+        self.cat_edit.setText(r.get("category_name", ""))
+        self.brand_edit.setText(r.get("brand_name", ""))
         self.content_edit.set_html(r.get("content_html", ""))
         self._loading = False             # nạp xong -> cho phép tự lưu lại
 
@@ -1849,7 +1865,8 @@ class JobsPage(QWidget):
         self._save_timer.setSingleShot(True)
         self._save_timer.setInterval(1000)
         self._save_timer.timeout.connect(self._autosave)
-        for w in (self.title_edit, self.kw_edit, self.desc_edit, self.tags_edit):
+        for w in (self.title_edit, self.kw_edit, self.desc_edit, self.tags_edit,
+                  self.cat_edit, self.brand_edit):
             try:
                 w.textChanged.connect(self._queue_save)
             except Exception:      # noqa: BLE001
@@ -1880,6 +1897,8 @@ class JobsPage(QWidget):
         r["focus_keyword"] = self.kw_edit.text()
         r["description"] = self.desc_edit.toPlainText()
         r["tags"] = self.tags_edit.text()
+        r["category_name"] = self.cat_edit.text()
+        r["brand_name"] = self.brand_edit.text()
         r["content_html"] = self.content_edit.get_html()
         self.store.upsert_task(self.current)
         self.store.save()

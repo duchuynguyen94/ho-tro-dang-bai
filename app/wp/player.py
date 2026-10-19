@@ -442,6 +442,154 @@ def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
     return len(done)
 
 
+def _norm_vn(s: str) -> str:
+    """Bỏ dấu + viết thường + gộp khoảng trắng (để so khớp tên danh mục/thương hiệu)."""
+    import unicodedata as _ud
+
+    t = _ud.normalize("NFD", str(s or "").lower())
+    t = "".join(ch for ch in t if _ud.category(ch) != "Mn")
+    t = t.replace("đ", "d")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+def _taxonomy_terms(page: Page, tax: str) -> list:
+    """Danh sách term hiện có trong hộp taxonomy: [{id, text, checked}]."""
+    try:
+        return page.evaluate(
+            """(tax) => {
+                const root = document.querySelector('#' + tax + 'checklist')
+                          || document.querySelector('#' + tax + 'div');
+                if (!root) return [];
+                const out = [];
+                root.querySelectorAll('li').forEach(li => {
+                    const inp = li.querySelector('input[type=checkbox]');
+                    const lab = li.querySelector('label');
+                    if (!inp || !lab) return;
+                    out.push({id: inp.id,
+                              text: (lab.innerText || '').replace(/\\s+/g, ' ').trim(),
+                              checked: !!inp.checked});
+                });
+                return out;
+            }""", tax) or []
+    except Exception:
+        return []
+
+
+def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=None) -> bool:
+    """Chọn 1 term trong hộp taxonomy của WooCommerce (product_cat / product_brand).
+
+    - Đã có trên web  -> tick đúng term (khớp KHÔNG DẤU, không phân biệt hoa thường).
+    - Chưa có         -> bấm "Thêm ... mới" -> điền tên -> bấm nút Thêm.
+    `name` rỗng -> bỏ qua bước.
+    """
+    name = str(name or "").strip()
+    label = label or tax
+    if not name:
+        if log:
+            log(f"  (bỏ qua {label} — để trống)")
+        return False
+    want = _norm_vn(name)
+
+    # 0) mở hộp metabox nếu đang thu gọn
+    try:
+        box = page.locator(f"#{tax}div").first
+        if box.count() and "closed" in (box.get_attribute("class") or ""):
+            try:
+                box.locator(".hndle").first.click(timeout=3000)
+                page.wait_for_timeout(300)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    def find():
+        terms = _taxonomy_terms(page, tax)
+        if not terms:
+            return None
+        for t in terms:
+            if _norm_vn(t["text"]) == want:
+                return t
+        for t in terms:
+            if _norm_vn(t["text"]).startswith(want):
+                return t
+        for t in terms:
+            if want in _norm_vn(t["text"]):
+                return t
+        return None
+
+    hit = find()
+    if hit is None:                      # thử tab "Tất cả" (nếu có) rồi tìm lại
+        try:
+            tab = page.locator(f"#{tax}-tab-all").first
+            if tab.count():
+                tab.click(timeout=3000)
+                page.wait_for_timeout(400)
+        except Exception:
+            pass
+        hit = find()
+
+    if hit:                              # ---- ĐÃ CÓ -> tick
+        try:
+            if not hit.get("checked"):
+                cb = page.locator("#" + str(hit["id"])).first
+                try:
+                    cb.check(force=True, timeout=4000)
+                except Exception:
+                    try:
+                        cb.click(force=True, timeout=4000)
+                    except Exception:
+                        page.locator(f"label[for='{hit['id']}']").first.click(timeout=4000)
+            page.wait_for_timeout(300)
+            if log:
+                log(f"  ({label}: đã chọn “{hit['text']}”)")
+            return True
+        except Exception as exc:          # noqa: BLE001
+            if log:
+                log(f"  ({label}: không tick được “{hit['text']}” — {str(exc)[:60]})")
+
+    # ---- CHƯA CÓ -> THÊM MỚI
+    try:
+        toggle = page.locator(f"#{tax}-add-toggle").first
+        if toggle.count():
+            try:
+                toggle.click(timeout=4000)
+                page.wait_for_timeout(400)
+            except Exception:
+                pass
+        inp = page.locator(f"#new{tax}").first
+        if not inp.count():
+            if log:
+                log(f"  ({label}: chưa có “{name}” và không thấy ô thêm mới — bỏ qua)")
+            return False
+        inp.fill(name, timeout=5000)
+        page.wait_for_timeout(200)
+        btn = page.locator(f"#{tax}-add-submit").first
+        if not btn.count():
+            if log:
+                log(f"  ({label}: không thấy nút Thêm — bỏ qua)")
+            return False
+        btn.click(timeout=6000)
+        for _ in range(25):              # chờ term mới hiện ra & được tick (tối đa ~7,5s)
+            page.wait_for_timeout(300)
+            m = next((t for t in _taxonomy_terms(page, tax) if _norm_vn(t["text"]) == want), None)
+            if m:
+                if not m.get("checked"):
+                    try:
+                        page.locator("#" + str(m["id"])).first.check(force=True, timeout=2000)
+                    except Exception:
+                        pass
+                if log:
+                    log(f"  ({label}: chưa có -> ĐÃ THÊM MỚI “{name}”)")
+                return True
+        if log:
+            log(f"  ({label}: đã bấm thêm “{name}” nhưng chưa thấy trong danh sách)")
+        return False
+    except Exception as exc:             # noqa: BLE001
+        if log:
+            log(f"  ({label}: lỗi thêm mới — {str(exc)[:70]})")
+        return False
+
+
 def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int:
     """Điền 4 ô của ảnh đang hiện (modal TRÊN CÙNG) — 1 lần, ưu tiên tiêu đề của chính ảnh."""
     return _fill_attachment_in_top_modal(page, value, log=log)
@@ -973,6 +1121,11 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("taxonomy_pick", "pick_term", "taxonomy_select"):
+                # Chọn danh mục / thương hiệu (chưa có thì THÊM MỚI)
+                tax = str(step.selector or "").strip() or "product_cat"
+                lab = "Thương hiệu" if "brand" in tax else "Danh mục"
+                pick_taxonomy_term(page, tax, render(step.value, ctx), label=lab, log=log)
             elif action in ("attachment_fields", "fill_attachment_now"):
                 # Điền 4 ô (Tiêu đề/Alt/Caption/Miêu tả) của ảnh đang hiện — MỘT LẦN
                 fill_current_attachment_fields(page, render(step.value or "{{title}}", ctx), log=log)

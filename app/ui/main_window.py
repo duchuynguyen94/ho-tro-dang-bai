@@ -232,7 +232,8 @@ class MainWindow(QMainWindow):
             # tạo sẵn ĐÚNG số ô ảnh đã chọn (để trống, chờ tải ảnh lên)
             slots = [{"path": "", "footer": ""} for _ in range(max(1, int(task.image_count or 3)))]
             task.result = {"title": "", "focus_keyword": "", "description": "",
-                           "tags": "", "content_html": "",
+                           "tags": "", "category_name": "", "brand_name": "",
+                           "content_html": "",
                            "images": slots, "image_opts_list": [{} for _ in slots],
                            "product_images": []}
             self.store.upsert_task(task)
@@ -340,7 +341,8 @@ class MainWindow(QMainWindow):
                 r = dict(fresh.result or {})
                 r.update({k: v for k, v in (result or {}).items()
                           if k in ("title", "focus_keyword", "description",
-                                   "tags", "content_html")})
+                                   "tags", "category_name", "brand_name",
+                                   "content_html")})
                 fresh.result = r
             else:
                 fresh.result = result
@@ -555,6 +557,7 @@ class MainWindow(QMainWindow):
             except Exception:      # noqa: BLE001
                 pass
             t.result = {"title": "", "focus_keyword": "", "description": "", "tags": "",
+                        "category_name": "", "brand_name": "",
                         "content_html": content, "images": slots,
                         "image_opts_list": [{} for _ in slots], "product_images": []}
             self.store.upsert_task(t)
@@ -634,7 +637,8 @@ class MainWindow(QMainWindow):
         if fresh is None:
             return
         r = fresh.result = dict(fresh.result or {})
-        for k in ("title", "description", "focus_keyword", "tags"):
+        for k in ("title", "description", "focus_keyword", "tags",
+                  "category_name", "brand_name"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
@@ -724,7 +728,8 @@ class MainWindow(QMainWindow):
         """Có JSON SEO -> điền vào Title / Description / Focus keyword / Tags."""
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
         r = fresh.result = dict(fresh.result or {})
-        for k in ("title", "description", "focus_keyword", "tags"):
+        for k in ("title", "description", "focus_keyword", "tags",
+                  "category_name", "brand_name"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v

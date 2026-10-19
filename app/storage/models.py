@@ -247,7 +247,7 @@ class Task:
     message: str = ""
     created_at: str = field(default_factory=now_iso)
     result: dict[str, Any] = field(default_factory=dict)
-    # result = {title, focus_keyword, description, tags, content_html,
+    # result = {title, focus_keyword, description, tags, category_name, brand_name, content_html,
     #           images:[{path, variant, footer}], brand_logo, product_images:[]}
 
     def to_dict(self) -> dict:
