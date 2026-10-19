@@ -368,66 +368,106 @@ def _sidebar_attach_id(page: Page) -> int:
 
 def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                                      expect: int = 0, log=None) -> int:
-    """Điền các ô CÒN TRỐNG (Alt / Image Caption / Miêu tả) cho các ảnh VỪA UPLOAD.
+    """Điền ô TRỐNG (Alt / Image Caption / Miêu tả) cho các ảnh VỪA UPLOAD.
 
-    DÙNG API CỦA WORDPRESS — TUYỆT ĐỐI KHÔNG BẤM VÀO ẢNH:
-    bấm vào ảnh là ĐỔI TRẠNG THÁI CHỌN -> bấm hết thì chỉ còn 1 ảnh được chọn
-    -> lúc "Thêm vào thư viện" chỉ chèn được 1 ảnh.
-
-    - Ảnh cần điền = các ảnh ĐANG ĐƯỢC CHỌN trong khung thư viện (ảnh vừa upload).
-    - Không có ảnh nào được chọn -> dự phòng N ảnh đầu (thư viện xếp mới nhất trước).
-    - Giá trị điền = TIÊU ĐỀ CỦA CHÍNH ẢNH (ô #attachment-details-title của ảnh đó).
-    - Ô nào đã có nội dung -> GIỮ NGUYÊN.
+    Cách làm (theo yêu cầu):
+    - Lấy các thẻ <li class="attachment selected"> (= ảnh vừa upload) -> BẤM LẦN LƯỢT từng cái.
+    - Mở bảng chi tiết -> lấy TIÊU ĐỀ CỦA CHÍNH ẢNH (ô #attachment-details-title)
+      -> điền vào các ô ĐANG TRỐNG (ô đã có nội dung thì giữ nguyên).
+    - Bấm xong PHẢI GIỮ ảnh trong danh sách đã chọn (class selected) -> "Thêm vào thư viện" mới chèn đủ ảnh.
     """
     val = str(value or "").strip()
-    js = """({val, expect}) => {
-        try {
-            if (!window.wp || !wp.media) return {err: 'khong co wp.media'};
-            const n = Math.max(parseInt(expect, 10) || 1, 1);
-            const models = [];
-            const seen = {};
-            const add = (m) => { if (m && m.id && !seen[m.id]) { seen[m.id] = 1; models.push(m); } };
-            // 1) ẢNH ĐANG ĐƯỢC CHỌN trong khung (ảnh vừa upload)
-            try {
-                const frame = wp.media.frame;
-                if (frame) frame.state().get('selection').each(add);
-            } catch (e) {}
-            // 2) BÙ THÊM cho đủ N ảnh: lấy các ảnh MỚI NHẤT trong khung thư viện
-            if (models.length < n) {
-                Array.from(document.querySelectorAll('li.attachment'))
-                     .forEach(li => { if (models.length < n) add(wp.media.attachment(li.getAttribute('data-id'))); });
-            }
-            const use = models.slice(0, n);
-            let done = 0;
-            use.forEach(m => {
-                const t = ((m.get('title') || '').trim()) || val;
-                if (!t) return;
-                const patch = {};
-                if (!((m.get('alt') || '').trim())) patch.alt = t;
-                if (!((m.get('caption') || '').trim())) patch.caption = t;
-                if (!((m.get('description') || '').trim())) patch.description = t;
-                if (Object.keys(patch).length) {
-                    m.set(patch);
-                    m.save();
-                    done += 1;
-                }
+    js_ids = """(expect) => {
+        const out = [];
+        document.querySelectorAll('li.attachment.selected').forEach(li => {
+            const id = li.getAttribute('data-id'); if (id) out.push(id);
+        });
+        if (!out.length) {          // không có ảnh nào được chọn -> lấy N ảnh đầu
+            document.querySelectorAll('li.attachment').forEach((li, i) => {
+                if (i < (expect || 0)) { const id = li.getAttribute('data-id'); if (id) out.push(id); }
             });
-            return {total: use.length, done: done, ids: use.map(m => m.id)};
-        } catch (e) { return {err: String(e)}; }
+        }
+        return out;
     }"""
     try:
-        res = page.evaluate(js, {"val": val, "expect": int(expect or 0)}) or {}
-    except Exception as exc:      # noqa: BLE001
+        ids = list(page.evaluate(js_ids, int(expect or 0)) or [])
+    except Exception:
+        ids = []
+    if not ids:
         if log:
-            log(f"  (không điền được mô tả ảnh: {str(exc)[:80]})")
+            log("  (không thấy ảnh nào vừa upload để điền mô tả)")
         return 0
-    total = int(res.get("total") or 0)
-    done = int(res.get("done") or 0)
+
+    fields = ("#attachment-details-title", "#attachment-details-alt-text",
+              "#attachment-details-caption", "#attachment-details-description")
+    done = 0
+    for tid in ids:
+        try:
+            # 1) Bấm vào ảnh (chỉ khi bảng chưa hiện đúng ảnh này)
+            shown = False
+            for _try in range(3):
+                if _sidebar_attach_id(page) == int(tid):
+                    shown = True
+                    break
+                try:
+                    page.evaluate("""(id) => { const li = Array.from(document.querySelectorAll('li.attachment'))
+                        .find(x => x.getAttribute('data-id') === id); if (li) li.click(); }""", tid)
+                except Exception:
+                    pass
+                for _w in range(15):
+                    page.wait_for_timeout(200)
+                    if _sidebar_attach_id(page) == int(tid):
+                        shown = True
+                        break
+                    if not _sidebar_attach_id(page) and page.locator("#attachment-details-title").count():
+                        shown = True
+                        break
+                if shown:
+                    break
+            if not shown:
+                continue
+            # 2) Tiêu đề CỦA CHÍNH ẢNH -> điền các ô ĐANG TRỐNG
+            try:
+                own = str(page.locator("#attachment-details-title").first.input_value(timeout=2000) or "").strip()
+            except Exception:
+                own = ""
+            use = own or val
+            patch = {}
+            for sel in fields:
+                loc = page.locator(sel).first
+                try:
+                    cur = str(loc.input_value(timeout=2000) or "").strip()
+                except Exception:
+                    cur = ""
+                if cur:
+                    continue                     # ô đã có nội dung -> giữ nguyên
+                try:
+                    loc.fill(use, timeout=6000)
+                    if sel.endswith("-alt-text"):
+                        patch["alt"] = use
+                    elif sel.endswith("-caption"):
+                        patch["caption"] = use
+                    elif sel.endswith("-description"):
+                        patch["description"] = use
+                    else:
+                        patch["title"] = use
+                except Exception:
+                    pass
+            # 3) Lưu qua API (chắc ăn) + GIỮ ảnh trong danh sách đã chọn
+            try:
+                page.evaluate("""([id, patch]) => { try {
+                    const m = wp.media.attachment(id);
+                    if (Object.keys(patch).length) { m.set(patch); m.save(); }
+                    const f = wp.media.frame;
+                    if (f) { const sel = f.state().get('selection'); sel.add(m); }
+                } catch (e) {} }""", [str(tid), patch])
+            except Exception:
+                pass
+            done += 1
+        except Exception:
+            continue
     if log:
-        if res.get("err"):
-            log(f"  (không điền được mô tả ảnh: {res['err'][:80]})")
-        else:
-            log(f"  (đã điền mô tả cho {done}/{total} ảnh vừa upload — chỉ điền ô trống)")
+        log(f"  (đã điền mô tả cho {done}/{len(ids)} ảnh vừa upload — chỉ điền ô trống)")
     return done
 
 
