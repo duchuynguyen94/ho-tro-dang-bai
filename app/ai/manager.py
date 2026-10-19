@@ -1145,6 +1145,14 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
     body = re.sub(r"<[^>]+>", " ", content_html or "")
     body = re.sub(r"\s+", " ", body).strip()[:6000]
 
+    if not with_rule:
+        # CHATGPT: prompt GỌN — mọi chi tiết nằm trong rule_seo.pdf của Project
+        head = ('Tạo một khối JSON thông tin SEO được tạo DỰA TRÊN NỘI DUNG BÀI VIẾT bên dưới '
+                'và theo rule trong file "rule_seo.pdf" bao gồm '
+                '{title, description, focus_keyword, tags}\n')
+        return (f"{head}Không giải thích gì thêm.\n"
+                f"\n=== NỘI DUNG BÀI VIẾT ===\n{body}\n")
+
     head = (
         "Tạo 1 khối JSON thông tin SEO theo file rule_seo.pdf đã đính kèm (sources) trong "
         "Project này bao gồm: title, focus_keyword, description, tags\n"
@@ -1166,11 +1174,8 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         "phương/tiếng Việt thông dụng; thông tin công ty\n"
     )
 
-    rule_block = ""
-    if with_rule:
-        seo_rule = read_rule(rule_path(rules, "seo"))
-        if seo_rule:
-            rule_block = f"\n=== RULE SEO (rule_seo.pdf) ===\n{seo_rule}\n"
+    seo_rule = read_rule(rule_path(rules, "seo"))
+    rule_block = f"\n=== RULE SEO (rule_seo.pdf) ===\n{seo_rule}\n" if seo_rule else ""
 
     return (f"{head}{rule_block}\nKhông giải thích gì thêm.\n"
             f"\n=== NỘI DUNG BÀI VIẾT ===\n{body}\n")
