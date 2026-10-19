@@ -189,7 +189,7 @@
         "button.edit-slug",
         "button:has-text('Chỉnh sửa')"
       ],
-      "value": "",
+      "value": "#new-post-slug",
       "note": "Bấm “Chỉnh sửa” cạnh đường dẫn",
       "source": "auto",
       "optional": true,
@@ -205,7 +205,7 @@
       "value": "{{slug}}",
       "note": "Điền đường dẫn (slug) từ tiêu đề — dưới 60 ký tự",
       "source": "auto",
-      "optional": false,
+      "optional": true,
       "force": false
     },
     {
@@ -220,7 +220,7 @@
       "value": "",
       "note": "Bấm “Đồng ý” để chốt đường dẫn (BẮT BUỘC)",
       "source": "auto",
-      "optional": false,
+      "optional": true,
       "force": false
     },
     {

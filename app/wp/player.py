@@ -110,7 +110,10 @@ def _fallbacks_for(step: ScriptStep) -> list[str]:
     """Gợi ý thêm selector theo từ khoá trong kịch bản (tiêu đề / nội dung)."""
     text = " ".join([step.selector or "", *(step.selectors or []), step.note or ""]).lower()
     out: list[str] = []
-    if "title" in text or "tiêu đề" in text or "tieu de" in text:
+    # Bước về ĐƯỜNG DẪN (slug) -> TUYỆT ĐỐI không dùng dự phòng ô Tiêu đề
+    # (trước đây gõ nhầm slug vào ô tiêu đề khi ô đường dẫn chưa mở)
+    is_slug = any(k in text for k in ("slug", "đường dẫn", "duong dan", "permalink"))
+    if not is_slug and ("title" in text or "tiêu đề" in text or "tieu de" in text):
         out += TITLE_FALLBACKS
     if ("content" in text or "nội dung" in text or "noi dung" in text
             or "body" in text or "editor" in text):
@@ -486,7 +489,33 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 else:
                     _locate(page, step).click()
             elif action == "click":
-                _locate(page, step).click(force=bool(step.force), timeout=15000)
+                loc = _locate(page, step)
+                check = str(step.value or "").strip()      # value = selector KIỂM TRA (nếu có)
+                if not check:
+                    loc.click(force=bool(step.force), timeout=15000)
+                else:
+                    # Bấm rồi KIỂM TRA phần tử cần mở đã hiện chưa -> chưa hiện thì bấm lại (tối đa 3 lần)
+                    done = False
+                    for _try in range(3):
+                        try:
+                            loc.click(force=bool(step.force), timeout=15000)
+                        except Exception:
+                            pass
+                        page.wait_for_timeout(500)
+                        try:
+                            tgt = _make(page, check)
+                            n = min(tgt.count(), 5)
+                            if any(tgt.nth(i).is_visible() for i in range(n)):
+                                done = True
+                                break
+                        except Exception:
+                            pass
+                        try:
+                            loc = _locate(page, step)          # tìm lại nút (DOM có thể đổi)
+                        except Exception:
+                            pass
+                    if not done and log:
+                        log(f"  (bấm “{step.note or 'nút'}” nhưng chưa thấy {check} — đi tiếp)")
             elif action == "type":
                 value = render(step.value, ctx)
                 try:
