@@ -288,6 +288,8 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
             f"Mỗi nội dung ngăn cách nhau theo kiểu ví dụ: === Nội dung  1 ===, === Nội dung 2 ===\n"
             f'Mỗi nội dung bài viết nằm trong 1 block và rule là  "HTML" theo “TEMPLATE” '
             f"trong file “rule_content.pdf”.\n"
+            f"KHÔNG tạo thông tin SEO và KHÔNG trả về JSON — chỉ trả về nội dung HTML "
+            f"của từng nhóm.\n"
             f"Không giải thích gì thêm.\n"
         )
 
