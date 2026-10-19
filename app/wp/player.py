@@ -433,14 +433,27 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
             for _ in range(12):
                 cur = _sidebar_attach_id(page)
                 if want_id and cur and cur == want_id:
-                    shown = True
+                    shown = True                    # bảng đang hiện ĐÚNG ảnh này
                     break
-                if not want_id and page.locator("#attachment-details-title").count():
-                    shown = True
-                    break
+                if not cur:
+                    # Không đọc được mã ảnh -> dùng dấu hiệu: ảnh có class 'details' + ô tiêu đề đã hiện
+                    try:
+                        if (it.evaluate("el => el.classList.contains('details')")
+                                and page.locator("#attachment-details-title").count()):
+                            shown = True
+                            break
+                    except Exception:
+                        pass
                 page.wait_for_timeout(200)
             if not shown:
                 continue
+            # TIÊU ĐỀ của CHÍNH ẢNH = giá trị ô #attachment-details-title (KHÔNG phải tên file)
+            try:
+                own = str(page.locator("#attachment-details-title").first
+                          .input_value(timeout=2000) or "").strip()
+            except Exception:
+                own = ""
+            use = own or val          # ảnh chưa có tiêu đề -> dùng giá trị dự phòng (tiêu đề bài viết)
             for sel in _ATTACH_FIELDS:
                 loc = page.locator(sel).first
                 try:
@@ -450,7 +463,7 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
                 if cur:
                     continue                    # ô đã có nội dung -> KHÔNG ghi đè
                 try:
-                    loc.fill(val, timeout=6000)
+                    loc.fill(use, timeout=6000)
                 except Exception:
                     pass
             done += 1
