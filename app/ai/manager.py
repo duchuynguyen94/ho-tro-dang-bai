@@ -211,7 +211,7 @@ Sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Pr
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 
  Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf”.
- Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra.
+ Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra và theo rule trong file "rule_seo.pdf" bao gồm {{title, description, focus_keyword, tags}}
 
 Không giải thích gì thêm."""
 
