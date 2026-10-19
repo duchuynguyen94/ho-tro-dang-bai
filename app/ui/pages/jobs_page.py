@@ -237,6 +237,24 @@ def info_state(task) -> tuple[bool, list[str]]:
     return (not missing), missing
 
 
+def _row_title(task, srcs: list[str]) -> str:
+    """Tiêu đề item bên trái.
+
+    - Job BLANK (không link): lấy Ô TIÊU ĐỀ (panel phải); rỗng -> "(blank)".
+    - Job thường: link nguồn; không có link -> "(blank)".
+    """
+    kind = str(getattr(task, "kind", "") or "")
+    r = task.result or {}
+    if kind == "blank":
+        return str(r.get("title") or "").strip() or "(blank)"
+    if srcs:
+        t = srcs[0]
+        if len(srcs) > 1:
+            t = f"{t}  (+{len(srcs) - 1})"
+        return t
+    return str(r.get("title") or "").strip() or "(blank)"
+
+
 class TaskRow(QFrame):
     """1 dòng trong danh sách công việc (có nút xoá)."""
 
@@ -264,21 +282,20 @@ class TaskRow(QFrame):
         srcs = [u for u in (getattr(task, "source_urls", None) or []) if u]
         if not srcs and task.source_url:
             srcs = [task.source_url]
+        # TIÊU ĐỀ ITEM: job CHIA -> "Bài N - link"; job BLANK -> Ô Tiêu đề (rỗng -> "(blank)")
         if split_no > 0:
-            # job được CHIA từ 1 link -> "Bài N - link nguồn"
-            title_text = f"Bài {split_no} - {task.source_url or '(chưa có link)'}"
+            title_text = f"Bài {split_no} - {task.source_url or '(blank)'}"
             purple = True
         elif is_blank:
-            title_text = task.source_url or "(chưa có link)"
+            title_text = _row_title(task, srcs)
             purple = True
         else:
-            title_text = srcs[0] if srcs else "(chưa có link)"
-            if len(srcs) > 1:
-                title_text = f"{title_text}  (+{len(srcs) - 1})"      # nhiều link nguồn
+            title_text = _row_title(task, srcs)
             purple = False
         url = QLabel(title_text)
         url.setObjectName("taskTitleBlank" if purple else "taskTitle")
         url.setWordWrap(True)
+        self.title_lbl = url                    # để cập nhật lại khi đổi ô Tiêu đề
         v.addWidget(url)
 
         # DÒNG TRẠNG THÁI (1 nhãn duy nhất — cập nhật lại được khi thông tin thay đổi):
@@ -345,6 +362,23 @@ class TaskRow(QFrame):
             st.unpolish(self)
             st.polish(self)
             self.update()
+        except Exception:      # noqa: BLE001
+            pass
+
+    def refresh_title(self) -> None:
+        """Cập nhật TIÊU ĐỀ item (job blank -> lấy theo ô Tiêu đề; rỗng -> "(blank)")."""
+        task = getattr(self, "_task", None)
+        lbl = getattr(self, "title_lbl", None)
+        if task is None or lbl is None:
+            return
+        try:
+            split_no = int(getattr(self, "_split_no", 0) or 0)
+            if split_no > 0:
+                return                       # job CHIA -> giữ "Bài N - link"
+            srcs = [u for u in (getattr(task, "source_urls", None) or []) if u]
+            if not srcs and task.source_url:
+                srcs = [task.source_url]
+            lbl.setText(_row_title(task, srcs))
         except Exception:      # noqa: BLE001
             pass
 
@@ -1180,6 +1214,7 @@ class JobsPage(QWidget):
             try:
                 row._task = t
                 row.refresh_info()
+                row.refresh_title()      # đổi ô Tiêu đề -> đổi luôn tiêu đề item bên trái
             except Exception:      # noqa: BLE001
                 continue
 
