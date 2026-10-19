@@ -116,11 +116,11 @@
     },
     {
       "action": "tagify",
-      "selector": ".rank-math-focus-keyword .tagify__input",
+      "selector": "#rank_math_metabox .rank-math-focus-keyword .tagify__input",
       "selectors": [
         "#rank_math_metabox .rank-math-focus-keyword .tagify__input",
-        ".rank-math-focus-keyword .tagify__input",
         "#rank_math_metabox .tagify__input",
+        ".rank-math-focus-keyword .tagify__input",
         ".tagify__input"
       ],
       "value": "{{focus_keyword}}",
