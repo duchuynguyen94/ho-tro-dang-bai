@@ -357,6 +357,89 @@
       "source": "auto",
       "optional": false,
       "force": false
+    },
+    {
+      "action": "click",
+      "selector": "a.add_product_images",
+      "selectors": [
+        "a.add_product_images",
+        "#product_images_container a.add_product_images",
+        "a:has-text('Thêm ảnh thư viện sản phẩm')",
+        ".add_product_images"
+      ],
+      "value": "",
+      "note": "AI hình 2+ → bấm “Thêm ảnh thư viện sản phẩm”",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "click",
+      "selector": ".media-menu-item:has-text('Tải lên tệp mới')",
+      "selectors": [
+        ".media-menu-item:has-text('Tải lên tệp mới')",
+        "#menu-item-upload",
+        "button.media-menu-item#menu-item-upload"
+      ],
+      "value": "",
+      "note": "Chọn tab “Tải lên tệp mới” (thư viện)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "upload",
+      "selector": "input[type='file']",
+      "selectors": [
+        "input[type='file']",
+        ".moxie-shim input[type='file']",
+        ".media-upload-form input[type='file']"
+      ],
+      "value": "{{image_2}}|{{image_3}}|{{image_4}}|{{image_5}}|{{image_6}}|{{image_7}}|{{image_8}}",
+      "note": "Tải các ảnh còn lại lên (ảnh 2,3,4,5…)",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "wait",
+      "selector": "",
+      "selectors": [],
+      "value": "4",
+      "note": "Chờ ảnh tải lên xong",
+      "source": "auto",
+      "optional": false,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "attachment_fields_uploaded",
+      "selector": "",
+      "selectors": [],
+      "value": "{{title}}",
+      "note": "Điền tiêu đề bài viết vào các ô TRỐNG của ẢNH VỪA UPLOAD",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
+    },
+    {
+      "action": "click",
+      "selector": "button.media-button-select",
+      "selectors": [
+        "button.media-button-select",
+        ".media-toolbar-primary .media-button-select",
+        "button:has-text('Thêm vào thư viện')"
+      ],
+      "value": "",
+      "note": "Thêm vào thư viện ảnh sản phẩm",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": "{{image_2}}"
     }
   ]
 }

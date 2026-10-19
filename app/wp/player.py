@@ -353,6 +353,75 @@ def fill_all_attachment_fields(page: Page, value: str, log=None) -> int:
     return done
 
 
+def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
+                                     expect: int = 0, log=None) -> int:
+    """Điền các ô CÒN TRỐNG cho ĐÚNG những ảnh VỪA UPLOAD (không đụng ảnh cũ trong thư viện).
+
+    - Ảnh vừa upload = ảnh có data-id LỚN HƠN mã lớn nhất trước khi upload.
+    - Không đọc được data-id -> lấy N ảnh đầu (thư viện xếp mới nhất trước).
+    - Ô nào đã có nội dung -> GIỮ NGUYÊN, chỉ điền ô trống.
+    """
+    val = str(value or "").strip()
+    if not val:
+        return 0
+    try:
+        items = page.locator(".attachments .attachment, .attachment-preview")
+        total = items.count()
+    except Exception:
+        return 0
+    rows: list[tuple[int, int]] = []
+    for i in range(total):
+        try:
+            it = items.nth(i)
+            if not it.is_visible():
+                continue
+            did = int(it.get_attribute("data-id") or "0") or 0
+        except Exception:
+            did = 0
+        rows.append((i, did))
+    targets = [i for i, did in rows if min_id and did and did > min_id]
+    if not targets and expect:
+        targets = [i for i, _d in rows][:max(0, int(expect))]
+    done = 0
+    for i in targets:
+        try:
+            it = items.nth(i)
+            try:
+                it.scroll_into_view_if_needed(timeout=3000)
+            except Exception:
+                pass
+            it.click(timeout=6000)
+            shown = False
+            for _ in range(12):
+                try:
+                    if page.locator("#attachment-details-title").count():
+                        shown = True
+                        break
+                except Exception:
+                    pass
+                page.wait_for_timeout(200)
+            if not shown:
+                continue
+            for sel in _ATTACH_FIELDS:
+                loc = page.locator(sel).first
+                try:
+                    cur = str(loc.input_value(timeout=2000) or "").strip()
+                except Exception:
+                    cur = ""
+                if cur:
+                    continue                    # ô đã có nội dung -> KHÔNG ghi đè
+                try:
+                    loc.fill(val, timeout=6000)
+                except Exception:
+                    pass
+            done += 1
+        except Exception:
+            continue
+    if log:
+        log(f"  (đã điền mô tả cho {done}/{len(targets)} ảnh VỪA upload — chỉ điền ô trống)")
+    return done
+
+
 def _tagify_committed(loc, value: str) -> bool:
     """Ô tagify ĐÃ nhận giá trị chưa? (đọc tag hiển thị + input ẩn trong hộp .tagify)."""
     v = str(value or "").strip().lower()
@@ -576,6 +645,12 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("attachment_fields_uploaded", "fill_attachment_uploaded"):
+                # Điền ô TRỐNG cho ĐÚNG những ảnh VỪA upload (không đụng ảnh cũ trong thư viện)
+                fill_uploaded_attachment_fields(
+                    page, render(step.value or "{{title}}", ctx),
+                    int(ctx.get("__max_attach_id") or 0),
+                    int(ctx.get("__uploaded_count") or 0), log=log)
             elif action in ("attachment_fields_all", "fill_attachment_all"):
                 # Điền 4 ô mô tả ảnh cho TẤT CẢ ảnh trong khung thư viện (ảnh 2, 3, 4…)
                 fill_all_attachment_fields(page, render(step.value or "{{title}}", ctx), log=log)
@@ -684,6 +759,18 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                         log("  (bỏ qua: không có ảnh cho bước này)")
                     time.sleep(delay)
                     continue
+                try:      # ghi lại MỐC trước khi upload (để biết ảnh nào là ảnh MỚI)
+                    mx = page.evaluate(
+                        """() => { let mx = 0;
+                            document.querySelectorAll('.attachments .attachment, .attachment-preview')
+                                .forEach(el => { const id = parseInt(el.getAttribute('data-id') || '0', 10) || 0;
+                                                 if (id > mx) mx = id; });
+                            return mx; }"""
+                    )
+                    ctx["__max_attach_id"] = int(mx or 0)
+                    ctx["__uploaded_count"] = len(vals)
+                except Exception:
+                    pass
                 _locate(page, step).set_input_files(vals)
             elif action == "press":
                 _locate(page, step).press(render(step.value or "Enter", ctx))
