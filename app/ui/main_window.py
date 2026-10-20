@@ -714,8 +714,14 @@ class MainWindow(QMainWindow):
             fresh = next((t for t in self.store.tasks if t.id == task_id), None)
             return str(((fresh.result if fresh else None) or {}).get("content_html") or "")
 
+        links = ([] if (getattr(task, "kind", "") or "") == "blank"
+                 else (list(getattr(task, "source_urls", []) or [])
+                       or ([task.source_url] if getattr(task, "source_url", "") else [])))
+        r0 = next((t for t in self.store.tasks if t.id == task_id), task).result or {}
         ModelsDialog(self.store, task_id, get_content=_content,
-                     apply_content=self._apply_models_content, parent=self).exec()
+                     apply_content=self._apply_models_content, parent=self,
+                     links_prefill=links,
+                     brand=str(r0.get("brand_name") or "")).exec()
 
     def _apply_models_content(self, task_id: str, new_html: str) -> None:
         """Ghi nội dung mới (đã chèn Product Models) vào công việc + cập nhật ô Nội dung."""

@@ -16,45 +16,53 @@ from ..workers import ModelsWorker
 FILE_FILTER = ("Tài liệu (*.pdf *.docx *.doc *.txt *.png *.jpg *.jpeg *.webp);;"
                "Tất cả tệp (*)")
 
-# tiêu đề <h2> được coi là mục FAQ
-FAQ_KEYS = ("faq", "hỏi đáp", "hỏi & đáp", "câu hỏi thường gặp", "câu hỏi đáp")
+# Số mã TỐI ĐA khi chèn vào nội dung
+MAX_INSERT = 20
 
 
 def _plain(text: str) -> str:
-    """Bỏ thẻ HTML + viết thường + gộp khoảng trắng."""
+    """Bỏ thẻ HTML + giải mã thực thể + viết thường + gộp khoảng trắng."""
     t = re.sub(r"<[^>]+>", " ", str(text or ""))
-    t = unescape(t)                       # "&amp;" -> "&" (để khớp "Hỏi & Đáp")
+    t = unescape(t)
     t = re.sub(r"\s+", " ", t).strip().lower()
     return t
 
 
-def insert_models_before_faq(html_text: str, models: list[str]) -> tuple[str, bool]:
-    """Chèn <ul><li>model</li>…</ul> NGAY TRƯỚC <h2> mục FAQ.
+def insert_models_block(html_text: str, models: list[str]) -> tuple[str, str, int]:
+    """Chèn <ul><li>model</li>…</ul> vào nội dung.
 
-    Không có mục FAQ -> chèn vào CUỐI BÀI.
-    Trả về (html mới, có_tìm_thấy_FAQ?).
+    - Ưu tiên: NGAY TRƯỚC <h2> thứ 4.
+    - Không có h2 thứ 4 -> trước <h2> thứ 3.
+    - Không có h2 thứ 3 -> CUỐI BÀI.
+    - Chỉ chèn TỐI ĐA 20 mã đầu.
+    Trả về (html mới, mô tả vị trí, số mã đã chèn).
     """
     html_text = str(html_text or "")
-    items = [str(m).strip() for m in (models or []) if str(m).strip()]
+    items = [str(m).strip() for m in (models or []) if str(m).strip()][:MAX_INSERT]
     if not items:
-        return html_text, False
+        return html_text, "", 0
     block = "<ul>" + "".join(f"<li>{_esc(m)}</li>" for m in items) + "</ul>"
-    for m in re.finditer(r"<h2\b[^>]*>(.*?)</h2>", html_text, re.I | re.S):
-        head = _plain(m.group(1))
-        if any(k in head for k in FAQ_KEYS):
-            i = m.start()
-            return html_text[:i] + block + "\n" + html_text[i:], True
-    tail = html_text.rstrip()
-    return (tail + ("\n" if tail else "") + block), False
+    heads = list(re.finditer(r"<h2\b[^>]*>.*?</h2>", html_text, re.I | re.S))
+    if len(heads) >= 4:
+        i, pos = heads[3].start(), "TRƯỚC <h2> thứ 4"
+    elif len(heads) == 3:
+        i, pos = heads[2].start(), "TRƯỚC <h2> thứ 3"
+    else:
+        tail = html_text.rstrip()
+        return (tail + ("\n" if tail else "") + block), "CUỐI BÀI", len(items)
+    return html_text[:i] + block + "\n" + html_text[i:], pos, len(items)
 
 
 class ModelsDialog(QDialog):
     """Ô link + ô chọn file -> nút Xuất -> hiện danh sách Product Models."""
 
     def __init__(self, store, task_id: str = "", get_content=None,
-                 apply_content=None, parent=None) -> None:
+                 apply_content=None, parent=None,
+                 links_prefill=None, brand: str = "") -> None:
         super().__init__(parent)
         self.store = store
+        self.brand = str(brand or "").strip()
+        self._prefill = [str(u).strip() for u in (links_prefill or []) if str(u).strip()]
         self.file_path = ""
         self._worker = None
         self.task_id = str(task_id or "")
@@ -77,6 +85,8 @@ class ModelsDialog(QDialog):
         self.links = QPlainTextEdit()
         self.links.setPlaceholderText("https://…")
         self.links.setFixedHeight(76)
+        if self._prefill:
+            self.links.setPlainText("\n".join(self._prefill))
         root.addWidget(self.links)
 
         row = QHBoxLayout()
@@ -118,11 +128,12 @@ class ModelsDialog(QDialog):
         self.copy_btn.setProperty("class", "ghost")
         self.copy_btn.clicked.connect(self._copy)
         foot.addWidget(self.copy_btn)
-        self.insert_btn = QPushButton("Chèn trên FAQ")
+        self.insert_btn = QPushButton("Chèn vào nội dung")
         self.insert_btn.setProperty("class", "ghost")
         self.insert_btn.setToolTip(
-            "Chèn danh sách mã ở trên vào NỘI DUNG của công việc đang mở,\n"
-            "ngay TRƯỚC thẻ <h2> của mục FAQ (không có FAQ thì chèn cuối bài)."
+            "Chèn danh sách mã ở trên vào NỘI DUNG của công việc đang mở:\n"
+            "ngay TRƯỚC <h2> thứ 4 (không có thì trước <h2> thứ 3, không có nữa thì cuối bài).\n"
+            f"Tối đa {MAX_INSERT} mã."
         )
         self.insert_btn.clicked.connect(self._insert_to_content)
         foot.addWidget(self.insert_btn)
@@ -182,6 +193,8 @@ class ModelsDialog(QDialog):
 
     def _on_ok(self, text: str) -> None:
         rows = [ln.strip() for ln in str(text or "").splitlines() if ln.strip()]
+        if self.brand:                     # thêm THƯƠNG HIỆU trước mỗi mã
+            rows = [f"{self.brand} {r}" for r in rows]
         self.out.setPlainText("\n".join(rows))
         self.status.setText(f"Xong — {len(rows)} Product Models")
         show_toast(self, f"Đã trích xuất {len(rows)} Product Models", 2600)
@@ -210,14 +223,9 @@ class ModelsDialog(QDialog):
         if not str(cur).strip():
             show_toast(self, "Công việc chưa có nội dung", 2600, ok=False)
             return
-        new_html, found = insert_models_before_faq(cur, models)
+        new_html, pos, n = insert_models_block(cur, models)
         self._apply_content(self.task_id, new_html)
-        show_toast(
-            self,
-            ("Đã chèn %d mã TRÊN mục FAQ" % len(models)) if found
-            else ("Không thấy mục FAQ — đã chèn %d mã vào cuối bài" % len(models)),
-            3000,
-        )
+        show_toast(self, f"Đã chèn {n} mã ({pos})", 3000)
 
     def _copy(self) -> None:
         text = self.out.toPlainText().strip()
