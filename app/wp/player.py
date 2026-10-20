@@ -523,11 +523,52 @@ def pick_taxonomy_terms(page: Page, tax: str, raw: str, label: str = "",
     return done
 
 
+def _ensure_tax_box_open(page: Page, tax: str, timeout: float = 6.0) -> None:
+    """Mở hộp taxonomy (nếu đang thu gọn) — bỏ class 'closed' + bấm tiêu đề nếu cần."""
+    try:
+        page.evaluate(
+            """(tax) => { const b = document.getElementById(tax + 'div');
+                if (b && b.classList.contains('closed')) b.classList.remove('closed'); }""",
+            tax)
+    except Exception:
+        pass
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        try:
+            vis = page.evaluate(
+                """(tax) => { const l = document.getElementById(tax + 'checklist');
+                    if (!l) return false;
+                    return !!(l.offsetWidth || l.offsetHeight); }""", tax)
+        except Exception:
+            vis = True
+        if vis:
+            return
+        try:
+            page.locator(f"#{tax}div .hndle").first.click(timeout=2500)
+        except Exception:
+            pass
+        page.wait_for_timeout(400)
+
+
+def _taxonomy_terms_settled(page: Page, tax: str, timeout: float = 5.0) -> list:
+    """Đọc danh sách term; nếu TRỐNG thì chờ thêm (trang có thể còn đang tải)."""
+    terms = _taxonomy_terms(page, tax)
+    if terms:
+        return terms
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        page.wait_for_timeout(400)
+        terms = _taxonomy_terms(page, tax)
+        if terms:
+            return terms
+    return terms
+
+
 def _find_term(page: Page, tax: str, want: str):
     """Tìm term theo tên (khớp KHÔNG DẤU): trùng khít -> bắt đầu bằng -> chứa."""
 
     def find():
-        terms = _taxonomy_terms(page, tax)
+        terms = _taxonomy_terms_settled(page, tax)
         if not terms:
             return None
         for t in terms:
@@ -590,6 +631,7 @@ def _tick_term(page: Page, cb_id: str, wait_ms: int = 3000) -> bool:
 
 def _add_term_once(page: Page, tax: str, name: str, timeout: float = 12.0) -> str:
     """Thêm 1 term mới. Trả về id checkbox của term vừa thêm (nếu thấy), ngược lại ""."""
+    _ensure_tax_box_open(page, tax)
     inp = page.locator(f"#new{tax}").first
     for _ in range(4):                   # mở ô "Thêm ... mới" (đang ĐÓNG mới bấm toggle)
         try:
@@ -608,8 +650,17 @@ def _add_term_once(page: Page, tax: str, name: str, timeout: float = 12.0) -> st
         return ""
     try:
         inp.fill(name, timeout=5000)
-    except Exception:
-        return ""
+    except Exception:                    # ô bị ẩn -> đặt giá trị trực tiếp
+        try:
+            page.evaluate(
+                """([tax, v]) => { const i = document.getElementById('new' + tax);
+                    if (!i) return;
+                    i.value = v;
+                    i.dispatchEvent(new Event('input', {bubbles: true}));
+                    i.dispatchEvent(new Event('change', {bubbles: true})); }""",
+                [tax, name])
+        except Exception:
+            return ""
     page.wait_for_timeout(200)
     btn = page.locator(f"#{tax}-add-submit").first
     if not btn.count():
@@ -617,7 +668,12 @@ def _add_term_once(page: Page, tax: str, name: str, timeout: float = 12.0) -> st
     try:
         btn.click(timeout=6000)
     except Exception:
-        return ""
+        try:
+            page.evaluate(
+                """(tax) => { const b = document.getElementById(tax + '-add-submit');
+                    if (b) b.click(); }""", tax)
+        except Exception:
+            return ""
     want = _norm_vn(name)
     deadline = time.time() + timeout
     while time.time() < deadline:        # chờ term mới xuất hiện trong danh sách
@@ -644,16 +700,7 @@ def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=Non
     want = _norm_vn(name)
 
     # 0) mở hộp metabox nếu đang thu gọn
-    try:
-        box = page.locator(f"#{tax}div").first
-        if box.count() and "closed" in (box.get_attribute("class") or ""):
-            try:
-                box.locator(".hndle").first.click(timeout=3000)
-                page.wait_for_timeout(300)
-            except Exception:
-                pass
-    except Exception:
-        pass
+    _ensure_tax_box_open(page, tax)
 
     # 1) ĐÃ CÓ -> tick + kiểm tra
     hit = _find_term(page, tax, want)
