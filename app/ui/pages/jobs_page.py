@@ -1729,9 +1729,29 @@ class JobsPage(QWidget):
 
         from ..widgets.source_images import SourceImageDialog
 
+        def _save_state(state: dict) -> None:
+            """Lưu NGAY link + tick của popup vào job (không mất khi đóng)."""
+            try:
+                cur = self.current
+                if cur is None or getattr(cur, "id", "") != getattr(task, "id", ""):
+                    cur = next((x for x in self.store.tasks if x.id == task.id), None)
+                if cur is None:
+                    return
+                r = cur.result = dict(cur.result or {})
+                r["image_links"] = list(state.get("links") or [])
+                r["image_nobg"] = bool(state.get("nobg"))
+                r["image_trim"] = bool(state.get("trim"))
+                self.store.upsert_task(cur)
+                self.store.save()
+            except Exception:      # noqa: BLE001
+                pass
+
         dlg = SourceImageDialog([u for u in (r0.get("source_images") or []) if u], self,
                                 links=links,
-                                cache=self._img_cache.setdefault(str(task.id), {}))
+                                cache=self._img_cache.setdefault(str(task.id), {}),
+                                nobg=bool(r0.get("image_nobg")),
+                                trim=bool(r0.get("image_trim")),
+                                on_save=_save_state)
         accepted = dlg.exec() == QDialog.Accepted
         try:      # nhớ link + danh sách ảnh cho RIÊNG job này
             r = self.current.result = dict(self.current.result or {})

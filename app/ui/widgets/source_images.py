@@ -69,7 +69,8 @@ class SourceImageDialog(QDialog):
     """Ô link (nhiều dòng) + nút "Lấy hình" -> chọn ảnh -> "Chèn vào canvas"."""
 
     def __init__(self, urls: list[str] | None = None, parent=None,
-                 links: list[str] | None = None, cache: dict | None = None) -> None:
+                 links: list[str] | None = None, cache: dict | None = None,
+                 nobg: bool = False, trim: bool = False, on_save=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Tìm hình")
         self.setMinimumSize(720, 620)
@@ -82,6 +83,7 @@ class SourceImageDialog(QDialog):
         self._tiles: list[_Tile] = []
         self._worker = None
         self._fetch_worker = None
+        self._on_save = on_save          # callback: lưu link + tick NGAY khi thay đổi
 
         v = QVBoxLayout(self)
         v.setContentsMargins(14, 12, 14, 12)
@@ -96,6 +98,7 @@ class SourceImageDialog(QDialog):
         self.links_edit.setFixedHeight(74)
         if self.links_list:
             self.links_edit.setPlainText("\n".join(self.links_list))
+        self.links_edit.textChanged.connect(self._emit_save)
         v.addWidget(self.links_edit)
 
         row = QHBoxLayout()
@@ -105,9 +108,13 @@ class SourceImageDialog(QDialog):
         row.addWidget(self.fetch_btn)
         self.nobg_cb = QCheckBox("Xoá nền")
         self.nobg_cb.setToolTip("Khi chèn: xoá nền thành phần — giống hệt chuột phải → Xoá nền.")
+        self.nobg_cb.setChecked(bool(nobg))
+        self.nobg_cb.toggled.connect(self._emit_save)
         row.addWidget(self.nobg_cb)
         self.trim_cb = QCheckBox("Trim")
         self.trim_cb.setToolTip("Khi chèn: tự cắt viền thừa quanh đối tượng.")
+        self.trim_cb.setChecked(bool(trim))
+        self.trim_cb.toggled.connect(self._emit_save)
         row.addWidget(self.trim_cb)
         row.addStretch(1)
         v.addLayout(row)
@@ -152,6 +159,26 @@ class SourceImageDialog(QDialog):
 
         if self.urls:
             self._set_urls(self.urls)
+
+    def _emit_save(self, *_a) -> None:
+        """Lưu NGAY link + 2 tick vào job (đóng popup hay tắt app cũng không mất)."""
+        try:
+            self.links_list = self._links()
+        except Exception:      # noqa: BLE001
+            pass
+        self._save_state()
+
+    def _save_state(self) -> None:
+        if self._on_save is None:
+            return
+        try:
+            self._on_save({
+                "links": list(self.links_list),
+                "nobg": bool(self.nobg_cb.isChecked()),
+                "trim": bool(self.trim_cb.isChecked()),
+            })
+        except Exception:      # noqa: BLE001
+            pass
 
     # ---------------- lấy ảnh từ link ---------------- #
     def _links(self) -> list[str]:
@@ -329,6 +356,7 @@ class SourceImageDialog(QDialog):
 
     def closeEvent(self, event) -> None:  # noqa: N802
         self.links_list = self._links()
+        self._save_state()
         for w in (self._worker, self._fetch_worker):
             try:
                 if w is not None:
