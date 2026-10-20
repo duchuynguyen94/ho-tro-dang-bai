@@ -687,6 +687,80 @@ def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int
     return _fill_attachment_in_top_modal(page, value, log=log)
 
 
+def set_post_status(page: Page, status: str = "pending", label: str = "", log=None) -> bool:
+    """Đổi TRẠNG THÁI bài viết/sản phẩm (ô #post_status) — KHÔNG bấm Lưu.
+
+    Mặc định "Chờ duyệt" (pending). Người dùng tự bấm Lưu trên WordPress.
+    """
+    want = str(status or "pending").strip() or "pending"
+    names = {"pending": "Chờ duyệt", "draft": "Bản nháp",
+             "publish": "Xuất bản", "private": "Riêng tư"}
+    lab = label or names.get(want, want)
+    sel = None
+    for s_ in ("#post_status", "select[name='post_status']"):
+        try:
+            loc = page.locator(s_).first
+            if loc.count():
+                sel = loc
+                break
+        except Exception:
+            continue
+    if sel is None:
+        if log:
+            log("  (trạng thái: không thấy ô trạng thái — bỏ qua)")
+        return False
+    try:
+        cur = str(sel.input_value() or "")
+    except Exception:
+        cur = ""
+    if cur == want:
+        if log:
+            log(f"  (trạng thái: đã là “{lab}”)")
+        return True
+    # ô trạng thái của WordPress thường BỊ ẨN -> bấm "Chỉnh sửa" để mở
+    try:
+        if not sel.is_visible():
+            for s2 in ("#post-status-edit", "a.edit-post-status"):
+                try:
+                    loc = page.locator(s2).first
+                    if loc.count():
+                        loc.click(timeout=4000)
+                        page.wait_for_timeout(400)
+                        break
+                except Exception:
+                    continue
+    except Exception:
+        pass
+    try:
+        try:
+            sel.select_option(want, timeout=6000)
+        except Exception:            # vẫn ẩn -> đặt giá trị trực tiếp + bắn sự kiện change
+            page.evaluate(
+                """(v) => { const s = document.querySelector('#post_status');
+                    if (!s) return;
+                    s.value = v;
+                    s.dispatchEvent(new Event('change', {bubbles: true})); }""", want)
+        page.wait_for_timeout(400)
+        for s2 in ("#post-status-save", "a.save-post-status"):
+            try:
+                ok_btn = page.locator(s2).first
+                if ok_btn.count() and ok_btn.is_visible():
+                    ok_btn.click(timeout=4000)
+                    page.wait_for_timeout(400)
+                    break
+            except Exception:
+                continue
+        page.wait_for_timeout(300)
+        now = str(sel.input_value() or "")
+        if log:
+            log(f"  (trạng thái -> “{lab}”" + ("" if now == want else f" (hiện: {now})") + ")")
+        return now == want
+    except Exception as exc:      # noqa: BLE001
+        if log:
+            log(f"  (trạng thái: lỗi — {str(exc)[:70]})")
+        return False
+
+
 def slug_if_needed(page: Page, new_slug: str, limit: int = 55, log=None) -> bool:
     """Chỉnh đường dẫn (slug) — CHỈ KHI slug hiện tại DÀI TỪ `limit` ký tự trở lên.
 
@@ -1213,6 +1287,8 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("set_status", "post_status", "status"):
+                set_post_status(page, render(step.value or "pending", ctx), log=log)
             elif action in ("taxonomy_pick", "pick_term", "taxonomy_select"):
                 # Chọn danh mục / thương hiệu (chưa có thì THÊM MỚI)
                 tax = str(step.selector or "").strip() or "product_cat"

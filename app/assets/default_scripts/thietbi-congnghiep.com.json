@@ -319,6 +319,17 @@
       "optional": true,
       "force": false,
       "when": "{{image_2}}"
+    },
+    {
+      "action": "set_status",
+      "selector": "#post_status",
+      "selectors": [],
+      "value": "pending",
+      "note": "Chuyển trạng thái -> Chờ duyệt (không bấm Lưu)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": ""
     }
   ],
   "site": "thietbi-congnghiep.com"
