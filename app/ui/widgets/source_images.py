@@ -329,6 +329,9 @@ class SourceImageDialog(QDialog):
                 p = ""
             if not p:
                 continue
+            # THỨ TỰ: tick cả 2 -> XOÁ NỀN trước, TRIM sau (theo yêu cầu)
+            if nobg:
+                p = remove_bg_to_png(p)
             if trim:
                 try:
                     from ...images.composer import trim_borders
@@ -336,8 +339,6 @@ class SourceImageDialog(QDialog):
                     p = trim_borders(p)
                 except Exception:      # noqa: BLE001
                     pass
-            if nobg:
-                p = remove_bg_to_png(p)
             paths.append(p)
         if not paths:
             self.status.setText("Không lưu được ảnh đã chọn — thử ảnh khác.")
