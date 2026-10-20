@@ -1906,6 +1906,10 @@ class JobsPage(QWidget):
     def _save(self) -> None:
         if not self.current:
             return
+        # CHỐT AN TOÀN: panel đang hiển thị JOB KHÁC (đang chuyển job) -> KHÔNG ghi đè
+        loaded = getattr(self, "_loaded_task_id", "")
+        if loaded and loaded != getattr(self.current, "id", ""):
+            return
         r = self.current.result
         r["title"] = self.title_edit.text()
         r["focus_keyword"] = self.kw_edit.text()

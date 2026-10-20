@@ -537,8 +537,14 @@ class PostWorker(TrackedThread):
 
     def __init__(self, site, result: dict) -> None:
         super().__init__()
+        import copy as _copy
+
         self.site = site
-        self.result = result
+        # BẢN SAO: đổi job A/B trên giao diện KHÔNG làm thay đổi dữ liệu đang đăng
+        try:
+            self.result = _copy.deepcopy(dict(result or {}))
+        except Exception:      # noqa: BLE001
+            self.result = dict(result or {})
         self._running = True
 
     def stop(self) -> None:

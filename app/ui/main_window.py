@@ -812,6 +812,11 @@ class MainWindow(QMainWindow):
         # CHỌN WEBSITE ĐỂ ĐĂNG (popup chọn sẵn website đã lưu của job; chỉ web có kịch bản)
         self.jobs_page._save()                          # chốt nội dung đang gõ trước khi hỏi
         fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        # CHỤP LẠI thông tin text NGAY LÚC BẤM ĐĂNG: đổi sang job khác giữa lúc ghép ảnh
+        # cũng KHÔNG làm Chrome điền nhầm dữ liệu của job khác
+        import copy as _copy1
+
+        snap = _copy1.deepcopy(fresh.result or {})
         prev_site_id = str(getattr(fresh, "site_id", "") or "")
         site = self._choose_post_site(fresh)
         if site is None:
@@ -851,7 +856,12 @@ class MainWindow(QMainWindow):
         except Exception:      # noqa: BLE001
             traceback.print_exc()
 
-        worker = PostWorker(site, task.result or {})
+        payload = dict(task.result or {})
+        for _k in ("title", "focus_keyword", "description", "tags",
+                   "category_name", "brand_name", "ma_san_pham"):
+            if str(snap.get(_k) or "").strip():
+                payload[_k] = snap.get(_k)
+        worker = PostWorker(site, payload)
         import time as _time
 
         self._post_workers[task.id] = worker
