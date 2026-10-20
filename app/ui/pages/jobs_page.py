@@ -1714,82 +1714,114 @@ class JobsPage(QWidget):
             traceback.print_exc()
             show_toast(self, f"Auto format lỗi: {exc}", 3600, ok=False)
 
-    def _pick_source_image(self) -> None:
-        """Popup "Hình tự tìm".
+    # ---------------- ảnh từ LINK NGUỒN (lọc theo mã sản phẩm) ---------------- #
+    @staticmethod
+    def _norm_txt(t: str) -> str:
+        """Chuẩn hoá để so mã: bỏ dấu, bỏ ký tự lạ, viết thường."""
+        import re as _re
 
-        - Job thường: lấy ảnh từ LINK NGUỒN -> nếu ít hơn 20 thì tìm thêm trên internet cho đủ 20.
-        - Job trống (hoặc muốn list khác): gõ keyword trong popup rồi bấm "Tìm ảnh" (20 ảnh).
-        - Bấm lại lần sau: GIỮ danh sách cũ của job đó (đổi job -> tự làm lại từ đầu).
+        t = str(t or "").lower().replace("đ", "d")
+        return _re.sub(r"[^a-z0-9]+", "", t)
+
+    def _product_codes(self, result: dict) -> list[str]:
+        """Danh sách mã sản phẩm của job (ô "Mã sản phẩm"; trống -> Focus keyword)."""
+        import re as _re
+
+        raw = str((result or {}).get("ma_san_pham") or "")
+        codes = [c.strip() for c in _re.split(r"[,;]", raw) if c.strip()]
+        if not codes:
+            fk = str((result or {}).get("focus_keyword") or "").strip()
+            if fk:
+                codes = [fk]
+        return codes
+
+    def _label_source_images(self, urls: list[str], meta: list[dict],
+                             codes: list[str]) -> list[tuple[str, str, bool]]:
+        """Gán mỗi ảnh 1 nhãn "thuộc mã nào" (khớp alt/title/tên file/chữ xung quanh)."""
+        by_url = {}
+        for m in (meta or []):
+            u = str(m.get("url") or "")
+            if u:
+                by_url[u] = m
+        out: list[tuple[str, str, bool]] = []
+        for u in urls:
+            m = by_url.get(u) or {}
+            hay = self._norm_txt(" ".join(str(m.get(k) or "") for k in
+                                          ("alt", "title", "near", "file"))) + self._norm_txt(u)
+            hit = ""
+            for c in codes:
+                nc = self._norm_txt(c)
+                if len(nc) >= 4 and nc in hay:
+                    hit = c
+                    break
+            out.append((u, f"✓ {hit}" if hit else "Không rõ mã", bool(hit)))
+        out.sort(key=lambda x: 0 if x[2] else 1)      # ảnh khớp mã lên trước
+        return out
+
+    def _pick_source_image(self) -> None:
+        """Popup "Hình tự tìm": CHỈ lấy ảnh từ LINK NGUỒN + lọc theo mã sản phẩm.
+
+        - Không tìm ảnh trên internet nữa.
+        - Mỗi ảnh có dòng chữ bên dưới: thuộc mã nào (hoặc "Không rõ mã").
+        - Bấm lại lần sau: GIỮ danh sách cũ của job đó.
         """
         if not self.current:
             return
         task = self.current
         r0 = task.result or {}
         urls = [u for u in (r0.get("source_images") or []) if u]
-        keyword = str(r0.get("image_keyword") or "")
-        kind = str(getattr(task, "kind", "") or "")
-        if not keyword and kind != "blank":
-            # job thường: điền sẵn mã sản phẩm (muốn đổi thì gõ keyword khác trong popup)
-            keyword = (r0.get("focus_keyword") or "").strip() or (r0.get("title") or "").strip()
+        meta: list[dict] = list(r0.get("source_images_meta") or [])
 
-        # 1) Job thường: lấy ảnh từ link nguồn (nếu chưa có)
-        if kind != "blank" and not urls:
-            src_url = (task.source_url or "").strip()
-            if src_url:
-                from PySide6.QtCore import Qt as _Qt
+        # 1) Chưa có -> lấy ảnh từ LINK NGUỒN
+        src_url = (task.source_url or "").strip()
+        if not urls and src_url:
+            from PySide6.QtCore import Qt as _Qt
 
-                from ...source import fetch_source
+            from ...source import fetch_source
 
-                QApplication.setOverrideCursor(_Qt.WaitCursor)
-                try:
-                    page = fetch_source(src_url)
-                    urls = [u for u in (page.get("images") or []) if u]
-                except Exception:
-                    urls = []
-                finally:
-                    QApplication.restoreOverrideCursor()
+            self.status_msg.emit("Đang lấy ảnh từ link nguồn…")
+            QApplication.setOverrideCursor(_Qt.WaitCursor)
+            try:
+                page = fetch_source(src_url)
+                meta = list(page.get("images_meta") or [])
+                urls = [u for u in (page.get("images") or [])]
+            except Exception as exc:      # noqa: BLE001
+                urls, meta = [], []
+                self.status_msg.emit(f"Không đọc được ảnh từ link nguồn: {str(exc)[:80]}")
+            finally:
+                QApplication.restoreOverrideCursor()
 
-        # 2) Chưa đủ 20 ảnh -> tìm thêm trên internet (theo mã sản phẩm / keyword)
-        if kind != "blank" and 0 < len(urls) < 20:
-            q = (keyword or (r0.get("focus_keyword") or "").strip()
-                 or (r0.get("title") or "").strip())
-            if q:
-                from ...source import search_images
+        # 2) Gán nhãn "thuộc mã nào" + sắp ảnh khớp mã lên trước
+        codes = self._product_codes(r0)
+        pairs = self._label_source_images(urls, meta, codes)
+        ordered = [u for u, _c, _ok in pairs]
+        labels = {u: c for u, c, _ok in pairs}
+        if ordered:
+            self._save_source_images(ordered, "", meta=meta)
 
-                self.status_msg.emit(f"Đang tìm thêm ảnh trên internet cho đủ 20 (theo: {q})…")
-                try:
-                    more = search_images(q, limit=20 - len(urls) + 4, log=self.status_msg.emit)
-                except Exception:
-                    more = []
-                for u in more:
-                    if u not in urls:
-                        urls.append(u)
-                    if len(urls) >= 20:
-                        break
-
-        if kind != "blank" and urls:
-            self._save_source_images(urls, keyword)
-
-        # 3) Mở popup (giữ danh sách cũ, có ô keyword để làm list khác)
+        # 3) Mở popup (không còn ô keyword / tìm internet)
         from ..widgets.source_images import SourceImageDialog
 
-        dlg = SourceImageDialog(urls, self, keyword=keyword,
-                                cache=self._img_cache.setdefault(str(task.id), {}))
+        dlg = SourceImageDialog(ordered, self, keyword="", allow_search=False,
+                                cache=self._img_cache.setdefault(str(task.id), {}),
+                                labels=labels)
         accepted = dlg.exec() == QDialog.Accepted
-        # nhớ lại keyword + danh sách mới của RIÊNG job này
         try:
-            self._save_source_images(dlg.urls or urls, dlg.keyword or keyword)
-        except Exception:
+            self._save_source_images(dlg.urls or ordered, "")
+        except Exception:      # noqa: BLE001
             pass
         if accepted and dlg.chosen:
             self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0))
 
-    def _save_source_images(self, urls: list[str], keyword: str = "") -> None:
+    def _save_source_images(self, urls: list[str], keyword: str = "",
+                            meta: list | None = None) -> None:
         """Lưu danh sách ảnh tự tìm + keyword theo TỪNG job (đổi job là làm lại từ đầu)."""
         if not self.current:
             return
         r = self.current.result = dict(self.current.result or {})
         r["source_images"] = [u for u in (urls or []) if u]
+        if meta is not None:
+            r["source_images_meta"] = list(meta)      # giữ alt/title để lần sau vẫn gán được mã
         if keyword:
             r["image_keyword"] = str(keyword)
         self.store.upsert_task(self.current)

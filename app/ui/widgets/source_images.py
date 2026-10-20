@@ -26,12 +26,12 @@ class _Tile(QFrame):
 
     clicked = Signal(str)
 
-    def __init__(self, url: str, parent=None) -> None:
+    def __init__(self, url: str, caption: str = "", parent=None) -> None:
         super().__init__(parent)
         self.url = url
         self.data = b""          # giữ trong bộ nhớ, chưa lưu ra máy
         self.setObjectName("srcTile")
-        self.setFixedSize(THUMB + 12, THUMB + 12)
+        self.setFixedSize(THUMB + 12, THUMB + 12 + 30)
         self.setCursor(Qt.PointingHandCursor)
         self.setProperty("selected", "false")
         lay = QVBoxLayout(self)
@@ -41,6 +41,14 @@ class _Tile(QFrame):
         self.pic.setFixedSize(THUMB, THUMB)
         self.pic.setObjectName("imgThumb")
         lay.addWidget(self.pic)
+        # DÒNG CHỮ DƯỚI ẢNH: ảnh này thuộc mã nào
+        self.cap = QLabel(str(caption or ""))
+        self.cap.setWordWrap(True)
+        self.cap.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
+        self.cap.setFixedHeight(28)
+        self.cap.setToolTip(str(caption or ""))
+        self.cap.setStyleSheet("font-size:10px;color:#475569;background:transparent;")
+        lay.addWidget(self.cap)
 
     def set_image(self, data: bytes) -> None:
         self.data = data or b""
@@ -72,8 +80,11 @@ class SourceImageDialog(QDialog):
     """
 
     def __init__(self, urls: list[str], parent=None, keyword: str = "",
-                 allow_search: bool = True, cache: dict | None = None) -> None:
+                 allow_search: bool = True, cache: dict | None = None,
+                 labels: dict | None = None) -> None:
         super().__init__(parent)
+        self._labels: dict = dict(labels or {})     # url -> "mã sản phẩm"
+        self._all_urls: list = list(urls or [])
         self.setWindowTitle("Hình tự tìm")
         self.setMinimumSize(700, 560)
         self.chosen: list[str] = []
@@ -88,6 +99,17 @@ class SourceImageDialog(QDialog):
 
         v = QVBoxLayout(self)
 
+        if not self._allow_search:
+            # BỎ tìm ảnh internet -> chỉ còn ô LỌC theo mã sản phẩm
+            frow = QHBoxLayout()
+            flab = QLabel("Lọc theo mã")
+            flab.setStyleSheet("font-weight:600;")
+            frow.addWidget(flab)
+            self.filter_edit = QLineEdit()
+            self.filter_edit.setPlaceholderText("Gõ mã sản phẩm để lọc ảnh…")
+            self.filter_edit.textChanged.connect(self._apply_filter)
+            frow.addWidget(self.filter_edit, 1)
+            v.addLayout(frow)
         # ô nhập keyword + nút tìm ảnh
         krow = QHBoxLayout()
         klab = QLabel("Keyword hình")
@@ -102,7 +124,12 @@ class SourceImageDialog(QDialog):
         self.search_btn.setEnabled(self._allow_search)
         self.search_btn.clicked.connect(self._do_search)
         krow.addWidget(self.search_btn)
-        v.addLayout(krow)
+        if self._allow_search:
+            v.addLayout(krow)
+        else:
+            klab.hide()
+            self.kw_edit.hide()
+            self.search_btn.hide()
 
         head = QHBoxLayout()
         self.title = QLabel(f"Ảnh tìm được ({len(self.urls)})")
@@ -159,19 +186,21 @@ class SourceImageDialog(QDialog):
                 w.setParent(None)
                 w.deleteLater()
         self._tiles = []
-        self.title.setText(f"Ảnh tìm được ({len(self.urls)})")
+        self.title.setText(f"Ảnh từ link nguồn ({len(self.urls)})"
+                           if not self._allow_search else f"Ảnh tìm được ({len(self.urls)})")
         self._update_buttons()
 
         cols = 4
         for i, url in enumerate(self.urls[:60]):
-            t = _Tile(url)
+            t = _Tile(url, self._labels.get(url, ""))
             t.clicked.connect(self._select)
             self._grid.addWidget(t, i // cols, i % cols)
             self._tiles.append(t)
         self._grid.setRowStretch(len(self._tiles) // cols + 1, 1)
 
         if not self._tiles:
-            self.status.setText("Chưa có ảnh — gõ keyword rồi bấm “Tìm ảnh”.")
+            self.status.setText("Không có ảnh phù hợp." if self._all_urls
+                                else "Link nguồn không có ảnh nào.")
             return
         try:
             if self._worker is not None:
@@ -195,6 +224,22 @@ class SourceImageDialog(QDialog):
         self._worker.progress.connect(self.status.setText)
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
+
+    def _apply_filter(self) -> None:
+        """Lọc ảnh theo mã sản phẩm (không phân biệt hoa thường / dấu)."""
+        q = self.filter_edit.text().strip().lower() if hasattr(self, "filter_edit") else ""
+        if not q:
+            self._set_urls(self._all_urls)
+            return
+        def _norm(t: str) -> str:
+            import re as _re
+
+            t = t.lower().replace("đ", "d")
+            return _re.sub(r"[^a-z0-9]+", "", t)
+        nq = _norm(q)
+        keep = [u for u in self._all_urls
+                if nq in _norm(self._labels.get(u, "")) or nq in _norm(u)]
+        self._set_urls(keep)
 
     def _do_search(self) -> None:
         """Tìm list ảnh MỚI theo keyword (chạy luồng riêng — không đứng giao diện)."""

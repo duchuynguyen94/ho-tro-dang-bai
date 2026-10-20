@@ -21,6 +21,55 @@ _IMG_ATTRS = ("src", "data-src", "data-lazy-src", "data-original", "data-srcset"
 _SKIP_EXT = (".svg", ".gif", ".ico")
 
 
+def _img_url(img, base_url: str) -> str:
+    """Lấy URL ảnh dùng được từ 1 thẻ <img> (thử nhiều thuộc tính)."""
+    for attr in _IMG_ATTRS:
+        val = img.get(attr)
+        if not val:
+            continue
+        candidate = str(val).split(",")[0].strip().split(" ")[0]
+        if not candidate or candidate.startswith("data:"):
+            continue
+        full = urljoin(base_url, candidate)
+        if _is_usable_image(full):
+            return full
+    return ""
+
+
+def extract_images_meta(soup: BeautifulSoup, base_url: str) -> list[dict]:
+    """Ảnh + thông tin để ĐOÁN ẢNH THUỘC MÃ NÀO (alt / title / tên file / chữ xung quanh)."""
+    out: list[dict] = []
+    seen: set[str] = set()
+    for img in soup.find_all("img"):
+        full = _img_url(img, base_url)
+        if not full:
+            continue
+        key = re.sub(r"-\d{2,4}x\d{2,4}(?=\.[a-z]+$)", "", full.lower())
+        if key in seen:
+            continue
+        seen.add(key)
+        alt = " ".join(str(img.get("alt") or "").split())
+        title = " ".join(str(img.get("title") or "").split())
+        near = ""
+        node = img
+        for _ in range(4):                 # chữ của khối bao quanh ảnh
+            node = node.parent
+            if node is None:
+                break
+            txt = " ".join(node.get_text(" ").split())
+            if len(txt) >= 8:
+                near = txt[:200]
+                break
+        out.append({
+            "url": full,
+            "alt": alt,
+            "title": title,
+            "near": near,
+            "file": urlparse(full).path.rsplit("/", 1)[-1],
+        })
+    return out
+
+
 def _extract_images(soup: BeautifulSoup, base_url: str) -> list[str]:
     urls: list[str] = []
     for img in soup.find_all("img"):
@@ -78,7 +127,7 @@ def _pdf_source(url: str, data: bytes, max_chars: int) -> dict:
     if not title:
         first = next((ln for ln in text.splitlines() if len(ln) > 8), "")
         title = first[:120]
-    return {"url": url, "title": title, "text": text, "images": []}
+    return {"url": url, "title": title, "text": text, "images": [], "images_meta": []}
 
 
 def fetch_source(url: str, max_chars: int = 6000) -> dict:
@@ -100,7 +149,8 @@ def fetch_source(url: str, max_chars: int = 6000) -> dict:
                 tag.decompose()
             text = "\n".join(ln.strip() for ln in soup.get_text("\n").splitlines() if ln.strip())
             return {"url": url, "title": title, "text": re.sub(r"\n{3,}", "\n\n", text)[:max_chars],
-                    "images": _extract_images(soup, url)}
+                    "images": _extract_images(soup, url),
+                    "images_meta": extract_images_meta(soup, url)}
     except OSError:
         pass
 
@@ -132,7 +182,8 @@ def fetch_source(url: str, max_chars: int = 6000) -> dict:
     text = re.sub(r"\n{3,}", "\n\n", text)[:max_chars]
 
     images = _extract_images(soup, url)
-    return {"url": url, "title": title, "text": text, "images": images}
+    return {"url": url, "title": title, "text": text, "images": images,
+            "images_meta": extract_images_meta(soup, url)}
 
 
 def find_brand_logo(url: str) -> str:
