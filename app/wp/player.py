@@ -477,7 +477,9 @@ def _taxonomy_terms(page: Page, tax: str) -> list:
                         txt = (lab.innerText || '');
                     }
                     txt = txt.replace(/\\s+/g, ' ').trim();
-                    out.push({id: inp.id, text: txt, checked: !!inp.checked});
+                    out.push({id: inp.id, value: String(inp.value || ''),
+                              text: txt, checked: !!inp.checked,
+                              vis: !!(inp.offsetWidth || inp.offsetHeight)});
                 });
                 return out;
             }""", tax) or []
@@ -595,38 +597,72 @@ def _find_term(page: Page, tax: str, want: str):
     return hit
 
 
-def _term_checked(page: Page, cb_id: str) -> bool:
+def _is_term_checked(page: Page, tax: str, value: str) -> bool:
+    """Có checkbox NÀO của term này đang được tick không (so theo GIÁ TRỊ, không theo id)."""
+    if not value:
+        return False
     try:
         return bool(page.evaluate(
-            """(id) => { const el = document.getElementById(id); return !!(el && el.checked); }""",
-            cb_id))
+            """([tax, v]) => Array.from(
+                document.querySelectorAll('input[name="tax_input[' + tax + '][]"]'))
+                .some(i => String(i.value) === String(v) && i.checked)""",
+            [tax, str(value)]))
     except Exception:
         return False
 
 
-def _tick_term(page: Page, cb_id: str, wait_ms: int = 3000) -> bool:
-    """Tick 1 checkbox RỒI KIỂM TRA LẠI (thử click nhãn nếu cách khác không ăn)."""
-    if _term_checked(page, cb_id):
+def _tick_term(page: Page, tax: str, value: str, wait_ms: int = 4000) -> bool:
+    """Tick term + KIỂM TRA LẠI (ưu tiên ô ĐANG HIỆN, cuối cùng click bằng JS)."""
+    if _is_term_checked(page, tax, value):
         return True
+    sel = f'input[name="tax_input[{tax}][]"][value="{value}"]'
+    # 1) ô đang HIỆN
     try:
-        page.locator("#" + cb_id).first.check(force=True, timeout=4000)
+        cb = page.locator(sel + ":visible").first
+        if cb.count():
+            try:
+                cb.check(force=True, timeout=3000)
+            except Exception:
+                try:
+                    cb.click(force=True, timeout=3000)
+                except Exception:
+                    pass
     except Exception:
         pass
-    for act in (lambda: page.locator("#" + cb_id).first.click(force=True, timeout=3000),
-                lambda: page.locator(f"label[for='{cb_id}']").first.click(timeout=3000)):
-        page.wait_for_timeout(250)
-        if _term_checked(page, cb_id):
-            return True
-        try:
-            act()
-        except Exception:
-            continue
+    if _is_term_checked(page, tax, value):
+        return True
+    # 2) bấm vào NHÃN của ô đầu tiên tìm thấy
+    try:
+        page.evaluate(
+            """([tax, v]) => {
+                const el = Array.from(document.querySelectorAll(
+                    'input[name="tax_input[' + tax + '][]"]'))
+                    .find(i => String(i.value) === String(v));
+                if (!el) return;
+                const lab = el.closest('label') || document.querySelector(`label[for="${el.id}"]`);
+                if (lab) lab.click(); else el.click();
+            }""", [tax, str(value)])
+    except Exception:
+        pass
+    if _is_term_checked(page, tax, value):
+        return True
+    # 3) click thẳng vào ô (mọi bản sao) bằng JS
+    try:
+        page.evaluate(
+            """([tax, v]) => {
+                Array.from(document.querySelectorAll(
+                    'input[name="tax_input[' + tax + '][]"]'))
+                    .filter(i => String(i.value) === String(v) && !i.checked)
+                    .forEach(i => i.click());
+            }""", [tax, str(value)])
+    except Exception:
+        pass
     deadline = time.time() + wait_ms / 1000.0
     while time.time() < deadline:
-        if _term_checked(page, cb_id):
+        if _is_term_checked(page, tax, value):
             return True
         page.wait_for_timeout(250)
-    return _term_checked(page, cb_id)
+    return _is_term_checked(page, tax, value)
 
 
 def _add_term_once(page: Page, tax: str, name: str, timeout: float = 12.0) -> str:
@@ -680,7 +716,7 @@ def _add_term_once(page: Page, tax: str, name: str, timeout: float = 12.0) -> st
         page.wait_for_timeout(300)
         m = next((t for t in _taxonomy_terms(page, tax) if _norm_vn(t["text"]) == want), None)
         if m:
-            return str(m["id"])
+            return str(m.get("value") or "")
     return ""
 
 
@@ -705,24 +741,24 @@ def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=Non
     # 1) ĐÃ CÓ -> tick + kiểm tra
     hit = _find_term(page, tax, want)
     if hit:
-        ok = _tick_term(page, str(hit["id"]))
+        ok = _tick_term(page, tax, str(hit.get("value") or ""))
         if log:
             log(f"  ({label}: {'đã chọn' if ok else 'KHÔNG tick được'} “{hit['text']}”"
                 + ("" if ok else " — thử tick lại bằng tay trên web"))
         return ok
 
     # 2) CHƯA CÓ -> thêm mới (thử 2 lần) rồi CHỌN chính term mới
-    new_id = ""
+    new_val = ""
     for attempt in (1, 2):
-        new_id = _add_term_once(page, tax, name)
-        if new_id:
+        new_val = _add_term_once(page, tax, name)
+        if new_val:
             break
         if attempt == 1 and log:
             log(f"  ({label}: chưa thấy “{name}” — thử thêm lại lần 2…")
-    if not new_id:
+    if not new_val:
         hit = _find_term(page, tax, want)      # có thể WP báo trùng -> term đã có sẵn
         if hit:
-            ok = _tick_term(page, str(hit["id"]))
+            ok = _tick_term(page, tax, str(hit.get("value") or ""))
             if log:
                 log(f"  ({label}: đã có sẵn “{hit['text']}” -> "
                     + ("ĐÃ CHỌN" if ok else "KHÔNG tick được"))
@@ -730,9 +766,9 @@ def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=Non
         if log:
             log(f"  ({label}: KHÔNG thêm được “{name}” — kiểm tra quyền/trùng tên")
         return False
-    ok = _tick_term(page, new_id)
+    ok = _tick_term(page, tax, new_val)
     text = next((t["text"] for t in _taxonomy_terms(page, tax)
-                 if str(t["id"]) == new_id), name)
+                 if str(t.get("value")) == str(new_val)), name)
     if log:
         log(f"  ({label}: chưa có -> ĐÃ THÊM MỚI “{text}”"
             + (" + ĐÃ CHỌN" if ok else " (CHƯA tick được — thử tick lại bằng tay)"))
