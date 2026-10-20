@@ -4,7 +4,7 @@ from __future__ import annotations
 import math
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageOps
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 DEFAULT_SIZE = 1080
 PAD = 40
@@ -139,17 +139,90 @@ def remove_background_simple(img: Image.Image, threshold: int = 245) -> Image.Im
     return img
 
 
+def _bg_color(img: Image.Image) -> tuple[int, int, int]:
+    """Màu nền = màu PHỔ BIẾN NHẤT trên toàn viền ảnh (gộp màu theo bước 8)."""
+    from collections import Counter
+
+    rgb = img.convert("RGB")
+    w, h = rgb.size
+    px = rgb.load()
+    cnt: Counter = Counter()
+    step = max(1, min(w, h) // 120)
+    for x in range(0, w, step):
+        for y in (0, min(1, h - 1), h - 2, h - 1):
+            r, g, b = px[x, max(0, y)]
+            cnt[(r // 8 * 8, g // 8 * 8, b // 8 * 8)] += 1
+    for y in range(0, h, step):
+        for x in (0, min(1, w - 1), w - 2, w - 1):
+            r, g, b = px[max(0, x), y]
+            cnt[(r // 8 * 8, g // 8 * 8, b // 8 * 8)] += 1
+    if not cnt:
+        return (255, 255, 255)
+    return cnt.most_common(1)[0][0]
+
+
 def remove_background_auto(img: Image.Image, thresh: int = 42) -> Image.Image:
-    """Xoá nền theo vùng liền kề từ 4 góc (flood fill) -> PNG trong suốt."""
+    """Xoá nền -> PNG TRONG SUỐT (mạnh hơn flood-fill 4 góc).
+
+    1. Màu nền = màu phổ biến nhất trên TOÀN VIỀN.
+    2. Mặt nạ "giống màu nền" theo sai lệch LỚN NHẤT của 3 kênh RGB.
+    3. LOANG từ toàn bộ viền (chỉ xoá vùng nền dính viền -> không ăn phần trắng bên trong).
+    4. 2 lượt khử viền (halo/anti-alias) sát vùng trong suốt.
+    5. Đặt alpha = 0 ở nền -> PNG trong suốt.
+    """
+    from collections import deque
+
     img = img.convert("RGBA")
     w, h = img.size
     if w < 3 or h < 3:
         return img
-    for xy in [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]:
-        try:
-            ImageDraw.floodfill(img, xy, (0, 0, 0, 0), thresh=thresh)
-        except Exception:
-            continue
+    th = max(4, int(thresh))
+    bg = _bg_color(img)
+    rgb = img.convert("RGB")
+    diffs = ImageChops.difference(rgb, Image.new("RGB", (w, h), bg)).split()
+    maxd = ImageChops.lighter(ImageChops.lighter(diffs[0], diffs[1]), diffs[2])
+    mask = maxd.point(lambda v: 1 if v <= th else 0)      # 1 = giống màu nền
+    mpx = mask.load()
+
+    seen = bytearray(w * h)
+    dq: deque = deque()
+
+    def push(x: int, y: int) -> None:
+        i = y * w + x
+        if not seen[i] and mpx[x, y]:
+            seen[i] = 1
+            dq.append((x, y))
+
+    for x in range(w):                 # loang từ TOÀN BỘ viền
+        push(x, 0)
+        push(x, h - 1)
+    for y in range(h):
+        push(0, y)
+        push(w - 1, y)
+    while dq:
+        x, y = dq.popleft()
+        if x > 0:
+            push(x - 1, y)
+        if x + 1 < w:
+            push(x + 1, y)
+        if y > 0:
+            push(x, y - 1)
+        if y + 1 < h:
+            push(x, y + 1)
+
+    kill = Image.frombytes("L", (w, h), bytes(seen)).point(lambda v: 255 if v else 0)
+    alpha = ImageChops.multiply(img.getchannel("A"), ImageChops.invert(kill))
+    img.putalpha(alpha)
+
+    # khử viền (halo) — 2 lượt: pixel gần màu nền + sát vùng trong suốt -> xoá
+    halo = max(6, th // 3)
+    near_bg = maxd.point(lambda v: 255 if v <= th + halo else 0)
+    for _ in range(2):
+        alpha = img.getchannel("A")
+        near_t = alpha.filter(ImageFilter.MinFilter(3))       # 0 nếu sát pixel trong suốt
+        cut = ImageChops.multiply(ImageChops.invert(near_t), near_bg)
+        alpha = ImageChops.subtract(alpha, cut)
+        img.putalpha(alpha)
     return img
 
 
