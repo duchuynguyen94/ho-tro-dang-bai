@@ -1075,6 +1075,46 @@ class SplitSeoWorker(TrackedThread):
         self.finished_all.emit(ok, total)
 
 
+class SourceImagesFetchWorker(TrackedThread):
+    """Lấy ảnh từ NHIỀU link nguồn (popup "Tìm hình")."""
+
+    log = Signal(str)
+    ok = Signal(list)          # danh sách URL ảnh (đã bỏ trùng)
+    failed = Signal(str)
+
+    def __init__(self, links: list[str]) -> None:
+        super().__init__()
+        self.links = [str(u).strip() for u in (links or []) if str(u).strip()]
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        from ..source import fetch_source
+
+        try:
+            out: list[str] = []
+            seen: set[str] = set()
+            total = max(1, len(self.links))
+            for i, u in enumerate(self.links, 1):
+                if self._stop:
+                    break
+                self.log.emit(f"Đang lấy ảnh từ link {i}/{total}…")
+                try:
+                    page = fetch_source(u)
+                except Exception as exc:      # noqa: BLE001
+                    self.log.emit(f"  (link {i} lỗi: {str(exc)[:70]})")
+                    continue
+                for img in (page.get("images") or []):
+                    if img and img not in seen:
+                        seen.add(img)
+                        out.append(img)
+            self.ok.emit(out)
+        except Exception as exc:      # noqa: BLE001
+            self.failed.emit(str(exc))
+
+
 class SourceImageSearchWorker(TrackedThread):
     """Tìm ảnh trên internet theo keyword (dùng trong popup "Hình tự tìm")."""
 

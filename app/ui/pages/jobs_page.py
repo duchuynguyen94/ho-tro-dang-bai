@@ -1714,100 +1714,31 @@ class JobsPage(QWidget):
             traceback.print_exc()
             show_toast(self, f"Auto format lỗi: {exc}", 3600, ok=False)
 
-    # ---------------- ảnh từ LINK NGUỒN (lọc theo mã sản phẩm) ---------------- #
-    @staticmethod
-    def _norm_txt(t: str) -> str:
-        """Chuẩn hoá để so mã: bỏ dấu, bỏ ký tự lạ, viết thường."""
-        import re as _re
-
-        t = str(t or "").lower().replace("đ", "d")
-        return _re.sub(r"[^a-z0-9]+", "", t)
-
-    def _product_codes(self, result: dict) -> list[str]:
-        """Danh sách mã sản phẩm của job (ô "Mã sản phẩm"; trống -> Focus keyword)."""
-        import re as _re
-
-        raw = str((result or {}).get("ma_san_pham") or "")
-        codes = [c.strip() for c in _re.split(r"[,;]", raw) if c.strip()]
-        if not codes:
-            fk = str((result or {}).get("focus_keyword") or "").strip()
-            if fk:
-                codes = [fk]
-        return codes
-
-    def _label_source_images(self, urls: list[str], meta: list[dict],
-                             codes: list[str]) -> list[tuple[str, str, bool]]:
-        """Gán mỗi ảnh 1 nhãn "thuộc mã nào" (khớp alt/title/tên file/chữ xung quanh)."""
-        by_url = {}
-        for m in (meta or []):
-            u = str(m.get("url") or "")
-            if u:
-                by_url[u] = m
-        out: list[tuple[str, str, bool]] = []
-        for u in urls:
-            m = by_url.get(u) or {}
-            hay = self._norm_txt(" ".join(str(m.get(k) or "") for k in
-                                          ("alt", "title", "near", "file"))) + self._norm_txt(u)
-            hit = ""
-            for c in codes:
-                nc = self._norm_txt(c)
-                if len(nc) >= 4 and nc in hay:
-                    hit = c
-                    break
-            out.append((u, f"✓ {hit}" if hit else "Không rõ mã", bool(hit)))
-        out.sort(key=lambda x: 0 if x[2] else 1)      # ảnh khớp mã lên trước
-        return out
-
+    # ---------------- "Tìm hình": lấy ảnh từ NHIỀU link nguồn ---------------- #
     def _pick_source_image(self) -> None:
-        """Popup "Hình tự tìm": CHỈ lấy ảnh từ LINK NGUỒN + lọc theo mã sản phẩm.
-
-        - Không tìm ảnh trên internet nữa.
-        - Mỗi ảnh có dòng chữ bên dưới: thuộc mã nào (hoặc "Không rõ mã").
-        - Bấm lại lần sau: GIỮ danh sách cũ của job đó.
-        """
+        """Popup "Tìm hình": gõ link -> bấm Lấy hình -> chọn ảnh -> chèn vào canvas."""
         if not self.current:
             return
         task = self.current
         r0 = task.result or {}
-        urls = [u for u in (r0.get("source_images") or []) if u]
-        meta: list[dict] = list(r0.get("source_images_meta") or [])
+        links = [u for u in (r0.get("image_links") or []) if u]
+        if not links:
+            links = list(getattr(task, "source_urls", []) or [])
+            if not links and getattr(task, "source_url", ""):
+                links = [task.source_url]
 
-        # 1) Chưa có -> lấy ảnh từ LINK NGUỒN
-        src_url = (task.source_url or "").strip()
-        if not urls and src_url:
-            from PySide6.QtCore import Qt as _Qt
-
-            from ...source import fetch_source
-
-            self.status_msg.emit("Đang lấy ảnh từ link nguồn…")
-            QApplication.setOverrideCursor(_Qt.WaitCursor)
-            try:
-                page = fetch_source(src_url)
-                meta = list(page.get("images_meta") or [])
-                urls = [u for u in (page.get("images") or [])]
-            except Exception as exc:      # noqa: BLE001
-                urls, meta = [], []
-                self.status_msg.emit(f"Không đọc được ảnh từ link nguồn: {str(exc)[:80]}")
-            finally:
-                QApplication.restoreOverrideCursor()
-
-        # 2) Gán nhãn "thuộc mã nào" + sắp ảnh khớp mã lên trước
-        codes = self._product_codes(r0)
-        pairs = self._label_source_images(urls, meta, codes)
-        ordered = [u for u, _c, _ok in pairs]
-        labels = {u: c for u, c, _ok in pairs}
-        if ordered:
-            self._save_source_images(ordered, "", meta=meta)
-
-        # 3) Mở popup (không còn ô keyword / tìm internet)
         from ..widgets.source_images import SourceImageDialog
 
-        dlg = SourceImageDialog(ordered, self, keyword="", allow_search=False,
-                                cache=self._img_cache.setdefault(str(task.id), {}),
-                                labels=labels)
+        dlg = SourceImageDialog([u for u in (r0.get("source_images") or []) if u], self,
+                                links=links,
+                                cache=self._img_cache.setdefault(str(task.id), {}))
         accepted = dlg.exec() == QDialog.Accepted
-        try:
-            self._save_source_images(dlg.urls or ordered, "")
+        try:      # nhớ link + danh sách ảnh cho RIÊNG job này
+            r = self.current.result = dict(self.current.result or {})
+            r["image_links"] = list(dlg.links_list or links)
+            r["source_images"] = list(dlg.urls or [])
+            self.store.upsert_task(self.current)
+            self.store.save()
         except Exception:      # noqa: BLE001
             pass
         if accepted and dlg.chosen:

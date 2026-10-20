@@ -1,37 +1,40 @@
-"""Popup chọn ảnh từ link nguồn để chèn vào canvas."""
+"""Popup “Tìm hình” — lấy ảnh từ NHIỀU link nguồn để chèn vào canvas."""
 from __future__ import annotations
+
+from pathlib import Path
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
+    QCheckBox,
     QDialog,
     QFrame,
     QGridLayout,
     QHBoxLayout,
     QLabel,
-    QLineEdit,
+    QPlainTextEdit,
     QPushButton,
     QScrollArea,
     QVBoxLayout,
     QWidget,
 )
 
-from ..workers import SourceImageDownloadWorker, SourceImageSearchWorker
+from ..workers import SourceImageDownloadWorker, SourceImagesFetchWorker
 
 THUMB = 132
 
 
 class _Tile(QFrame):
-    """1 ảnh trong danh sách nguồn (bấm để chọn)."""
+    """1 ảnh trong danh sách (bấm để chọn)."""
 
     clicked = Signal(str)
 
-    def __init__(self, url: str, caption: str = "", parent=None) -> None:
+    def __init__(self, url: str, parent=None) -> None:
         super().__init__(parent)
         self.url = url
         self.data = b""          # giữ trong bộ nhớ, chưa lưu ra máy
         self.setObjectName("srcTile")
-        self.setFixedSize(THUMB + 12, THUMB + 12 + 30)
+        self.setFixedSize(THUMB + 12, THUMB + 12)
         self.setCursor(Qt.PointingHandCursor)
         self.setProperty("selected", "false")
         lay = QVBoxLayout(self)
@@ -41,14 +44,6 @@ class _Tile(QFrame):
         self.pic.setFixedSize(THUMB, THUMB)
         self.pic.setObjectName("imgThumb")
         lay.addWidget(self.pic)
-        # DÒNG CHỮ DƯỚI ẢNH: ảnh này thuộc mã nào
-        self.cap = QLabel(str(caption or ""))
-        self.cap.setWordWrap(True)
-        self.cap.setAlignment(Qt.AlignHCenter | Qt.AlignTop)
-        self.cap.setFixedHeight(28)
-        self.cap.setToolTip(str(caption or ""))
-        self.cap.setStyleSheet("font-size:10px;color:#475569;background:transparent;")
-        lay.addWidget(self.cap)
 
     def set_image(self, data: bytes) -> None:
         self.data = data or b""
@@ -72,71 +67,71 @@ class _Tile(QFrame):
         super().mousePressEvent(event)
 
 
+def remove_bg_to_png(path: str, thresh: int = 42) -> str:
+    """Xoá nền 1 file ảnh -> lưu PNG trong suốt (lỗi thì giữ nguyên file cũ)."""
+    try:
+        from ...images.composer import _load_rgba, remove_background_auto
+
+        img = _load_rgba(path)
+        if img is None:
+            return path
+        out = remove_background_auto(img, thresh)
+        dest = Path(path).with_name(f"{Path(path).stem}_nobg.png")
+        out.save(dest)
+        return str(dest)
+    except Exception:      # noqa: BLE001
+        return path
+
+
 class SourceImageDialog(QDialog):
-    """Hiện danh sách ảnh TỰ TÌM; chọn 1 hoặc nhiều ảnh rồi bấm "Chèn vào canvas".
+    """Ô link (nhiều dòng) + nút "Lấy hình" -> chọn ảnh -> "Chèn vào canvas"."""
 
-    - Ô nhập keyword + nút "Tìm ảnh": tìm 20 ảnh trên internet (làm lại list khác).
-    - Bấm lại nút "Hình tự tìm": popup vẫn GIỮ danh sách cũ, muốn list khác thì gõ keyword mới.
-    """
-
-    def __init__(self, urls: list[str], parent=None, keyword: str = "",
-                 allow_search: bool = True, cache: dict | None = None,
-                 labels: dict | None = None) -> None:
+    def __init__(self, urls: list[str] | None = None, parent=None,
+                 links: list[str] | None = None, cache: dict | None = None) -> None:
         super().__init__(parent)
-        self._labels: dict = dict(labels or {})     # url -> "mã sản phẩm"
-        self._all_urls: list = list(urls or [])
-        self.setWindowTitle("Hình tự tìm")
-        self.setMinimumSize(700, 560)
+        self.setWindowTitle("Tìm hình")
+        self.setMinimumSize(720, 620)
         self.chosen: list[str] = []
         self.urls: list[str] = list(urls or [])
-        self.keyword: str = str(keyword or "")
-        self._allow_search = bool(allow_search)   # có cho tìm ảnh trên internet không
-        self._cache: dict = cache if cache is not None else {}   # url -> bytes (giữ ảnh đã tải)
+        self.links_list: list[str] = [str(u).strip() for u in (links or []) if str(u).strip()]
+        self._cache: dict = cache if cache is not None else {}   # url -> bytes (nhớ ảnh đã tải)
         self._picked: list[str] = []
         self._tiles: list[_Tile] = []
         self._worker = None
-        self._search_worker = None
+        self._fetch_worker = None
 
         v = QVBoxLayout(self)
+        v.setContentsMargins(14, 12, 14, 12)
+        v.setSpacing(8)
 
-        if not self._allow_search:
-            # BỎ tìm ảnh internet -> chỉ còn ô LỌC theo mã sản phẩm
-            frow = QHBoxLayout()
-            flab = QLabel("Lọc theo mã")
-            flab.setStyleSheet("font-weight:600;")
-            frow.addWidget(flab)
-            self.filter_edit = QLineEdit()
-            self.filter_edit.setPlaceholderText("Gõ mã sản phẩm để lọc ảnh…")
-            self.filter_edit.textChanged.connect(self._apply_filter)
-            frow.addWidget(self.filter_edit, 1)
-            v.addLayout(frow)
-        # ô nhập keyword + nút tìm ảnh
-        krow = QHBoxLayout()
-        klab = QLabel("Keyword hình")
-        klab.setStyleSheet("font-weight:600;")
-        krow.addWidget(klab)
-        self.kw_edit = QLineEdit(self.keyword)
-        self.kw_edit.setPlaceholderText("Gõ keyword (ví dụ: máy bơm nước Panasonic)…")
-        self.kw_edit.returnPressed.connect(self._do_search)
-        krow.addWidget(self.kw_edit, 1)
-        self.search_btn = QPushButton("Tìm ảnh")
-        self.search_btn.setProperty("class", "primary")
-        self.search_btn.setEnabled(self._allow_search)
-        self.search_btn.clicked.connect(self._do_search)
-        krow.addWidget(self.search_btn)
-        if self._allow_search:
-            v.addLayout(krow)
-        else:
-            klab.hide()
-            self.kw_edit.hide()
-            self.search_btn.hide()
+        lab = QLabel("Link nguồn (mỗi dòng 1 link):")
+        lab.setStyleSheet("font-weight:600;")
+        v.addWidget(lab)
 
-        head = QHBoxLayout()
-        self.title = QLabel(f"Ảnh tìm được ({len(self.urls)})")
+        self.links_edit = QPlainTextEdit()
+        self.links_edit.setPlaceholderText("https://…")
+        self.links_edit.setFixedHeight(74)
+        if self.links_list:
+            self.links_edit.setPlainText("\n".join(self.links_list))
+        v.addWidget(self.links_edit)
+
+        row = QHBoxLayout()
+        self.fetch_btn = QPushButton("Lấy hình")
+        self.fetch_btn.setProperty("class", "primary")
+        self.fetch_btn.clicked.connect(self._on_fetch)
+        row.addWidget(self.fetch_btn)
+        self.nobg_cb = QCheckBox("Xoá nền")
+        self.nobg_cb.setToolTip("Khi chèn: tự xoá nền ảnh (xuất PNG trong suốt).")
+        row.addWidget(self.nobg_cb)
+        self.trim_cb = QCheckBox("Trim")
+        self.trim_cb.setToolTip("Khi chèn: tự cắt viền thừa quanh đối tượng.")
+        row.addWidget(self.trim_cb)
+        row.addStretch(1)
+        v.addLayout(row)
+
+        self.title = QLabel(f"Ảnh ({len(self.urls)})")
         self.title.setStyleSheet("font-weight:700;")
-        head.addWidget(self.title)
-        head.addStretch(1)
-        v.addLayout(head)
+        v.addWidget(self.title)
 
         sub = QLabel("Bấm ảnh để CHỌN (chọn được nhiều ảnh), rồi bấm “Chèn vào canvas”.")
         sub.setProperty("class", "sub")
@@ -151,32 +146,78 @@ class SourceImageDialog(QDialog):
         scroll.setWidget(holder)
         v.addWidget(scroll, 1)
 
-        self.status = QLabel("Đang tải ảnh…")
+        self.status = QLabel("Gõ link rồi bấm “Lấy hình”." if not self.urls else "")
         self.status.setObjectName("taskMeta")
         v.addWidget(self.status)
 
-        row = QHBoxLayout()
-        row.addStretch(1)
-        cancel = QPushButton("Đóng")
-        cancel.setProperty("class", "ghost")
-        cancel.clicked.connect(self.reject)
+        foot = QHBoxLayout()
+        foot.addStretch(1)
         self.pick_all_btn = QPushButton("Chọn tất cả")
         self.pick_all_btn.setProperty("class", "ghost")
         self.pick_all_btn.clicked.connect(self._pick_all)
-        row.addWidget(self.pick_all_btn)
+        foot.addWidget(self.pick_all_btn)
+        cancel = QPushButton("Đóng")
+        cancel.setProperty("class", "ghost")
+        cancel.clicked.connect(self.reject)
+        foot.addWidget(cancel)
         self.insert_btn = QPushButton("Chèn vào canvas")
         self.insert_btn.setProperty("class", "primary")
         self.insert_btn.setEnabled(False)
         self.insert_btn.clicked.connect(self._accept)
-        row.addWidget(cancel)
-        row.addWidget(self.insert_btn)
-        v.addLayout(row)
+        foot.addWidget(self.insert_btn)
+        v.addLayout(foot)
 
-        self._set_urls(self.urls)
+        if self.urls:
+            self._set_urls(self.urls)
+
+    # ---------------- lấy ảnh từ link ---------------- #
+    def _links(self) -> list[str]:
+        out: list[str] = []
+        for line in self.links_edit.toPlainText().splitlines():
+            for piece in line.replace(",", " ").split():
+                t = piece.strip()
+                if t and t not in out:
+                    out.append(t)
+        return out
+
+    def _on_fetch(self) -> None:
+        links = self._links()
+        if not links:
+            self.status.setText("Gõ ít nhất 1 link trước đã.")
+            return
+        if self._fetch_worker is not None and self._fetch_worker.isRunning():
+            return
+        self.fetch_btn.setEnabled(False)
+        self.fetch_btn.setText("Đang lấy…")
+        self.status.setText(f"Đang lấy ảnh từ {len(links)} link…")
+        worker = SourceImagesFetchWorker(links)
+        worker.log.connect(self.status.setText)
+        worker.ok.connect(self._on_fetch_ok)
+        worker.failed.connect(self._on_fetch_failed)
+        worker.finished.connect(self._on_fetch_done)
+        self._fetch_worker = worker
+        worker.start()
+
+    def _on_fetch_ok(self, urls: list) -> None:
+        urls = [u for u in (urls or []) if u]
+        if not urls:
+            self.status.setText("Không tìm thấy ảnh nào trong các link đó.")
+            return
+        self._cache.clear()          # lấy link mới -> danh sách MỚI (thay cũ)
+        self.links_list = self._links()
+        self._set_urls(urls[:80])    # tối đa 80 ảnh cho nhẹ
+        self.status.setText(f"Đã lấy {len(urls)} ảnh — chọn ảnh rồi bấm “Chèn vào canvas”.")
+
+    def _on_fetch_failed(self, err: str) -> None:
+        self.status.setText(f"Lấy ảnh lỗi: {err}")
+
+    def _on_fetch_done(self) -> None:
+        self._fetch_worker = None
+        self.fetch_btn.setEnabled(True)
+        self.fetch_btn.setText("Lấy hình")
 
     # ---------------- danh sách ảnh ---------------- #
     def _set_urls(self, urls: list[str]) -> None:
-        """Nạp (lại) danh sách ảnh vào popup + tải ảnh trong luồng nền."""
         self.urls = [u for u in (urls or []) if u]
         self._picked = []
         while self._grid.count():
@@ -186,28 +227,26 @@ class SourceImageDialog(QDialog):
                 w.setParent(None)
                 w.deleteLater()
         self._tiles = []
-        self.title.setText(f"Ảnh từ link nguồn ({len(self.urls)})"
-                           if not self._allow_search else f"Ảnh tìm được ({len(self.urls)})")
+        self.title.setText(f"Ảnh ({len(self.urls)})")
         self._update_buttons()
 
         cols = 4
-        for i, url in enumerate(self.urls[:60]):
-            t = _Tile(url, self._labels.get(url, ""))
+        for i, url in enumerate(self.urls):
+            t = _Tile(url)
             t.clicked.connect(self._select)
             self._grid.addWidget(t, i // cols, i % cols)
             self._tiles.append(t)
         self._grid.setRowStretch(len(self._tiles) // cols + 1, 1)
 
         if not self._tiles:
-            self.status.setText("Không có ảnh phù hợp." if self._all_urls
-                                else "Link nguồn không có ảnh nào.")
+            self.status.setText("Chưa có ảnh — gõ link rồi bấm “Lấy hình”.")
             return
+
         try:
             if self._worker is not None:
                 self._worker.stop()
-        except Exception:
+        except Exception:      # noqa: BLE001
             pass
-        # Ảnh ĐÃ TẢI TRƯỚC ĐÓ -> hiện NGAY (không tải lại); chỉ tải ảnh còn thiếu
         todo: list[str] = []
         for t in self._tiles:
             data = self._cache.get(t.url)
@@ -225,62 +264,11 @@ class SourceImageDialog(QDialog):
         self._worker.finished.connect(self._on_finished)
         self._worker.start()
 
-    def _apply_filter(self) -> None:
-        """Lọc ảnh theo mã sản phẩm (không phân biệt hoa thường / dấu)."""
-        q = self.filter_edit.text().strip().lower() if hasattr(self, "filter_edit") else ""
-        if not q:
-            self._set_urls(self._all_urls)
-            return
-        def _norm(t: str) -> str:
-            import re as _re
-
-            t = t.lower().replace("đ", "d")
-            return _re.sub(r"[^a-z0-9]+", "", t)
-        nq = _norm(q)
-        keep = [u for u in self._all_urls
-                if nq in _norm(self._labels.get(u, "")) or nq in _norm(u)]
-        self._set_urls(keep)
-
-    def _do_search(self) -> None:
-        """Tìm list ảnh MỚI theo keyword (chạy luồng riêng — không đứng giao diện)."""
-        q = self.kw_edit.text().strip()
-        if not q:
-            self.status.setText("Gõ keyword trước đã.")
-            return
-        if not self._allow_search:
-            return
-        self.keyword = q
-        self._cache.clear()          # bấm "Tìm ảnh" -> XOÁ cache ảnh cũ
-        self.search_btn.setEnabled(False)
-        self.status.setText("Đang tìm ảnh trên internet…")
-        try:
-            if self._search_worker is not None:
-                self._search_worker.stop()
-        except Exception:
-            pass
-        self._search_worker = SourceImageSearchWorker(q, limit=20)
-        self._search_worker.log.connect(self.status.setText)
-        self._search_worker.ok.connect(self._on_search_ok)
-        self._search_worker.failed.connect(self._on_search_failed)
-        self._search_worker.start()
-
-    def _on_search_ok(self, urls: list) -> None:
-        self.search_btn.setEnabled(True)
-        urls = [u for u in (urls or []) if u]
-        if not urls:
-            self.status.setText("Không tìm được ảnh nào — thử keyword khác.")
-            return
-        self._set_urls(urls[:20])
-
-    def _on_search_failed(self, err: str) -> None:
-        self.search_btn.setEnabled(True)
-        self.status.setText(f"Tìm ảnh lỗi: {err}")
-
     def _on_one(self, url: str, data) -> None:
         if data:
             try:
                 self._cache[url] = bytes(data)     # nhớ ảnh đã tải -> mở lại popup là hiện ngay
-            except Exception:
+            except Exception:      # noqa: BLE001
                 pass
         for t in self._tiles:
             if t.url == url:
@@ -293,11 +281,10 @@ class SourceImageDialog(QDialog):
 
     def _on_finished(self) -> None:
         n = sum(1 for t in self._tiles if t.data)
-        self.status.setText(f"Đã tải {n}/{len(self._tiles)} ảnh — chọn 1 ảnh rồi bấm “Chèn vào canvas”."
-                            if n else "Không tải được ảnh nào từ link nguồn.")
+        self.status.setText(f"Đã tải {n}/{len(self._tiles)} ảnh — chọn ảnh rồi bấm “Chèn vào canvas”."
+                            if n else "Không tải được ảnh nào.")
 
     def _select(self, url: str) -> None:
-        """Bấm 1 ảnh = bật/tắt chọn (chọn được nhiều ảnh)."""
         if not url:
             return
         if url in self._picked:
@@ -323,20 +310,35 @@ class SourceImageDialog(QDialog):
             t.set_selected(t.url in self._picked)
         self._update_buttons()
 
+    # ---------------- chèn ---------------- #
     def _accept(self) -> None:
-        """Lưu (các) ảnh đã chọn ra máy rồi đóng — chỉ lưu khi bấm Chèn."""
+        """Lưu ảnh đã chọn ra máy (kèm xoá nền / trim nếu tick) rồi đóng."""
         from ...source import save_image_bytes
 
-        self.keyword = self.kw_edit.text().strip()      # nhớ keyword cho lần mở sau
+        trim = bool(self.trim_cb.isChecked())
+        nobg = bool(self.nobg_cb.isChecked())
+        self.links_list = self._links()
         paths: list[str] = []
+        self.status.setText("Đang lưu ảnh…")
         for t in self._tiles:
-            if t.url in self._picked and t.data:
+            if t.url not in self._picked or not t.data:
+                continue
+            try:
+                p = save_image_bytes(t.url, t.data)
+            except Exception:      # noqa: BLE001
+                p = ""
+            if not p:
+                continue
+            if trim:
                 try:
-                    p = save_image_bytes(t.url, t.data)
-                except Exception:
-                    p = ""
-                if p:
-                    paths.append(p)
+                    from ...images.composer import trim_borders
+
+                    p = trim_borders(p)
+                except Exception:      # noqa: BLE001
+                    pass
+            if nobg:
+                p = remove_bg_to_png(p)
+            paths.append(p)
         if not paths:
             self.status.setText("Không lưu được ảnh đã chọn — thử ảnh khác.")
             return
@@ -344,14 +346,11 @@ class SourceImageDialog(QDialog):
         self.accept()
 
     def closeEvent(self, event) -> None:  # noqa: N802
-        try:
-            self.keyword = self.kw_edit.text().strip()
-        except Exception:
-            pass
-        for w in (self._worker, self._search_worker):
+        self.links_list = self._links()
+        for w in (self._worker, self._fetch_worker):
             try:
                 if w is not None:
                     w.stop()
-            except Exception:
+            except Exception:      # noqa: BLE001
                 pass
         super().closeEvent(event)

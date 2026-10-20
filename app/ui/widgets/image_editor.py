@@ -289,7 +289,7 @@ class ImageEditorPanel(QFrame):
         ai.setProperty("class", "ghost")
         ai.clicked.connect(self.request_ai_edit.emit)
         self.ai_btn = ai
-        src_btn = QPushButton("Hình tự tìm")
+        src_btn = QPushButton("Tìm hình")
         src_btn.setProperty("class", "ghost")
         src_btn.setToolTip("Hiện danh sách ảnh lấy từ link nguồn — chọn 1 ảnh để chèn vào canvas")
         src_btn.clicked.connect(self.request_source_picker.emit)
