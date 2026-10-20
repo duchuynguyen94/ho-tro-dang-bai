@@ -714,9 +714,10 @@ class MainWindow(QMainWindow):
             fresh = next((t for t in self.store.tasks if t.id == task_id), None)
             return str(((fresh.result if fresh else None) or {}).get("content_html") or "")
 
-        links = ([] if (getattr(task, "kind", "") or "") == "blank"
-                 else (list(getattr(task, "source_urls", []) or [])
-                       or ([task.source_url] if getattr(task, "source_url", "") else [])))
+        # điền link nguồn nếu job CÓ link (job chia bài cũng có link gốc);
+        # job trống tự tạo (không có link) -> để trống
+        links = (list(getattr(task, "source_urls", []) or [])
+                 or ([task.source_url] if getattr(task, "source_url", "") else []))
         r0 = next((t for t in self.store.tasks if t.id == task_id), task).result or {}
         ModelsDialog(self.store, task_id, get_content=_content,
                      apply_content=self._apply_models_content, parent=self,
