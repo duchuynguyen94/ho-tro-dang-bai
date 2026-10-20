@@ -465,9 +465,19 @@ def _taxonomy_terms(page: Page, tax: str) -> list:
                     const inp = li.querySelector('input[type=checkbox]');
                     const lab = li.querySelector('label');
                     if (!inp || !lab) return;
-                    out.push({id: inp.id,
-                              text: (lab.innerText || '').replace(/\\s+/g, ' ').trim(),
-                              checked: !!inp.checked});
+                    // BỎ các link phụ do plugin chèn trong nhãn (vd "Make Term Primary")
+                    let txt = '';
+                    try {
+                        const copy = lab.cloneNode(true);
+                        copy.querySelectorAll(
+                            'input, a, button, .rank-math-tooltip, [class*="tooltip"],'
+                            + ' [class*="make-primary"]').forEach(x => x.remove());
+                        txt = (copy.textContent || '');
+                    } catch (e) {
+                        txt = (lab.innerText || '');
+                    }
+                    txt = txt.replace(/\\s+/g, ' ').trim();
+                    out.push({id: inp.id, text: txt, checked: !!inp.checked});
                 });
                 return out;
             }""", tax) or []
