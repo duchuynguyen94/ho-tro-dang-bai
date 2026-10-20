@@ -1,8 +1,6 @@
 """Popup “Tìm hình” — lấy ảnh từ NHIỀU link nguồn để chèn vào canvas."""
 from __future__ import annotations
 
-from pathlib import Path
-
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
@@ -67,22 +65,6 @@ class _Tile(QFrame):
         super().mousePressEvent(event)
 
 
-def remove_bg_to_png(path: str, thresh: int = 42) -> str:
-    """Xoá nền 1 file ảnh -> lưu PNG trong suốt (lỗi thì giữ nguyên file cũ)."""
-    try:
-        from ...images.composer import _load_rgba, remove_background_auto
-
-        img = _load_rgba(path)
-        if img is None:
-            return path
-        out = remove_background_auto(img, thresh)
-        dest = Path(path).with_name(f"{Path(path).stem}_nobg.png")
-        out.save(dest)
-        return str(dest)
-    except Exception:      # noqa: BLE001
-        return path
-
-
 class SourceImageDialog(QDialog):
     """Ô link (nhiều dòng) + nút "Lấy hình" -> chọn ảnh -> "Chèn vào canvas"."""
 
@@ -92,6 +74,7 @@ class SourceImageDialog(QDialog):
         self.setWindowTitle("Tìm hình")
         self.setMinimumSize(720, 620)
         self.chosen: list[str] = []
+        self.chosen_nobg = False          # tick "Xoá nền" -> đánh dấu thành phần (như chuột phải)
         self.urls: list[str] = list(urls or [])
         self.links_list: list[str] = [str(u).strip() for u in (links or []) if str(u).strip()]
         self._cache: dict = cache if cache is not None else {}   # url -> bytes (nhớ ảnh đã tải)
@@ -121,7 +104,7 @@ class SourceImageDialog(QDialog):
         self.fetch_btn.clicked.connect(self._on_fetch)
         row.addWidget(self.fetch_btn)
         self.nobg_cb = QCheckBox("Xoá nền")
-        self.nobg_cb.setToolTip("Khi chèn: tự xoá nền ảnh (xuất PNG trong suốt).")
+        self.nobg_cb.setToolTip("Khi chèn: xoá nền thành phần — giống hệt chuột phải → Xoá nền.")
         row.addWidget(self.nobg_cb)
         self.trim_cb = QCheckBox("Trim")
         self.trim_cb.setToolTip("Khi chèn: tự cắt viền thừa quanh đối tượng.")
@@ -329,9 +312,6 @@ class SourceImageDialog(QDialog):
                 p = ""
             if not p:
                 continue
-            # THỨ TỰ: tick cả 2 -> XOÁ NỀN trước, TRIM sau (theo yêu cầu)
-            if nobg:
-                p = remove_bg_to_png(p)
             if trim:
                 try:
                     from ...images.composer import trim_borders
@@ -344,6 +324,7 @@ class SourceImageDialog(QDialog):
             self.status.setText("Không lưu được ảnh đã chọn — thử ảnh khác.")
             return
         self.chosen = paths
+        self.chosen_nobg = nobg      # để canvas xoá nền y như "chuột phải -> Xoá nền"
         self.accept()
 
     def closeEvent(self, event) -> None:  # noqa: N802

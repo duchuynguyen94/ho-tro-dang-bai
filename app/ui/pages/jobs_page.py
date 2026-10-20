@@ -1742,7 +1742,8 @@ class JobsPage(QWidget):
         except Exception:      # noqa: BLE001
             pass
         if accepted and dlg.chosen:
-            self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0))
+            self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0),
+                                         nobg=bool(getattr(dlg, "chosen_nobg", False)))
 
     def _save_source_images(self, urls: list[str], keyword: str = "",
                             meta: list | None = None) -> None:
@@ -1758,7 +1759,8 @@ class JobsPage(QWidget):
         self.store.upsert_task(self.current)
         self.store.save()
 
-    def _add_upload_components(self, paths: list[str], index: int) -> None:
+    def _add_upload_components(self, paths: list[str], index: int,
+                               nobg: bool = False) -> None:
         """Thêm NHIỀU ảnh cùng lúc vào canvas (mỗi ảnh 1 thành phần)."""
         if not self.current or not paths:
             return
@@ -1774,10 +1776,13 @@ class JobsPage(QWidget):
         real = [p for p in paths if p]
         spots = self._find_free_spots(len(real))     # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng)
         for p, spot in zip(real, spots):
+            item = {"path": p, "pos": spot}
+            if nobg:
+                item["nobg"] = True      # xoá nền y như "chuột phải -> Xoá nền"
             if len(ups) >= 20:
-                ups[-1] = {"path": p, "pos": spot}
+                ups[-1] = item
             else:
-                ups.append({"path": p, "pos": spot})
+                ups.append(item)
         lst[index]["uploads"] = ups
         r["image_opts_list"] = lst
         self.store.upsert_task(self.current)
