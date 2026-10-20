@@ -207,7 +207,7 @@
       "selector": "",
       "selectors": [],
       "value": "{{slug}}",
-      "note": "Chỉnh đường dẫn (slug) — chỉ khi slug hiện tại >= 65 ký tự",
+      "note": "Chỉnh đường dẫn (slug) — chỉ khi slug hiện tại >= 55 ký tự",
       "source": "auto",
       "optional": true,
       "force": false,

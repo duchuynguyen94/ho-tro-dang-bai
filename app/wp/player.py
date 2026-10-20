@@ -513,32 +513,8 @@ def pick_taxonomy_terms(page: Page, tax: str, raw: str, label: str = "",
     return done
 
 
-def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=None) -> bool:
-    """Chọn 1 term trong hộp taxonomy của WooCommerce (product_cat / product_brand).
-
-    - Đã có trên web  -> tick đúng term (khớp KHÔNG DẤU, không phân biệt hoa thường).
-    - Chưa có         -> bấm "Thêm ... mới" -> điền tên -> bấm nút Thêm.
-    `name` rỗng -> bỏ qua bước.
-    """
-    name = str(name or "").strip()
-    label = label or tax
-    if not name:
-        if log:
-            log(f"  (bỏ qua {label} — để trống)")
-        return False
-    want = _norm_vn(name)
-
-    # 0) mở hộp metabox nếu đang thu gọn
-    try:
-        box = page.locator(f"#{tax}div").first
-        if box.count() and "closed" in (box.get_attribute("class") or ""):
-            try:
-                box.locator(".hndle").first.click(timeout=3000)
-                page.wait_for_timeout(300)
-            except Exception:
-                pass
-    except Exception:
-        pass
+def _find_term(page: Page, tax: str, want: str):
+    """Tìm term theo tên (khớp KHÔNG DẤU): trùng khít -> bắt đầu bằng -> chứa."""
 
     def find():
         terms = _taxonomy_terms(page, tax)
@@ -565,74 +541,145 @@ def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=Non
         except Exception:
             pass
         hit = find()
+    return hit
 
-    if hit:                              # ---- ĐÃ CÓ -> tick
-        try:
-            if not hit.get("checked"):
-                cb = page.locator("#" + str(hit["id"])).first
-                try:
-                    cb.check(force=True, timeout=4000)
-                except Exception:
-                    try:
-                        cb.click(force=True, timeout=4000)
-                    except Exception:
-                        page.locator(f"label[for='{hit['id']}']").first.click(timeout=4000)
-            page.wait_for_timeout(300)
-            if log:
-                log(f"  ({label}: đã chọn có sẵn “{hit['text']}”")
-            return True
-        except Exception as exc:          # noqa: BLE001
-            if log:
-                log(f"  ({label}: không tick được “{hit['text']}” — {str(exc)[:60]})")
 
-    # ---- CHƯA CÓ -> THÊM MỚI
+def _term_checked(page: Page, cb_id: str) -> bool:
     try:
-        # ô "Thêm ... mới": CHỈ mở khi đang ĐÓNG (bấm toggle lúc đang mở sẽ đóng lại)
-        inp = page.locator(f"#new{tax}").first
-        for _ in range(3):
-            try:
-                if inp.count() and inp.is_visible():
-                    break
-            except Exception:
-                pass
-            try:
-                toggle = page.locator(f"#{tax}-add-toggle").first
-                if toggle.count():
-                    toggle.click(timeout=4000)
-            except Exception:
-                pass
-            page.wait_for_timeout(400)
-        if not inp.count():
-            if log:
-                log(f"  ({label}: chưa có “{name}” và không thấy ô thêm mới — bỏ qua)")
-            return False
+        return bool(page.evaluate(
+            """(id) => { const el = document.getElementById(id); return !!(el && el.checked); }""",
+            cb_id))
+    except Exception:
+        return False
+
+
+def _tick_term(page: Page, cb_id: str, wait_ms: int = 3000) -> bool:
+    """Tick 1 checkbox RỒI KIỂM TRA LẠI (thử click nhãn nếu cách khác không ăn)."""
+    if _term_checked(page, cb_id):
+        return True
+    try:
+        page.locator("#" + cb_id).first.check(force=True, timeout=4000)
+    except Exception:
+        pass
+    for act in (lambda: page.locator("#" + cb_id).first.click(force=True, timeout=3000),
+                lambda: page.locator(f"label[for='{cb_id}']").first.click(timeout=3000)):
+        page.wait_for_timeout(250)
+        if _term_checked(page, cb_id):
+            return True
+        try:
+            act()
+        except Exception:
+            continue
+    deadline = time.time() + wait_ms / 1000.0
+    while time.time() < deadline:
+        if _term_checked(page, cb_id):
+            return True
+        page.wait_for_timeout(250)
+    return _term_checked(page, cb_id)
+
+
+def _add_term_once(page: Page, tax: str, name: str, timeout: float = 12.0) -> str:
+    """Thêm 1 term mới. Trả về id checkbox của term vừa thêm (nếu thấy), ngược lại ""."""
+    inp = page.locator(f"#new{tax}").first
+    for _ in range(4):                   # mở ô "Thêm ... mới" (đang ĐÓNG mới bấm toggle)
+        try:
+            if inp.count() and inp.is_visible():
+                break
+        except Exception:
+            pass
+        try:
+            toggle = page.locator(f"#{tax}-add-toggle").first
+            if toggle.count():
+                toggle.click(timeout=4000)
+        except Exception:
+            pass
+        page.wait_for_timeout(400)
+    if not inp.count():
+        return ""
+    try:
         inp.fill(name, timeout=5000)
-        page.wait_for_timeout(200)
-        btn = page.locator(f"#{tax}-add-submit").first
-        if not btn.count():
-            if log:
-                log(f"  ({label}: không thấy nút Thêm — bỏ qua)")
-            return False
+    except Exception:
+        return ""
+    page.wait_for_timeout(200)
+    btn = page.locator(f"#{tax}-add-submit").first
+    if not btn.count():
+        return ""
+    try:
         btn.click(timeout=6000)
-        for _ in range(25):              # chờ term mới hiện ra & được tick (tối đa ~7,5s)
-            page.wait_for_timeout(300)
-            m = next((t for t in _taxonomy_terms(page, tax) if _norm_vn(t["text"]) == want), None)
-            if m:
-                if not m.get("checked"):
-                    try:
-                        page.locator("#" + str(m["id"])).first.check(force=True, timeout=2000)
-                    except Exception:
-                        pass
-                if log:
-                    log(f"  ({label}: chưa có -> ĐÃ THÊM MỚI “{name}”)")
-                return True
+    except Exception:
+        return ""
+    want = _norm_vn(name)
+    deadline = time.time() + timeout
+    while time.time() < deadline:        # chờ term mới xuất hiện trong danh sách
+        page.wait_for_timeout(300)
+        m = next((t for t in _taxonomy_terms(page, tax) if _norm_vn(t["text"]) == want), None)
+        if m:
+            return str(m["id"])
+    return ""
+
+
+def pick_taxonomy_term(page: Page, tax: str, name: str, label: str = "", log=None) -> bool:
+    """Chọn 1 term trong hộp taxonomy của WooCommerce (product_cat / product_brand).
+
+    - Đã có trên web  -> TICK đúng term + KIỂM TRA lại đã tick.
+    - Chưa có         -> THÊM MỚI -> CHỜ term xuất hiện -> TICK chính term mới đó -> kiểm tra.
+    `name` rỗng -> bỏ qua bước.
+    """
+    name = str(name or "").strip()
+    label = label or tax
+    if not name:
         if log:
-            log(f"  ({label}: đã bấm thêm “{name}” nhưng chưa thấy trong danh sách)")
+            log(f"  (bỏ qua {label} — để trống)")
         return False
-    except Exception as exc:             # noqa: BLE001
+    want = _norm_vn(name)
+
+    # 0) mở hộp metabox nếu đang thu gọn
+    try:
+        box = page.locator(f"#{tax}div").first
+        if box.count() and "closed" in (box.get_attribute("class") or ""):
+            try:
+                box.locator(".hndle").first.click(timeout=3000)
+                page.wait_for_timeout(300)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+    # 1) ĐÃ CÓ -> tick + kiểm tra
+    hit = _find_term(page, tax, want)
+    if hit:
+        ok = _tick_term(page, str(hit["id"]))
         if log:
-            log(f"  ({label}: lỗi thêm mới — {str(exc)[:70]})")
+            log(f"  ({label}: {'đã chọn' if ok else 'KHÔNG tick được'} “{hit['text']}”"
+                + ("" if ok else " — thử tick lại bằng tay trên web"))
+        return ok
+
+    # 2) CHƯA CÓ -> thêm mới (thử 2 lần) rồi CHỌN chính term mới
+    new_id = ""
+    for attempt in (1, 2):
+        new_id = _add_term_once(page, tax, name)
+        if new_id:
+            break
+        if attempt == 1 and log:
+            log(f"  ({label}: chưa thấy “{name}” — thử thêm lại lần 2…")
+    if not new_id:
+        hit = _find_term(page, tax, want)      # có thể WP báo trùng -> term đã có sẵn
+        if hit:
+            ok = _tick_term(page, str(hit["id"]))
+            if log:
+                log(f"  ({label}: đã có sẵn “{hit['text']}” -> "
+                    + ("ĐÃ CHỌN" if ok else "KHÔNG tick được"))
+            return ok
+        if log:
+            log(f"  ({label}: KHÔNG thêm được “{name}” — kiểm tra quyền/trùng tên")
         return False
+    ok = _tick_term(page, new_id)
+    text = next((t["text"] for t in _taxonomy_terms(page, tax)
+                 if str(t["id"]) == new_id), name)
+    if log:
+        log(f"  ({label}: chưa có -> ĐÃ THÊM MỚI “{text}”"
+            + (" + ĐÃ CHỌN" if ok else " (CHƯA tick được — thử tick lại bằng tay)"))
+    return ok
 
 
 def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int:
@@ -640,10 +687,10 @@ def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int
     return _fill_attachment_in_top_modal(page, value, log=log)
 
 
-def slug_if_needed(page: Page, new_slug: str, limit: int = 65, log=None) -> bool:
+def slug_if_needed(page: Page, new_slug: str, limit: int = 55, log=None) -> bool:
     """Chỉnh đường dẫn (slug) — CHỈ KHI slug hiện tại DÀI TỪ `limit` ký tự trở lên.
 
-    Slug hiện tại < 65 ký tự -> BỎ QUA (giữ nguyên slug WordPress tự tạo).
+    Slug hiện tại < 55 ký tự -> BỎ QUA (giữ nguyên slug WordPress tự tạo).
     """
     cur = ""
     try:
