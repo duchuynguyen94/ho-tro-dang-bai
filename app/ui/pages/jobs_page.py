@@ -1673,8 +1673,9 @@ class JobsPage(QWidget):
         try:
             from ...ai.manager import (already_auto_formatted, apply_template_icons,
                                        clean_content_html, extract_product_name,
-                                       insert_title_links, linkify_domains,
-                                       mark_auto_formatted, set_first_title_link)
+                                       insert_readmore, insert_title_links,
+                                       linkify_domains, mark_auto_formatted,
+                                       readmore_from_store, set_first_title_link)
         except Exception:      # noqa: BLE001
             traceback.print_exc()
             return
@@ -1688,6 +1689,7 @@ class JobsPage(QWidget):
             if already_auto_formatted(html):
                 # Đã format rồi -> CHỈ kiểm tra + sửa link tiêu đề đầu cho đúng website sẽ đăng
                 fixed = set_first_title_link(html, site_url)
+                fixed = insert_readmore(fixed, readmore_from_store(self.store))
                 if fixed != html:
                     self.content_edit.set_html(fixed)
                     self._save()
@@ -1706,6 +1708,7 @@ class JobsPage(QWidget):
                  str(r.get("title") or ""), ""],
             )
             out = set_first_title_link(out, site_url)         # 5) tiêu đề đầu -> website sẽ đăng
+            out = insert_readmore(out, readmore_from_store(self.store))   # 5b) khối "Đọc thêm"
             out = mark_auto_formatted(out)                    # 6) gắn dấu đã auto format
             self.content_edit.set_html(out)
             self._save()

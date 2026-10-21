@@ -1369,3 +1369,69 @@ def build_models_prompt(urls: list, has_file: bool = False) -> str:
     else:
         head = "Trích xuất toàn bộ Product Models có trong dữ liệu."
     return f"{head}\n\n{MODELS_RULES}"
+
+
+# --------------------------------------------------------------------------- #
+# "Đọc thêm" (Cài đặt -> Chèn nội dung) — chèn trước <h2> ĐẦU TIÊN
+# --------------------------------------------------------------------------- #
+READMORE_CLASS = "readmore"
+
+
+def _remove_readmore(html_text: str) -> str:
+    """Gỡ khối <div class="readmore">...</div> cũ (không phá div lồng bên trong)."""
+    t = str(html_text or "")
+    needle = f'<div class="{READMORE_CLASS}"'
+    i = t.lower().find(needle)
+    while i >= 0:
+        depth = 0
+        end = len(t)
+        for m in re.finditer(r"<div\b|</div\s*>", t[i:], re.I):
+            if m.group(0).lower().startswith("<div"):
+                depth += 1
+            else:
+                depth -= 1
+            if depth == 0:
+                end = i + m.end()
+                # bỏ luôn khoảng trắng/xuống dòng ngay sau khối
+                while end < len(t) and t[end] in " \t\r\n":
+                    end += 1
+                break
+        t = t[:i] + t[end:]
+        i = t.lower().find(needle)
+    return t
+
+
+def build_readmore_block(text: str) -> str:
+    """Khối HTML của "đọc thêm" (chèn nguyên văn; dạng chữ thường -> bọc <p>)."""
+    body = str(text or "").strip()
+    if not body:
+        return ""
+    if "<" not in body:
+        body = "\n".join(f"<p>{html.escape(ln)}</p>"
+                         for ln in body.splitlines() if ln.strip())
+    return f'<div class="{READMORE_CLASS}">\n{body}\n</div>'
+
+
+def insert_readmore(html_text: str, text: str) -> str:
+    """Chèn "đọc thêm" NGAY TRƯỚC <h2> ĐẦU TIÊN (không có <h2> -> cuối bài).
+
+    Luôn gỡ khối cũ trước -> format lại nhiều lần cũng KHÔNG bị nhân đôi.
+    `text` rỗng -> chỉ gỡ khối cũ (không chèn gì).
+    """
+    t = _remove_readmore(str(html_text or ""))
+    block = build_readmore_block(text)
+    if not block:
+        return t
+    m = re.search(r"<h2\b", t, re.I)
+    if m:
+        return t[: m.start()] + block + "\n" + t[m.start():]
+    tail = t.rstrip()
+    return (tail + "\n" if tail else "") + block
+
+
+def readmore_from_store(store) -> str:
+    """Nội dung “Đọc thêm” đã cấu hình trong Cài đặt (rỗng = không chèn)."""
+    try:
+        return str(((store.data.get("ui") or {}).get("readmore") or "")).strip()
+    except Exception:      # noqa: BLE001
+        return ""

@@ -1286,8 +1286,9 @@ class MainWindow(QMainWindow):
         """Auto format LẠI 1 lần + đặt link tiêu đề ĐẦU = website sẽ đăng."""
         try:
             from ..ai.manager import (apply_template_icons, clean_content_html,
-                                      extract_product_name, insert_title_links,
-                                      linkify_domains, mark_auto_formatted,
+                                      extract_product_name, insert_readmore,
+                                      insert_title_links, linkify_domains,
+                                      mark_auto_formatted, readmore_from_store,
                                       set_first_title_link)
 
             r = task.result = dict(task.result or {})
@@ -1300,6 +1301,7 @@ class MainWindow(QMainWindow):
             if already_auto_formatted(html):
                 # đã format rồi -> chỉ sửa link tiêu đề đầu cho đúng website
                 out = set_first_title_link(html, site_url)
+                out = insert_readmore(out, readmore_from_store(self.store))
             else:
                 out = clean_content_html(html)
                 out = apply_template_icons(out)
@@ -1311,6 +1313,7 @@ class MainWindow(QMainWindow):
                      str(r.get("title") or ""), ""],
                 )
                 out = set_first_title_link(out, site_url)
+                out = insert_readmore(out, readmore_from_store(self.store))
                 out = mark_auto_formatted(out)
             r["content_html"] = out
             self.store.upsert_task(task)

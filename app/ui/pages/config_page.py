@@ -153,6 +153,12 @@ class ConfigPage(QWidget):
             ("format", fmt, "Format Rule"),
             ("title_links", tlinks, "Link tiêu đề"),
         ]
+        from ..widgets.readmore_panel import ReadMorePanel
+
+        readmore = ReadMorePanel(self.store)
+        readmore.changed.connect(self.changed.emit)
+        items.append(("readmore", readmore, "Chèn nội dung"))
+
         from ..widgets.cache_panel import CachePanel
 
         cache = CachePanel(self.store, on_cleared=self._on_cache_cleared)
