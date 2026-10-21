@@ -525,6 +525,118 @@ def pick_taxonomy_terms(page: Page, tax: str, raw: str, label: str = "",
     return done
 
 
+def _tag_box_list(page: Page, box_id: str = "tagsdiv-product_tag") -> list:
+    """Các thẻ ĐÃ CÓ trong hộp Thẻ sản phẩm (bỏ nút xoá khỏi tên)."""
+    try:
+        return page.evaluate(
+            """(box) => {
+                const b = document.getElementById(box);
+                if (!b) return [];
+                const cl = b.querySelector('.tagchecklist');
+                if (!cl) return [];
+                return Array.from(cl.querySelectorAll('span')).map(sp => {
+                    const c = sp.cloneNode(true);
+                    c.querySelectorAll('a, button').forEach(x => x.remove());
+                    return (c.textContent || '').replace(/\\s+/g, ' ').trim();
+                }).filter(Boolean);
+            }""", box_id) or []
+    except Exception:
+        return []
+
+
+def add_tags(page: Page, tags: str, input_sel: str = "", log=None,
+             box_id: str = "tagsdiv-product_tag") -> bool:
+    """Thêm THẺ (tags) chắc chắn: gõ -> bấm "Thêm" -> KIỂM TRA -> thử lại 3 lần.
+
+    `tags` nhiều thẻ cách nhau dấu phẩy / chấm phẩy.
+    """
+    names = [t.strip() for t in re.split(r"[,;]", str(tags or "")) if t.strip()]
+    if not names:
+        if log:
+            log("  (bỏ qua thẻ — để trống)")
+        return False
+
+    def norm(t: str) -> str:
+        return _norm_vn(t)
+
+    wants = [norm(n) for n in names]
+
+    def done() -> bool:
+        have = [norm(t) for t in _tag_box_list(page, box_id)]
+        return all(any(w == h or w in h for h in have) for w in wants)
+
+    # mở hộp Thẻ nếu đang thu gọn
+    try:
+        page.evaluate(
+            """(id) => { const b = document.getElementById(id);
+                if (b && b.classList.contains('closed')) b.classList.remove('closed'); }""", box_id)
+    except Exception:
+        pass
+    try:
+        if not page.locator(f"#{box_id} .tagchecklist").count():
+            page.locator(f"#{box_id} .hndle").first.click(timeout=2500)
+            page.wait_for_timeout(300)
+    except Exception:
+        pass
+
+    inp = page.locator(input_sel or "#new-tag-product_tag").first
+    if not inp.count():
+        if log:
+            log("  (thẻ: không thấy ô nhập thẻ — bỏ qua)")
+        return False
+    btn = page.locator(f"#{box_id} .tagadd").first
+
+    for attempt in (1, 2, 3):
+        if done():                      # đã có đủ từ lần trước
+            break
+        try:
+            inp.fill(", ".join(names), timeout=5000)
+        except Exception:               # ô bị ẩn -> đặt giá trị trực tiếp
+            try:
+                page.evaluate(
+                    """([sel, v]) => { const i = document.querySelector(sel);
+                        if (!i) return; i.value = v;
+                        i.dispatchEvent(new Event('input', {bubbles: true})); }""",
+                    [input_sel or "#new-tag-product_tag", ", ".join(names)])
+            except Exception:
+                return False
+        page.wait_for_timeout(250)
+        clicked = False
+        try:
+            if btn.count() and btn.is_visible() and btn.is_enabled():
+                btn.click(timeout=4000)
+                clicked = True
+        except Exception:
+            clicked = False
+        if not clicked:
+            try:
+                page.evaluate(
+                    """(id) => { const b = document.querySelector('#' + id + ' .tagadd');
+                        if (b) b.click(); }""", box_id)
+            except Exception:
+                pass
+        # chờ tối đa ~6 giây
+        deadline = time.time() + 6.0
+        while time.time() < deadline:
+            page.wait_for_timeout(300)
+            if done():
+                if log:
+                    log(f"  (thẻ: đã thêm {len(names)} thẻ)")
+                return True
+        # thử Enter trong ô nhập (WordPress hỗ trợ)
+        try:
+            inp.click(timeout=2000)
+            inp.press("Enter", timeout=2000)
+        except Exception:
+            pass
+        if log and attempt < 3:
+            log(f"  (thẻ: chưa thấy đủ thẻ — thử lại lần {attempt + 1}…)")
+    ok = done()
+    if log:
+        log(f"  (thẻ: {'đã thêm' if ok else 'KHÔNG thêm được'} {len(names)} thẻ)")
+    return ok
+
+
 def _ensure_tax_box_open(page: Page, tax: str, timeout: float = 6.0) -> None:
     """Mở hộp taxonomy (nếu đang thu gọn) — bỏ class 'closed' + bấm tiêu đề nếu cần."""
     try:
@@ -1380,6 +1492,9 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("add_tags", "add_tag", "tags_add"):
+                add_tags(page, render(step.value or "{{tags}}", ctx),
+                         input_sel=step.selector, log=log)
             elif action in ("set_status", "post_status", "status"):
                 set_post_status(page, render(step.value or "pending", ctx), log=log)
             elif action in ("taxonomy_pick", "pick_term", "taxonomy_select"):

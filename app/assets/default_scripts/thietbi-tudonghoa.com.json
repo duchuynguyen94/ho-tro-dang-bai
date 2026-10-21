@@ -130,33 +130,15 @@
       "force": false
     },
     {
-      "action": "type",
+      "action": "add_tags",
       "selector": "#new-tag-product_tag",
-      "selectors": [
-        "#new-tag-product_tag",
-        "#tagsdiv-product_tag input.newtag",
-        "#tagsdiv-product_tag input[type='text']",
-        "#tax-input-product_tag"
-      ],
+      "selectors": [],
       "value": "{{tags}}",
-      "note": "AI search tags → Thẻ sản phẩm",
+      "note": "AI search tags → Thẻ sản phẩm (gõ + bấm Thêm + kiểm tra)",
       "source": "auto",
       "optional": true,
-      "force": false
-    },
-    {
-      "action": "click",
-      "selector": "#tagsdiv-product_tag .tagadd",
-      "selectors": [
-        "#tagsdiv-product_tag .tagadd",
-        "#tagsdiv-product_tag input.tagadd",
-        "#tagsdiv-product_tag input[type='button']"
-      ],
-      "value": "",
-      "note": "Bấm “Thêm” để thêm thẻ sản phẩm",
-      "source": "auto",
-      "optional": true,
-      "force": false
+      "force": false,
+      "when": ""
     },
     {
       "action": "taxonomy_pick",
