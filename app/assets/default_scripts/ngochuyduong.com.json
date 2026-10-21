@@ -312,6 +312,17 @@
       "optional": true,
       "force": false,
       "when": ""
+    },
+    {
+      "action": "save_post",
+      "selector": "#publish",
+      "selectors": [],
+      "value": "",
+      "note": "Lưu vào chờ duyệt (bấm Lưu/Cập nhật + chờ lưu xong)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": ""
     }
   ]
 }

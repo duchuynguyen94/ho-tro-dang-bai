@@ -892,6 +892,81 @@ def fill_current_attachment_fields(page: Page, value: str = "", log=None) -> int
     return _fill_attachment_in_top_modal(page, value, log=log)
 
 
+def save_post(page: Page, log=None, timeout: float = 120.0) -> bool:
+    """Bấm nút Lưu/Cập nhật (#publish) và CHỜ WordPress lưu xong."""
+    # Trạng thái KHÁC "publish" -> phải bấm nút LƯU (name="save"), KHÔNG bấm "Xuất bản"
+    status = ""
+    try:
+        status = str(page.evaluate(
+            "() => (document.querySelector('#post_status') || {}).value || ''") or "")
+    except Exception:
+        status = ""
+    if status and status != "publish":
+        sels = ("#save-post", "input[name='save']", "#publish")
+    else:
+        sels = ("#publish", "#save-post", "input[name='save']")
+    btn = None
+    for sel in sels:
+        try:
+            loc = page.locator(sel).first
+            if loc.count():
+                btn = loc
+                break
+        except Exception:
+            continue
+    if btn is None:
+        if log:
+            log("  (lưu: không thấy nút Lưu — bỏ qua)")
+        return False
+    url_before = ""
+    try:
+        url_before = page.url
+    except Exception:
+        pass
+    if log:
+        log("  (đang lưu…)")
+    clicked = False
+    try:
+        btn.click(timeout=8000)
+        clicked = True
+    except Exception:
+        clicked = False
+    if not clicked:
+        try:
+            page.evaluate(
+                """(sel) => { const b = document.querySelector(sel); if (b) b.click(); }""",
+                sels[0])
+        except Exception:
+            if log:
+                log("  (lưu: không bấm được nút Lưu)")
+            return False
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        page.wait_for_timeout(600)
+        try:
+            url = page.url
+        except Exception:
+            break
+        if url and url != url_before and ("post.php" in url or "message=" in url):
+            if log:
+                log("  (đã lưu xong — bài đang ở trạng thái đã chọn)")
+            return True
+        try:      # thông báo "Sản phẩm đã cập nhật." / "Product updated"
+            txt = page.evaluate(
+                """() => { const n = document.querySelector('#message, .notice-success, .updated');
+                    return n ? (n.innerText || '') : ''; }""")
+        except Exception:
+            txt = ""
+        low = str(txt or "").lower()
+        if any(k in low for k in ("đã cập nhật", "đã lưu", "updated", "published", "đã đăng")):
+            if log:
+                log("  (đã lưu xong)")
+            return True
+    if log:
+        log("  (lưu: chưa thấy xác nhận — kiểm tra trên web)")
+    return False
+
+
 def set_post_status(page: Page, status: str = "pending", label: str = "", log=None) -> bool:
     """Đổi TRẠNG THÁI bài viết/sản phẩm (ô #post_status) — KHÔNG bấm Lưu.
 
@@ -1492,6 +1567,8 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     # Ô soạn thảo TinyMCE đang ở chế độ "Trực quan" -> điền thẳng vào khung soạn thảo
                     if not _fill_editor_iframe(page, step, value, log=log):
                         raise
+            elif action in ("save_post", "luu_bai", "submit_post"):
+                save_post(page, log=log)
             elif action in ("add_tags", "add_tag", "tags_add"):
                 add_tags(page, render(step.value or "{{tags}}", ctx),
                          input_sel=step.selector, log=log)
