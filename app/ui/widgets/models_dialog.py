@@ -16,8 +16,8 @@ from ..workers import ModelsWorker
 FILE_FILTER = ("Tài liệu (*.pdf *.docx *.doc *.txt *.png *.jpg *.jpeg *.webp);;"
                "Tất cả tệp (*)")
 
-# Số mã TỐI ĐA khi chèn vào nội dung
-MAX_INSERT = 20
+# Trạng thái popup dùng CHUNG cho mọi job (config.json -> ui.models_state)
+STATE_KEY = "models_state"
 
 
 def _plain(text: str) -> str:
@@ -34,11 +34,11 @@ def insert_models_block(html_text: str, models: list[str]) -> tuple[str, str, in
     - Ưu tiên: NGAY TRƯỚC <h2> thứ 4.
     - Không có h2 thứ 4 -> trước <h2> thứ 3.
     - Không có h2 thứ 3 -> CUỐI BÀI.
-    - Chỉ chèn TỐI ĐA 20 mã đầu.
+    - Chèn TOÀN BỘ mã trong ô kết quả (không giới hạn).
     Trả về (html mới, mô tả vị trí, số mã đã chèn).
     """
     html_text = str(html_text or "")
-    items = [str(m).strip() for m in (models or []) if str(m).strip()][:MAX_INSERT]
+    items = [str(m).strip() for m in (models or []) if str(m).strip()]
     if not items:
         return html_text, "", 0
     block = "<ul>" + "".join(f"<li>{_esc(m)}</li>" for m in items) + "</ul>"
@@ -62,7 +62,12 @@ class ModelsDialog(QDialog):
         super().__init__(parent)
         self.store = store
         self.brand = str(brand or "").strip()
-        self._prefill = [str(u).strip() for u in (links_prefill or []) if str(u).strip()]
+        # TRẠNG THÁI DÙNG CHUNG (mọi job dùng chung link + kết quả đã Xuất)
+        state = self._state()
+        saved_links = [str(u).strip() for u in (state.get("links") or []) if str(u).strip()]
+        saved_out = str(state.get("result") or "")
+        self._prefill = (saved_links
+                         or [str(u).strip() for u in (links_prefill or []) if str(u).strip()])
         self.file_path = ""
         self._worker = None
         self.task_id = str(task_id or "")
@@ -70,6 +75,7 @@ class ModelsDialog(QDialog):
         self._apply_content = apply_content
 
         self.setWindowTitle("Product Models")
+        self._state_timer = None
         self.setMinimumWidth(660)
         self.resize(700, 640)
 
@@ -85,6 +91,7 @@ class ModelsDialog(QDialog):
         self.links = QPlainTextEdit()
         self.links.setPlaceholderText("https://…")
         self.links.setFixedHeight(76)
+        self.links.textChanged.connect(self._queue_state_save)
         if self._prefill:
             self.links.setPlainText("\n".join(self._prefill))
         root.addWidget(self.links)
@@ -120,6 +127,8 @@ class ModelsDialog(QDialog):
         root.addWidget(QLabel("Kết quả (mỗi Product Model 1 dòng):"))
         self.out = QPlainTextEdit()
         self.out.setPlaceholderText("Kết quả sẽ hiện ở đây…")
+        if saved_out:
+            self.out.setPlainText(saved_out)
         root.addWidget(self.out, 1)
 
         foot = QHBoxLayout()
@@ -132,8 +141,7 @@ class ModelsDialog(QDialog):
         self.insert_btn.setProperty("class", "ghost")
         self.insert_btn.setToolTip(
             "Chèn danh sách mã ở trên vào NỘI DUNG của công việc đang mở:\n"
-            "ngay TRƯỚC <h2> thứ 4 (không có thì trước <h2> thứ 3, không có nữa thì cuối bài).\n"
-            f"Tối đa {MAX_INSERT} mã."
+            "ngay TRƯỚC <h2> thứ 4 (không có thì trước <h2> thứ 3, không có nữa thì cuối bài)."
         )
         self.insert_btn.clicked.connect(self._insert_to_content)
         foot.addWidget(self.insert_btn)
@@ -143,6 +151,42 @@ class ModelsDialog(QDialog):
         root.addLayout(foot)
 
     # ------------------------------------------------------------------ #
+    def _state(self) -> dict:
+        """Dict trạng thái dùng chung (lưu trong config.json)."""
+        try:
+            ui = self.store.data.setdefault("ui", {})
+            st = ui.get(STATE_KEY)
+            if not isinstance(st, dict):
+                st = {}
+                ui[STATE_KEY] = st
+            return st
+        except Exception:      # noqa: BLE001
+            return {}
+
+    def _save_state(self) -> None:
+        """Lưu LINK + KẾT QUẢ (dùng chung mọi job)."""
+        try:
+            st = self._state()
+            st["links"] = self._links()
+            st["result"] = self.out.toPlainText()
+            self.store.save()
+        except Exception:      # noqa: BLE001
+            pass
+
+    def _queue_state_save(self, *_a) -> None:
+        """Hẹn lưu sau 0,8 giây (tránh ghi config mỗi lần gõ)."""
+        try:
+            from PySide6.QtCore import QTimer
+
+            if self._state_timer is None:
+                self._state_timer = QTimer(self)
+                self._state_timer.setSingleShot(True)
+                self._state_timer.setInterval(800)
+                self._state_timer.timeout.connect(self._save_state)
+            self._state_timer.start()
+        except Exception:      # noqa: BLE001
+            pass
+
     def _pick_file(self) -> None:
         p, _ = QFileDialog.getOpenFileName(self, "Chọn file nguồn", "", FILE_FILTER)
         if not p:
@@ -196,6 +240,7 @@ class ModelsDialog(QDialog):
         if self.brand:                     # thêm THƯƠNG HIỆU trước mỗi mã
             rows = [f"{self.brand} {r}" for r in rows]
         self.out.setPlainText("\n".join(rows))
+        self._save_state()                 # nhớ kết quả DÙNG CHUNG cho mọi job
         self.status.setText(f"Xong — {len(rows)} Product Models")
         show_toast(self, f"Đã trích xuất {len(rows)} Product Models", 2600)
 
@@ -237,6 +282,7 @@ class ModelsDialog(QDialog):
 
     # ------------------------------------------------------------------ #
     def closeEvent(self, event) -> None:      # noqa: N802
+        self._save_state()
         if self._worker is not None and self._worker.isRunning():
             show_toast(self, "Đang xuất — vui lòng chờ xong", 2600, ok=False)
             event.ignore()
