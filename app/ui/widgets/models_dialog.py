@@ -66,8 +66,8 @@ class ModelsDialog(QDialog):
         state = self._state()
         saved_links = [str(u).strip() for u in (state.get("links") or []) if str(u).strip()]
         saved_out = str(state.get("result") or "")
-        self._prefill = (saved_links
-                         or [str(u).strip() for u in (links_prefill or []) if str(u).strip()])
+        # KHÔNG tự điền link của job nữa — chỉ giữ link người dùng đã gõ lần trước
+        self._prefill = saved_links
         self.file_path = ""
         self._worker = None
         self.task_id = str(task_id or "")
