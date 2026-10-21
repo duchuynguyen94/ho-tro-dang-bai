@@ -382,6 +382,66 @@ class MainWindow(QMainWindow):
             return
         self._refresh_count()
         self.status("Xong — vào tab Công việc đang làm để duyệt.")
+        self._prefetch_source_images(fresh)      # tự lấy sẵn ảnh từ link nguồn
+
+    def _prefetch_source_images(self, task, targets: list | None = None) -> None:
+        """Job vừa TẠO XONG NỘI DUNG -> tự lấy ảnh từ ĐÚNG link nguồn (chạy nền).
+
+        Ảnh lưu sẵn vào job -> mở "Tìm hình" là có ngay, không phải bấm "Lấy hình".
+        """
+        try:
+            if task is None:
+                return
+            kind = str(getattr(task, "kind", "") or "")
+            if kind == "blank" and not int(getattr(task, "split_no", 0) or 0):
+                return                       # job trống (không có link nguồn)
+            r = task.result or {}
+            if [u for u in (r.get("source_images") or []) if u]:
+                return                       # đã có ảnh -> không lấy lại
+            links = [u for u in (r.get("image_links") or []) if u]
+            if not links:
+                links = list(getattr(task, "source_urls", []) or [])
+            if not links and str(getattr(task, "source_url", "") or "").strip():
+                links = [task.source_url]
+            links = [str(u).strip() for u in links if str(u).strip()]
+            if not links:
+                return
+            ids = [str(x) for x in (targets or [task.id])]
+            from .workers import SourceImagesFetchWorker
+
+            worker = SourceImagesFetchWorker(links)
+            self.status("Đang lấy sẵn ảnh từ link nguồn…")
+
+            def _ok(urls) -> None:
+                urls = [u for u in (urls or []) if u]
+                if not urls:
+                    return
+                for tid in ids:
+                    fresh = next((t for t in self.store.tasks if t.id == tid), None)
+                    if fresh is None:
+                        continue
+                    rr = fresh.result = dict(fresh.result or {})
+                    if [u for u in (rr.get("source_images") or []) if u]:
+                        continue             # đã có -> giữ nguyên
+                    rr["source_images"] = list(urls)
+                    if not [u for u in (rr.get("image_links") or []) if u]:
+                        rr["image_links"] = list(links)
+                    self.store.upsert_task(fresh)
+                self.store.save()
+                if getattr(self.jobs_page.current, "id", "") in ids:
+                    fresh = next((t for t in self.store.tasks
+                                  if t.id == self.jobs_page.current.id), None)
+                    if fresh is not None:
+                        self.jobs_page.current = fresh
+                self.status(f"Đã lấy sẵn {len(urls)} ảnh từ link nguồn.")
+
+            worker.ok.connect(_ok)
+            worker.failed.connect(lambda _e: self.status("Không lấy được ảnh từ link nguồn."))
+            worker.finished.connect(lambda: self._cleanup(worker))
+            self._workers.append(worker)
+            worker.start()
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
 
     def _on_cancel_task(self, task) -> None:
         worker = self._content_workers.get(task.id)
@@ -588,6 +648,8 @@ class MainWindow(QMainWindow):
         for t in made:      # ghép ảnh bằng logo/thanh thông tin MẶC ĐỊNH (chưa chọn website)
             self._start_images_worker(t, None, None, "Đang ghép ảnh…")
         show_toast(self, f"Đã tạo {len(made)} job trống (Bài 1 → Bài {len(made)})", 3600)
+        if made:
+            self._prefetch_source_images(made[0], targets=[x.id for x in made])
         self._start_split_seo(made)      # tự lấy JSON SEO cho TỪNG bài (popup phủ toàn app)
 
     # ------------------------------------------------------------------ #
