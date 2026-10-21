@@ -1413,7 +1413,7 @@ def build_readmore_block(text: str) -> str:
 
 
 def insert_readmore(html_text: str, text: str) -> str:
-    """Chèn "đọc thêm" NGAY TRƯỚC <h2> ĐẦU TIÊN (không có <h2> -> cuối bài).
+    """Chèn "đọc thêm" NGAY SAU </h1> (không có <h1> -> chèn NGAY ĐẦU nội dung).
 
     Luôn gỡ khối cũ trước -> format lại nhiều lần cũng KHÔNG bị nhân đôi.
     `text` rỗng -> chỉ gỡ khối cũ (không chèn gì).
@@ -1422,11 +1422,15 @@ def insert_readmore(html_text: str, text: str) -> str:
     block = build_readmore_block(text)
     if not block:
         return t
-    m = re.search(r"<h2\b", t, re.I)
-    if m:
-        return t[: m.start()] + block + "\n" + t[m.start():]
-    tail = t.rstrip()
-    return (tail + "\n" if tail else "") + block
+    # 1) có <h1> -> chèn ngay SAU </h1>
+    m = None
+    for m in re.finditer(r"</h1\s*>", t, re.I):
+        pass
+    if m is not None:
+        i = m.end()
+        return t[:i] + "\n" + block + "\n" + t[i:]
+    # 2) không có <h1> -> chèn NGAY ĐẦU
+    return block + "\n" + t
 
 
 def readmore_from_store(store) -> str:

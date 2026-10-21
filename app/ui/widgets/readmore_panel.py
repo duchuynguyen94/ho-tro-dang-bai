@@ -37,8 +37,8 @@ class ReadMorePanel(QWidget):
 
         card = Card("Chèn nội dung")
         desc = QLabel(
-            "Nội dung “Đọc thêm” sẽ được chèn vào bài <b>ngay trước thẻ &lt;h2&gt; đầu tiên</b> "
-            "(bài không có &lt;h2&gt; thì chèn cuối bài).<br>"
+            "Nội dung “Đọc thêm” sẽ được chèn vào bài <b>ngay sau thẻ &lt;/h1&gt;</b> "
+            "(bài không có &lt;h1&gt; thì chèn ngay đầu nội dung).<br>"
             "Áp dụng khi bấm <b>Auto format</b> và khi <b>đăng bài</b>. "
             "Để trống = không chèn (và tự gỡ khối cũ)."
         )
