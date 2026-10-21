@@ -1201,14 +1201,24 @@ class MainWindow(QMainWindow):
             return None
         names = [x.name or x.url for x in sites]
         cur = str(getattr(task, "site_id", "") or "") if task is not None else ""
-        start = next((i for i, x in enumerate(sites) if x.id == cur), 0)
+        # ƯU TIÊN: website DÙNG GẦN NHẤT (nhớ toàn app) -> mọi job đều chọn sẵn web đó
+        last = str(((self.store.data.get("ui") or {}).get("last_post_site") or ""))
+        start = next((i for i, x in enumerate(sites) if x.id == last), -1)
+        if start < 0:                 # chưa có / website đã bị xoá -> dùng website của job
+            start = next((i for i, x in enumerate(sites) if x.id == cur), 0)
         name, ok = QInputDialog.getItem(
             self, "Chọn website để đăng", "Website sẽ đăng bài này:", names, start, False
         )
         if not ok or not name:
             return None
         idx = names.index(name) if name in names else start
-        return sites[idx]
+        site = sites[idx]
+        try:      # NHỚ website vừa chọn cho LẦN SAU (dùng chung mọi job)
+            self.store.data.setdefault("ui", {})["last_post_site"] = site.id
+            self.store.save()
+        except Exception:      # noqa: BLE001
+            pass
+        return site
 
     def _format_content_for_site(self, task, site) -> None:
         """Auto format LẠI 1 lần + đặt link tiêu đề ĐẦU = website sẽ đăng."""
