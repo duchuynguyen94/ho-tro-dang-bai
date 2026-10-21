@@ -152,7 +152,8 @@ class MainWindow(QMainWindow):
         self.stack = QStackedWidget()
         self.post_page = PostPage(self.store)
         self.error_log_page = ErrorLogPage(self.store)     # nằm trong Cài đặt (sidebar)
-        self.config_page = ConfigPage(self.store, self.error_log_page)
+        self.config_page = ConfigPage(self.store, self.error_log_page,
+                                      on_cache_cleared=self._on_cache_cleared)
         self.jobs_page = JobsPage(self.store)
         self.jobs_page._post_sites = self._post_sites    # job chưa lưu website -> dùng chung
         for page in (self.config_page, self.post_page, self.jobs_page):
@@ -216,6 +217,20 @@ class MainWindow(QMainWindow):
             if int(b.property("pageIndex") or -1) == 2:
                 b.setText(f"Công việc đang làm ({len(self.store.tasks)})")
                 break
+
+    def _on_cache_cleared(self) -> None:
+        """Vừa xoá cache: bỏ cache ảnh trong RAM + nạp lại danh sách job (đã trống)."""
+        try:
+            self.jobs_page._img_cache.clear()
+        except Exception:      # noqa: BLE001
+            pass
+        try:
+            self.jobs_page.current = None
+            self.jobs_page.refresh()
+            self._refresh_count()
+        except Exception:      # noqa: BLE001
+            pass
+        show_toast(self, "Đã xoá cache — toàn bộ job và ảnh đã xoá", 3200)
 
     def _on_config_changed(self) -> None:
         self.post_page.reload_sites()
