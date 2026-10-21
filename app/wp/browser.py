@@ -12,6 +12,30 @@ from playwright.sync_api import Page, TimeoutError as PWTimeout, sync_playwright
 
 from ..config import sessions_dir
 
+def _patch_chrome_prefs(profile_dir: str) -> None:
+    """Tắt Google Dịch trong profile (bong bóng dịch hay che nút -> kịch bản bấm trượt)."""
+    import json
+    from pathlib import Path
+
+    for name in ("Default/Preferences", "Preferences"):
+        f = Path(profile_dir) / name
+        if not f.exists():
+            continue
+        try:
+            data = json.loads(f.read_text(encoding="utf-8") or "{}")
+        except Exception:
+            continue
+        try:
+            tr = data.get("translate")
+            if not isinstance(tr, dict):
+                tr = {}
+                data["translate"] = tr
+            tr["enabled"] = False
+            f.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+        except Exception:      # noqa: BLE001
+            pass
+
+
 def _no_window_kwargs() -> dict:
     """Trên Windows: ẩn cửa sổ console khi gọi PowerShell/taskkill (tránh nháy cửa sổ)."""
     if os.name != "nt":
@@ -245,7 +269,11 @@ class WPBrowser:
                         args=["--disable-blink-features=AutomationControlled",
                               "--start-maximized",
                               # đóng tab cuối -> Chrome TẮT HẲN (không chạy nền) -> app mở khoá ngay
-                              "--disable-background-mode"],
+                              "--disable-background-mode",
+                              # TẮT Google Dịch (bong bóng dịch che trang -> chặn click của kịch bản)
+                              "--disable-translate",
+                              "--disable-features=Translate,TranslateUI,TranslateRenderer",
+                              "--no-default-browser-check"],
                     )
                     if self.headless:
                         kwargs["viewport"] = {"width": 1400, "height": 900}
@@ -253,6 +281,7 @@ class WPBrowser:
                         # cửa sổ mở TO HẾT màn hình: tránh bị che mất thanh cuộn / phần dưới
                         kwargs["no_viewport"] = True
                     kwargs.update(extra)
+                    _patch_chrome_prefs(_user_data_dir(self.site_id))
                     self.context = self._pw.chromium.launch_persistent_context(**kwargs)
                     self.channel_used = label
                     opened = True

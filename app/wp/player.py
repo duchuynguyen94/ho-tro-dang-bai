@@ -442,6 +442,41 @@ def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
     return len(done)
 
 
+def _dismiss_translate(page: Page) -> None:
+    """Dọn bong bóng Google Dịch / banner dịch (hay che nút và chặn click)."""
+    try:
+        page.evaluate(
+            """() => {
+                ['#gtx-trans', '.goog-te-banner-frame', 'iframe.skiptranslate',
+                 '#goog-gt-tt', '.goog-te-balloon-frame'].forEach(sel => {
+                    document.querySelectorAll(sel).forEach(e => {
+                        try { e.remove(); } catch (err) {}
+                    });
+                });
+                try { document.body.style.top = '0px'; } catch (err) {}
+            }"""
+        )
+    except Exception:
+        pass
+
+
+def _safe_click(page: Page, loc, force: bool = False, timeout: int = 15000) -> None:
+    """Bấm nút; nếu bị popup che (Google dịch…) thì dọn popup + Esc rồi bấm lại."""
+    for attempt in (1, 2):
+        try:
+            loc.click(force=force, timeout=timeout)
+            return
+        except Exception as exc:      # noqa: BLE001
+            if attempt == 2:
+                raise
+            _dismiss_translate(page)
+            try:
+                page.keyboard.press("Escape")
+            except Exception:
+                pass
+            page.wait_for_timeout(300)
+
+
 def _norm_vn(s: str) -> str:
     """Bỏ dấu + viết thường + gộp khoảng trắng (để so khớp tên danh mục/thương hiệu)."""
     import unicodedata as _ud
@@ -1532,16 +1567,17 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                 else:
                     _locate(page, step).click()
             elif action == "click":
+                _dismiss_translate(page)                   # dọn popup Google dịch trước khi bấm
                 loc = _locate(page, step)
                 check = str(step.value or "").strip()      # value = selector KIỂM TRA (nếu có)
                 if not check:
-                    loc.click(force=bool(step.force), timeout=15000)
+                    _safe_click(page, loc, force=bool(step.force))
                 else:
                     # Bấm rồi KIỂM TRA phần tử cần mở đã hiện chưa -> chưa hiện thì bấm lại (tối đa 3 lần)
                     done = False
                     for _try in range(3):
                         try:
-                            loc.click(force=bool(step.force), timeout=15000)
+                            _safe_click(page, loc, force=bool(step.force))
                         except Exception:
                             pass
                         page.wait_for_timeout(500)
@@ -1560,6 +1596,7 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) ->
                     if not done and log:
                         log(f"  (bấm “{step.note or 'nút'}” nhưng chưa thấy {check} — đi tiếp)")
             elif action == "type":
+                _dismiss_translate(page)
                 value = render(step.value, ctx)
                 try:
                     _locate(page, step).fill(value, force=bool(step.force), timeout=15000)
