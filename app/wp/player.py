@@ -759,26 +759,36 @@ def _is_term_checked(page: Page, tax: str, value: str) -> bool:
 
 
 def _tick_term(page: Page, tax: str, value: str, wait_ms: int = 4000) -> bool:
-    """Tick term + KIỂM TRA LẠI (ưu tiên ô ĐANG HIỆN, cuối cùng click bằng JS)."""
+    """Tick term + KIỂM TRA LẠI.
+
+    Ưu tiên CLICK BẰNG JS (không cần cuộn/chờ actionability -> không bị "đứng")
+    rồi mới tới các cách dự phòng của Playwright.
+    """
     if _is_term_checked(page, tax, value):
         return True
-    sel = f'input[name="tax_input[{tax}][]"][value="{value}"]'
-    # 1) ô đang HIỆN
+
+    # 1) JS: cuộn hộp vào khung nhìn + click các ô CHƯA tick của term này
     try:
-        cb = page.locator(sel + ":visible").first
-        if cb.count():
-            try:
-                cb.check(force=True, timeout=3000)
-            except Exception:
-                try:
-                    cb.click(force=True, timeout=3000)
-                except Exception:
-                    pass
+        page.evaluate(
+            """([tax, v]) => {
+                const all = Array.from(document.querySelectorAll(
+                    'input[name="tax_input[' + tax + '][]"]'));
+                const list = all.filter(i => String(i.value) === String(v));
+                if (!list.length) return;
+                try {
+                    const el = list[0].closest('li') || list[0];
+                    el.scrollIntoView({block: 'center'});
+                } catch (e) {}
+                list.filter(i => !i.checked).forEach(i => {
+                    try { i.click(); } catch (e) {}
+                });
+            }""", [tax, str(value)])
     except Exception:
         pass
     if _is_term_checked(page, tax, value):
         return True
-    # 2) bấm vào NHÃN của ô đầu tiên tìm thấy
+
+    # 2) JS: bấm vào NHÃN của ô đầu tiên
     try:
         page.evaluate(
             """([tax, v]) => {
@@ -793,17 +803,28 @@ def _tick_term(page: Page, tax: str, value: str, wait_ms: int = 4000) -> bool:
         pass
     if _is_term_checked(page, tax, value):
         return True
-    # 3) click thẳng vào ô (mọi bản sao) bằng JS
+
+    # 3) Playwright (dự phòng): cuộn tới rồi tick ô đang hiện
+    sel = f'input[name="tax_input[{tax}][]"][value="{value}"]'
     try:
-        page.evaluate(
-            """([tax, v]) => {
-                Array.from(document.querySelectorAll(
-                    'input[name="tax_input[' + tax + '][]"]'))
-                    .filter(i => String(i.value) === String(v) && !i.checked)
-                    .forEach(i => i.click());
-            }""", [tax, str(value)])
+        cb = page.locator(sel).first
+        if cb.count():
+            try:
+                cb.scroll_into_view_if_needed(timeout=4000)
+            except Exception:
+                pass
+            try:
+                cb.check(force=True, timeout=4000)
+            except Exception:
+                try:
+                    cb.click(force=True, timeout=4000)
+                except Exception:
+                    pass
     except Exception:
         pass
+    if _is_term_checked(page, tax, value):
+        return True
+
     deadline = time.time() + wait_ms / 1000.0
     while time.time() < deadline:
         if _is_term_checked(page, tax, value):
