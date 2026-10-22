@@ -29,6 +29,7 @@ from PySide6.QtWidgets import (
 )
 
 from ...storage.models import (
+    Task,
     STATUS_CANCELLED,
     STATUS_ERROR,
     STATUS_GENERATING,
@@ -261,6 +262,7 @@ class TaskRow(QFrame):
     clicked = Signal(str)
     delete = Signal(str)
     copied = Signal(str)
+    clone = Signal(str)                      # nhân bản job (chỉ lấy hình)
 
     def __init__(self, task, parent=None) -> None:
         super().__init__(parent)
@@ -419,6 +421,7 @@ class TaskRow(QFrame):
         act_open = menu.addAction("Mở link nguồn")
         act_open.setEnabled(bool(self.source_url))
         menu.addSeparator()
+        act_clone = menu.addAction("Nhân bản công việc (chỉ lấy hình)")
         act_del = menu.addAction("Xoá công việc")
 
         chosen = menu.exec(event.globalPos())
@@ -427,6 +430,8 @@ class TaskRow(QFrame):
             self.copied.emit(self.source_url)
         elif chosen == act_open and self.source_url:
             QDesktopServices.openUrl(QUrl(self.source_url))
+        elif chosen == act_clone:
+            self.clone.emit(self.task_id)
         elif chosen == act_del:
             self.delete.emit(self.task_id)
 
@@ -755,6 +760,7 @@ class JobsPage(QWidget):
             row.clicked.connect(self.select_task)
             row.delete.connect(self._confirm_delete)
             row.copied.connect(lambda _u: show_toast(self, "Đã sao chép link nguồn"))
+            row.clone.connect(self._clone_task)
             self._rows[t.id] = row
             self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
 
@@ -1850,6 +1856,41 @@ class JobsPage(QWidget):
         self._load(self.current)
         self.recompose_image.emit(self.current, index)
 
+
+    def _clone_task(self, task_id: str) -> None:
+        """Nhân bản job: CHỈ giữ HÌNH (ảnh đã ghép + ảnh chèn canvas), các ô khác để trống."""
+        src = next((t for t in self.store.tasks if t.id == task_id), None)
+        if src is None:
+            return
+        self._save()                     # chốt thông tin đang gõ của job hiện tại
+        r = src.result or {}
+        count = max(1, int(getattr(src, "image_count", 3) or 3))
+        t = Task(
+            kind="blank",                # job trống -> không có link nguồn
+            status=STATUS_FINISH,
+            progress=100,
+            image_count=count,
+            footer_mode=str(getattr(src, "footer_mode", "random") or "random"),
+            brand_logo_fallback=str(getattr(src, "brand_logo_fallback", "") or ""),
+        )
+        slots = [dict(x) for x in (r.get("images") or []) if isinstance(x, dict)]
+        if not slots:
+            slots = [{"path": "", "footer": ""} for _ in range(count)]
+        opts = [dict(x) for x in (r.get("image_opts_list") or []) if isinstance(x, dict)]
+        t.result = {
+            "title": "", "focus_keyword": "", "description": "", "tags": "",
+            "category_name": "", "brand_name": "", "ma_san_pham": "",
+            "content_html": "",
+            "images": slots,
+            "image_opts_list": opts,
+            "product_images": [x for x in (r.get("product_images") or []) if x],
+            "brand_logo": str(r.get("brand_logo") or ""),
+        }
+        self.store.upsert_task(t)
+        self.store.save()
+        self.refresh()
+        self.select_task(t.id)
+        show_toast(self, "Đã nhân bản công việc (chỉ giữ hình)", 2800)
 
     def _confirm_delete(self, task_id: str) -> None:
         ans = QMessageBox.question(
