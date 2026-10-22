@@ -129,6 +129,8 @@ class ModelsDialog(QDialog):
         self.out.setPlaceholderText("Kết quả sẽ hiện ở đây…")
         if saved_out:
             self.out.setPlainText(saved_out)
+        # DÁN/GÕ vào ô kết quả -> tự lưu (dùng chung mọi job)
+        self.out.textChanged.connect(self._queue_state_save)
         root.addWidget(self.out, 1)
 
         foot = QHBoxLayout()
