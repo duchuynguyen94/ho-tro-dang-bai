@@ -247,9 +247,16 @@ class RichEditor(QWidget):
 
     def _insert_image(self) -> None:
         self._focus_rich()
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Chèn ảnh", "", "Ảnh (*.png *.jpg *.jpeg *.webp *.gif)"
-        )
+        store = getattr(self, "store", None)
+        if store is not None:
+            from ..filepick import open_file
+
+            path = open_file(store, self, "Chèn ảnh",
+                             "Ảnh (*.png *.jpg *.jpeg *.webp *.gif)")
+        else:
+            path, _ = QFileDialog.getOpenFileName(
+                self, "Chèn ảnh", "", "Ảnh (*.png *.jpg *.jpeg *.webp *.gif)"
+            )
         if path:
             self.edit.insertHtml(f'<img src="{path}" width="520" />')
 

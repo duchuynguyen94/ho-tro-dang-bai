@@ -190,7 +190,9 @@ class ModelsDialog(QDialog):
             pass
 
     def _pick_file(self) -> None:
-        p, _ = QFileDialog.getOpenFileName(self, "Chọn file nguồn", "", FILE_FILTER)
+        from ..filepick import open_file
+
+        p = open_file(self.store, self, "Chọn file nguồn", FILE_FILTER)
         if not p:
             return
         self.file_path = p

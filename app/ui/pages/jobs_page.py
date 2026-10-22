@@ -603,6 +603,10 @@ class JobsPage(QWidget):
         self.models_edit.setToolTip("Danh sách mã sản phẩm của nội dung (cách nhau bởi dấu phẩy).")
         ev2.addLayout(self._field("Mã sản phẩm", self.models_edit))
         self.content_edit = RichEditor()
+        try:
+            self.content_edit.store = self.store      # để "Chèn ảnh" nhớ thư mục
+        except Exception:      # noqa: BLE001
+            pass
         self.content_edit.changed.connect(self._sync_seo_btn)
         self.content_edit.changed.connect(self._queue_save)
         ev2.addLayout(self._field("Nội dung", self.content_edit,
@@ -1609,8 +1613,10 @@ class JobsPage(QWidget):
 
     def _upload_image(self, index: int) -> None:
         """Chọn NHIỀU ảnh từ máy -> thêm vào canvas thành các thành phần."""
-        paths, _ = QFileDialog.getOpenFileNames(
-            self, "Chọn ảnh (chọn được nhiều ảnh)", "", "Ảnh (*.png *.jpg *.jpeg *.webp)")
+        from ..filepick import open_files
+
+        paths = open_files(self.store, self, "Chọn ảnh (chọn được nhiều ảnh)",
+                           "Ảnh (*.png *.jpg *.jpeg *.webp)")
         if not paths:
             return
         self._add_upload_components(paths, index)

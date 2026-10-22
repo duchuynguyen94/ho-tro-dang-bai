@@ -40,9 +40,11 @@ IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
 FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.pdf *.doc *.docx);;Tất cả (*.*)"
 
 
-def _pick_file(parent, caption, filt) -> str:
-    path, _ = QFileDialog.getOpenFileName(parent, caption, "", filt)
-    return path or ""
+def _pick_file(store, parent, caption, filt) -> str:
+    """Chọn file (nhớ thư mục đã dùng)."""
+    from ..filepick import open_file
+
+    return open_file(store, parent, caption, filt)
 
 
 def _wrap_scroll(w: QWidget) -> QScrollArea:
@@ -453,7 +455,9 @@ class SitePanel(QWidget):
 
     def _pick_media(self, kind: str) -> None:
         _title, _dflt, caption = self.MEDIA_FIELDS[kind]
-        path, _ = QFileDialog.getOpenFileName(self, caption, "", IMAGE_FILTER)
+        from ..filepick import open_file
+
+        path = open_file(self.store, self, caption, IMAGE_FILTER)
         if not path:
             return
         try:
@@ -522,7 +526,9 @@ class SitePanel(QWidget):
 
     def _pick_into(self, edit: QLineEdit, caption: str, filt: str = IMAGE_FILTER) -> None:
         """Chọn ảnh (logo / thanh thông tin / khung) — copy vào thư mục media."""
-        path, _ = QFileDialog.getOpenFileName(self, caption, "", filt)
+        from ..filepick import open_file
+
+        path = open_file(self.store, self, caption, filt)
         if not path:
             return
         try:
@@ -587,7 +593,7 @@ class SitePanel(QWidget):
 
     def _import(self) -> None:
         """Import kịch bản từ file — THAY LUÔN kịch bản cũ và tự lưu."""
-        path = _pick_file(self, "Import kịch bản", "JSON (*.json)")
+        path = _pick_file(self.store, self, "Import kịch bản", "JSON (*.json)")
         if not path:
             return
         try:
@@ -1320,7 +1326,9 @@ class FormatPanel(QScrollArea):
 
     # ------------------------------------------------------------------ #
     def _pick(self, key: str, edit: QLineEdit, label: str) -> None:
-        path, _ = QFileDialog.getOpenFileName(self, label, "", FORMAT_FILTER)
+        from ..filepick import open_file
+
+        path = open_file(self.store, self, label, FORMAT_FILTER)
         if not path:
             return
         edit.setText(Store.import_file(path, formats_dir()))

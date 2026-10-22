@@ -214,9 +214,10 @@ QPushButton#imgDel:disabled {{ color: #cbd5e1; }}
 QFrame#taskRow {{ background: transparent; border: none; border-bottom: 1px solid {LINE};
     border-left: 3px solid transparent; }}
 QFrame#taskRow:hover, QFrame#taskRow[hover="true"] {{ background: #eef2f7; }}
-QFrame#taskRow[selected="true"] {{ background: #eff6ff; border-left: 3px solid {ACCENT}; }}
+QFrame#taskRow[selected="true"] {{ background: #cfe3ff; border-left: 5px solid {ACCENT};
+    border-top: 1px solid #93b8ea; border-bottom: 1px solid #93b8ea; }}
 QFrame#taskRow[selected="true"]:hover,
-QFrame#taskRow[selected="true"][hover="true"] {{ background: #e6efff; }}
+QFrame#taskRow[selected="true"][hover="true"] {{ background: #c2dbff; }}
 QLabel#taskTitle {{ font-weight: 600; font-size: 12.5px; }}
 QLabel#taskTitleBlank {{ font-weight: 600; font-size: 12.5px; color: #7c3aed; }}
 QLabel#taskMeta {{ color: {MUTED}; font-size: 11px; }}

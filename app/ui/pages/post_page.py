@@ -226,9 +226,10 @@ class PostPage(QWidget):
             return 2
 
     def _pick_brand(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Chọn logo thương hiệu", "", "Ảnh (*.png *.jpg *.jpeg *.webp *.svg)"
-        )
+        from ..filepick import open_file
+
+        path = open_file(self.store, self, "Chọn logo thương hiệu",
+                         "Ảnh (*.png *.jpg *.jpeg *.webp *.svg)")
         if path:
             self.brand_logo.setText(path)
 
