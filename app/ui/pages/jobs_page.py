@@ -441,6 +441,7 @@ class JobsPage(QWidget):
     regenerate_images = Signal(object, str)  # (task, footer_mode)
     post = Signal(object)                    # (task)
     models_extract = Signal()                # nút "Product Models" -> popup trích xuất
+    seo_all = Signal()                       # lấy JSON SEO hàng loạt (job trống thiếu SEO)
     delete_task = Signal(str)                # task id
     ai_edit = Signal(object, int, str)       # (task, image index, yêu cầu chỉnh sửa)
     refetch_image = Signal(object, int)      # (task, image index) lấy lại ảnh sản phẩm
@@ -487,6 +488,14 @@ class JobsPage(QWidget):
         left.setMinimumWidth(300)
         left.setMaximumWidth(420)
         left.set_title("Công việc đang làm")
+        self.seo_all_btn = QPushButton("Lấy JSON SEO hàng loạt")
+        self.seo_all_btn.setProperty("class", "ghost")
+        self.seo_all_btn.setToolTip(
+            "Chạy TUẦN TỰ lấy JSON SEO cho các job TRỐNG còn thiếu Tiêu đề / Description\n"
+            "(dùng Nội dung của chính job đó) — có popup tiến trình 1/N."
+        )
+        self.seo_all_btn.clicked.connect(self.seo_all.emit)
+        left.add_header_widget(self.seo_all_btn)
         self.stop_all_btn = QPushButton("■ Dừng tất cả")
         self.stop_all_btn.setProperty("class", "danger")
         self.stop_all_btn.setToolTip("Dừng mọi việc đang chờ / đang tạo → chuyển thành \"chưa tạo\"")
@@ -842,7 +851,8 @@ class JobsPage(QWidget):
     def _busy_targets(self) -> list:
         """Các nút bị khoá khi có tiến trình chạy."""
         out = []
-        for name in ("post_btn", "seo_btn", "regen_all_btn", "retry_btn", "models_btn"):
+        for name in ("post_btn", "seo_btn", "regen_all_btn", "retry_btn", "models_btn",
+                     "seo_all_btn"):
             b = getattr(self, name, None)
             if b is not None:
                 out.append(b)

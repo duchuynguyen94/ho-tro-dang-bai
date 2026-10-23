@@ -182,6 +182,7 @@ class MainWindow(QMainWindow):
         self.jobs_page.status_msg.connect(self.status)
         self.jobs_page.seo_json.connect(self._on_seo_json)
         self.jobs_page.models_extract.connect(self._on_models_extract)
+        self.jobs_page.seo_all.connect(self._on_seo_all)
         self.config_page.changed.connect(self._on_config_changed)
 
         self._refresh_count()
@@ -663,6 +664,44 @@ class MainWindow(QMainWindow):
             if not html.strip():
                 continue
             items.append((t.id, html, f"Bài {i}"))
+        if not items:
+            return
+        self._start_seo_batch(items)
+
+    def _on_seo_all(self) -> None:
+        """Nút "Lấy JSON SEO hàng loạt": chạy TUẦN TỰ cho job TRỐNG thiếu Tiêu đề/Mô tả."""
+        if self._split_seo_worker is not None and self._split_seo_worker.isRunning():
+            show_toast(self, "Đang lấy JSON SEO — chờ xong đã", 3000, ok=False)
+            return
+        try:
+            self.jobs_page._save()
+        except Exception:      # noqa: BLE001
+            pass
+        busy_ids = set(self._content_workers) | set(self._post_workers)
+        found: list = []
+        for t in self.store.tasks:
+            if str(getattr(t, "kind", "") or "") != "blank":
+                continue
+            if t.id in busy_ids:
+                continue
+            r = t.result or {}
+            html = str(r.get("content_html") or "")
+            if not html.strip():
+                continue
+            if (str(r.get("title") or "").strip()
+                    and str(r.get("description") or "").strip()):
+                continue                      # đã có đủ Tiêu đề + Mô tả -> bỏ qua
+            found.append((t.id, html, str(r.get("title") or "").strip()[:44] or "(blank)"))
+        if not found:
+            show_toast(self, "Không có job trống nào thiếu Tiêu đề / Description", 3200, ok=False)
+            return
+        total = len(found)
+        items = [(tid, html, f"{i}/{total} — {lab}")
+                 for i, (tid, html, lab) in enumerate(found, 1)]
+        self._start_seo_batch(items)
+
+    def _start_seo_batch(self, items: list) -> None:
+        """Chạy TUẦN TỰ lấy JSON SEO cho danh sách [(task_id, html, nhãn)] + popup tiến trình."""
         if not items:
             return
         self._split_seo_cancelled = False
