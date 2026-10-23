@@ -323,7 +323,12 @@ class WPBrowser:
             )
 
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
-        self.page.set_default_timeout(20000)
+        # Website WordPress có thể CHẬM -> chấp nhận chờ lâu hơn
+        try:
+            self.page.set_default_timeout(60000)                    # mọi thao tác: 60 giây
+            self.page.set_default_navigation_timeout(120000)        # mở trang: 120 giây
+        except Exception:      # noqa: BLE001
+            self.page.set_default_timeout(20000)
         return self.page
 
     # ------------------------------------------------------------------ #

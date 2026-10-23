@@ -619,7 +619,7 @@ class PostWorker(TrackedThread):
             if site.script and site.script.steps:
                 # LUÔN mở trang tạo bài trước khi phát lại kịch bản (bỏ qua nếu đang ở đó rồi)
                 if site.new_post_url and "post-new.php" not in page.url:
-                    self.log.emit("Mở trang tạo bài viết…")
+                    self.log.emit("Mở trang tạo bài viết… (web chậm có thể chờ tới ~2 phút)")
                     page.goto(site.new_post_url, wait_until="domcontentloaded")
                 wait_editor_ready(page, log=self.log.emit)
                 # Hộp thoại (alert/confirm) của web: ghi log + chọn "Hủy bỏ" để KHÔNG xoá gì

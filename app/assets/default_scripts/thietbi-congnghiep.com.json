@@ -238,7 +238,7 @@
       "action": "wait",
       "selector": "",
       "selectors": [],
-      "value": "4",
+      "value": "8",
       "note": "Chờ ảnh tải lên xong",
       "source": "auto",
       "optional": false,

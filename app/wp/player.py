@@ -1307,7 +1307,7 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
     KHÔNG bấm vào ảnh: bấm vào ảnh là ĐỔI TRẠNG THÁI CHỌN -> mất lựa chọn -> "Thêm vào thư viện"
     chỉ chèn được 1 ảnh.
 
-    - Chờ "Đang tải lên" biến mất (tối đa 120 giây).
+    - Chờ "Đang tải lên" biến mất (tối đa 300 giây — web chậm vẫn chờ).
     - Ảnh cần điền = các <li class="attachment selected"> TRONG MODAL ĐANG HIỆN (ảnh vừa upload);
       không có -> lấy theo danh sách đang chọn của wp.media; cuối cùng -> N ảnh đầu.
     - Giá trị = TIÊU ĐỀ CỦA CHÍNH ẢNH; ô nào đã có nội dung -> giữ nguyên.
@@ -1315,7 +1315,8 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
     val = str(value or "").strip()
     want = max(1, int(expect or 1))
     # 1) CHỜ upload xong: hết chữ "Đang tải lên" + đã có ảnh được chọn
-    deadline = time.time() + 120
+    deadline = time.time() + 300
+    _up_next_log = time.time() + 15.0
     while time.time() < deadline:
         try:
             st = page.evaluate(
@@ -1337,6 +1338,9 @@ def fill_uploaded_attachment_fields(page: Page, value: str, min_id: int = 0,
             break
         if not st.get("up") and (int(st.get("pick") or 0) >= 1 or int(st.get("sel") or 0) >= 1):
             break
+        if log and time.time() >= _up_next_log:
+            _up_next_log = time.time() + 15.0
+            log("  (đang tải ảnh lên… web chậm thì chờ thêm)")
         time.sleep(0.3)
     # 2) LẤY MÃ ẢNH (chỉ trong modal đang hiện)
     js_ids = """(expect) => {
@@ -1518,7 +1522,7 @@ def _wait_editors_ready(page: Page, timeout: int = 15000) -> None:
         time.sleep(0.3)
 
 
-def wait_editor_ready(page: Page, log=None, timeout: int = 15000) -> None:
+def wait_editor_ready(page: Page, log=None, timeout: int = 60000) -> None:
     """Chờ trang soạn thảo (Gutenberg/Classic) TẢI XONG mới cho phát lại kịch bản."""
     try:
         page.wait_for_load_state("domcontentloaded", timeout=timeout)
@@ -1526,12 +1530,12 @@ def wait_editor_ready(page: Page, log=None, timeout: int = 15000) -> None:
         pass
     # trang tải xong hẳn (ảnh / script) — tối đa 10 giây rồi đi tiếp
     try:
-        page.wait_for_load_state("load", timeout=10000)
+        page.wait_for_load_state("load", timeout=45000)
     except Exception:
         pass
-    # mạng tạm yên (WordPress hay có "nhịp tim" nên chỉ chờ tối đa 10 giây)
+    # mạng tạm yên (WordPress hay có "nhịp tim" nên chỉ chờ tối đa 15 giây)
     try:
-        page.wait_for_load_state("networkidle", timeout=10000)
+        page.wait_for_load_state("networkidle", timeout=15000)
     except Exception:
         pass
     # khung soạn thảo đã có mặt
