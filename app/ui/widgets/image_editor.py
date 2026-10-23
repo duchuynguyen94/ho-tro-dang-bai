@@ -589,7 +589,15 @@ class ImageEditorPanel(QFrame):
 
                 img = _Img.open(path).convert("RGBA")
                 img = remove_background_auto(img, 42)
-                buf = str(Path(path).with_suffix("")) + "_nobg.png"
+                # gom ảnh ĐÃ XOÁ NỀN vào thư mục riêng: <products>/no_bg/
+                from ...config import product_dir
+
+                out_dir = product_dir() / "no_bg"
+                try:
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                except Exception:      # noqa: BLE001
+                    out_dir = Path(path).parent
+                buf = str(out_dir / (Path(path).stem + "_nobg.png"))
                 img.save(buf)
                 pm2 = QPixmap(buf)
                 if not pm2.isNull():
