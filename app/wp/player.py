@@ -452,6 +452,58 @@ DEFAULT_HIDE_SELECTORS = (
 )
 
 
+def build_hide_script(selectors) -> str:
+    """Script tiêm SỚM (init script): ẩn khối + TỰ ẨN LẠI mỗi khi trang vẽ thêm phần tử."""
+    import json as _json
+
+    sels = _json.dumps([str(x) for x in (selectors or []) if str(x).strip()])
+    return """
+(() => {
+  const SELS = %s;
+  if (!SELS.length) return;
+  const CSS = SELS.map(s => s + ' { display: none !important; }').join('\\n');
+  let scheduled = false;
+  const apply = () => {
+    scheduled = false;
+    try {
+      let st = document.getElementById('htdb-hide-style');
+      if (!st) {
+        st = document.createElement('style');
+        st.id = 'htdb-hide-style';
+        (document.head || document.documentElement).appendChild(st);
+      }
+      if (st.textContent !== CSS) st.textContent = CSS;
+      SELS.forEach(sel => {
+        try {
+          document.querySelectorAll(sel).forEach(e => {
+            if (e.style.display !== 'none') e.style.display = 'none';
+          });
+        } catch (err) {}
+      });
+    } catch (err) {}
+  };
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    setTimeout(apply, 150);
+  };
+  const start = () => {
+    apply();
+    try {
+      new MutationObserver(schedule).observe(document.documentElement,
+                                             {childList: true, subtree: true});
+    } catch (e) {}
+    setInterval(apply, 2000);      // lưới an toàn (trang tự vẽ lại nhiều lần)
+  };
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+})();
+""" % sels
+
+
 def hide_elements(page: Page, extra: list | None = None) -> None:
     """Ẩn các khối không dùng trên trang (tiêm CSS — KHÔNG sửa gì trên website)."""
     sels = list(DEFAULT_HIDE_SELECTORS) + [str(x).strip() for x in (extra or []) if str(x).strip()]

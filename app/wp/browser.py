@@ -322,6 +322,13 @@ class WPBrowser:
                 "hoặc cài Google Chrome, hoặc mở Cài đặt → website → kiểm tra lại."
             )
 
+        # LUÔN ẨN các khối không dùng (áp cho mọi trang + mọi lần tải trong phiên)
+        try:
+            from .player import DEFAULT_HIDE_SELECTORS, build_hide_script
+
+            self.context.add_init_script(script=build_hide_script(DEFAULT_HIDE_SELECTORS))
+        except Exception:      # noqa: BLE001
+            pass
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         # Website WordPress có thể CHẬM -> chấp nhận chờ lâu hơn
         try:
