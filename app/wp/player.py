@@ -445,6 +445,7 @@ def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
 # Các khối LUÔN ẩn trên trang WordPress (chỉ ẩn trong trình duyệt của app)
 DEFAULT_HIDE_SELECTORS = (
     "#rank_math_metabox_link_suggestions",
+    "#rank_math_metabox_content_ai",
     "#commentsdiv",
     "#woocommerce-product-data",
 )
