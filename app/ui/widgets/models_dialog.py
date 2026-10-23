@@ -274,7 +274,17 @@ class ModelsDialog(QDialog):
             return
         new_html, pos, n = insert_models_block(cur, models)
         self._apply_content(self.task_id, new_html)
-        show_toast(self, f"Đã chèn {n} mã ({pos})", 3000)
+        # ĐÓNG popup rồi mới báo -> toast hiện ở cửa sổ chính
+        msg = f"Đã chèn {n} mã vào nội dung ({pos})"
+        self._save_state()
+        self.accept()
+        try:
+            from PySide6.QtCore import QTimer
+
+            parent = self.parentWidget()
+            QTimer.singleShot(80, lambda: show_toast(parent or self, msg, 3000))
+        except Exception:      # noqa: BLE001
+            pass
 
     def _copy(self) -> None:
         text = self.out.toPlainText().strip()

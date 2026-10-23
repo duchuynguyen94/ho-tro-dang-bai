@@ -1299,17 +1299,27 @@ class ImageToolsWorker(TrackedThread):
                 trimmed = Path(trim_borders(str(cur)))
                 if trimmed.exists():
                     cur = trimmed
-            names = {
-                "trim": f"{stem}_trim",
-                "nobg": f"{stem}_nobg",
-                "nobg_trim": f"{stem}_nobg_trim",
-            }
-            base = names.get(self.mode, f"{stem}_{self.mode}")
-            ext = ".png" if self.mode != "trim" else (suffix if suffix else ".png")
-            dest = out / (base + ext)
-            n = 1
-            while dest.exists():          # không ghi đè
-                n += 1
-                dest = out / f"{base} ({n}){ext}"
+            # ĐẶT TÊN THEO SỐ: 1.png, 2.png … (nối tiếp theo thư mục đích, tối đa 1000)
+            n = self._next_number(out)
+            dest = out / f"{n}.png"
             shutil.copy2(cur, dest)
             return str(dest)
+
+    @staticmethod
+    def _next_number(out) -> int:
+        """Số kế tiếp trong thư mục đích (bỏ qua tên không phải số), tối đa 1000."""
+        from pathlib import Path
+
+        biggest = 0
+        try:
+            for f in Path(out).glob("*.png"):
+                try:
+                    biggest = max(biggest, int(f.stem))
+                except (TypeError, ValueError):
+                    continue
+        except Exception:      # noqa: BLE001
+            biggest = 0
+        n = biggest + 1
+        while (Path(out) / f"{n}.png").exists():      # nhảy qua số đã có
+            n += 1
+        return n
