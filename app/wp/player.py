@@ -448,6 +448,7 @@ DEFAULT_HIDE_SELECTORS = (
     "#rank_math_metabox_content_ai",
     "#commentsdiv",
     "#woocommerce-product-data",
+    "#wpcode-metabox-snippets",
 )
 
 
