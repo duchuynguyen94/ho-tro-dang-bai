@@ -1008,11 +1008,16 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
             if href:
                 # bọc TOÀN BỘ chữ còn lại SAU tên mục (chỉ khi phần đuôi có nghĩa;
                 # nếu đuôi chỉ là dấu câu như ")" thì bọc CẢ tiêu đề)
-                tail_probe = text[hit.end():].strip() if hit is not None else ""
-                if tail_probe and len(tail_probe) >= 3 and re.search(r"\w", tail_probe):
-                    tail_raw = text[hit.end():]
-                    tail = tail_raw.strip()
-                    sep = " " if tail_raw[:1].isspace() else ""
+                # Phần ĐUÔI sau tên mục: giữ TỪ NỐI ("của", "cho", "về"…) ở NGOÀI thẻ <a>
+                tail_raw = text[hit.end():] if hit is not None else ""
+                prefix = ""
+                mm_conn = re.match(r"^(\s*(?:của|cho|về|với|và|theo)\s+)", tail_raw, re.I)
+                if mm_conn:
+                    prefix = mm_conn.group(1)          # vd " của "
+                    tail_raw = tail_raw[mm_conn.end():]
+                tail = tail_raw.strip().lstrip(":–—-/|·•,.").strip()
+                if tail and len(tail) >= 3 and re.search(r"\w", tail):
+                    sep = prefix if prefix else (" " if text[hit.end():][:1].isspace() else "")
                     text = f'{text[:hit.end()]}{sep}<a href="{_norm_url(href)}">{tail}</a>'
                 else:
                     # không có chữ sau tên mục (hoặc không phải tiêu đề mục chuẩn)
