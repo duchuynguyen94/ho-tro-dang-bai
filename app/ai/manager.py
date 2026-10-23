@@ -113,7 +113,7 @@ SEO_JSON_SPEC = """{
   "focus_keyword": "01 từ khoá chính duy nhất = Model của sản phẩm (vd: BI15U-EM30WDTC-AP6X)",
   "description": "mô tả siêu ngắn ĐÚNG mục 3 của rule_seo, gồm 4 phần trên các dòng riêng: (1) câu mô tả: “<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc.”; (2) dòng liên hệ: “🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com”; (3) “Tên sản phẩm <Brand> models tiêu biểu”; (4) tối đa 5 model tiêu biểu, MỖI DÒNG 1 model theo mẫu “<Tên sản phẩm> <Hãng> <Model>” (vd: Cảm biến siêu âm Carlo Gavazzi UA18CAD04PM1)",
   "tags": "trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy; GỒM: tên sản phẩm + đồng nghĩa, thương hiệu, sản phẩm + model nổi bật, từ khoá địa phương/tiếng Việt thông dụng, thông tin công ty",
-  "category_name": "Tên chủng loại sản phẩm, có thể có nhiều loại, mỗi loại cách nhau bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản phẩm cũng là con của nó; dấu chấm phẩy nằm TRONG chuỗi, không phải mảng)",
+  "category_name": "Tên chủng loại sản phẩm, có thể có nhiều loại, mỗi loại cách nhau bởi dấu chấm phẩy (tối đa 2 cái, trong đó có 1 danh mục chính, 1 danh mục còn lại sản phẩm cũng là con của nó; dấu chấm phẩy nằm TRONG chuỗi, không phải mảng)",
   "brand_name": "Tên thương hiệu của sản phẩm (vd: Carlo Gavazzi)",
   "ma_san_pham": "Danh sách mã sản phẩm của nội dung được viết, mỗi mã cách nhau bởi dấu phẩy (dấu phẩy nằm TRONG chuỗi, không phải mảng)"
 }"""
@@ -212,7 +212,7 @@ SEO_FIELDS_DETAIL = (
     "phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa phương/tiếng Việt "
     "thông dụng; thông tin công ty.\n"
     '   - "category_name": Tên chủng loại sản phẩm, có thể có nhiều loại, mỗi loại cách nhau '
-    'bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản phẩm '
+    'bởi dấu chấm phẩy (tối đa 2 cái, trong đó có 1 danh mục chính, 1 danh mục còn lại sản phẩm '
     'cũng là con của nó).\n'
     '   - "brand_name": tên thương hiệu sản phẩm (vd: Carlo Gavazzi).\n'
     '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết, '
@@ -1239,7 +1239,7 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         "tên sản phẩm + đồng nghĩa; thương hiệu; sản phẩm + model nổi bật; từ khoá địa "
         "phương/tiếng Việt thông dụng; thông tin công ty\n"
         '   - "category_name": Tên chủng loại sản phẩm, có thể có nhiều loại, mỗi loại cách nhau '
-        'bởi dấu chấm phẩy (tối đa 3 cái, trong đó có 1 danh mục chính, 2 danh mục còn lại sản '
+        'bởi dấu chấm phẩy (tối đa 2 cái, trong đó có 1 danh mục chính, 1 danh mục còn lại sản '
         'phẩm cũng là con của nó)\n'
         '   - "brand_name": tên thương hiệu sản phẩm (vd: Carlo Gavazzi)\n'
         '   - "ma_san_pham": Danh sách mã sản phẩm của nội dung được viết, '
