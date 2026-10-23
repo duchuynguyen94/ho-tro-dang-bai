@@ -50,6 +50,12 @@ class Store:
                         self.save()
                 except Exception:
                     pass
+                # thứ tự website theo danh sách mặc định (ngochuyduong, tudonghoa, congnghiep…)
+                try:
+                    if self.order_default_sites():
+                        self.save()
+                except Exception:
+                    pass
                 return
             except (json.JSONDecodeError, OSError):
                 pass
@@ -142,6 +148,31 @@ class Store:
             self.upsert_site(site)
             changed = True
         return changed
+
+    def order_default_sites(self) -> bool:
+        """Sắp website theo ĐÚNG thứ tự DEFAULT_SITES (website lạ -> xuống cuối)."""
+        from .models import DEFAULT_SITES
+
+        try:
+            sites = self.sites
+        except Exception:      # noqa: BLE001
+            return False
+        if len(sites) < 2:
+            return False
+
+        def key(site) -> int:
+            u = str(getattr(site, "url", "") or "").lower()
+            n = str(getattr(site, "name", "") or "").lower()
+            for i, dom in enumerate(DEFAULT_SITES):
+                if dom in u or dom in n:
+                    return i
+            return len(DEFAULT_SITES)
+
+        ordered = sorted(sites, key=key)
+        if [x.id for x in ordered] == [x.id for x in sites]:
+            return False
+        self.set_sites(ordered)
+        return True
 
     def _seed_default_sites(self) -> None:
         """Tạo sẵn các website mặc định cho máy mới cài + gắn kịch bản đóng gói kèm app."""

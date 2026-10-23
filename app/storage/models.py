@@ -211,8 +211,8 @@ DEFAULT_WATERMARK = "https://ngochuyduong.com"   # watermark mặc định khi w
 # Website tạo sẵn khi MÁY MỚI CÀI phần mềm (kịch bản kèm theo nếu có trong app/assets)
 DEFAULT_SITES = (
     "ngochuyduong.com",
-    "thietbi-congnghiep.com",
     "thietbi-tudonghoa.com",
+    "thietbi-congnghiep.com",
     "enda-vietnam.com",
 )   # watermark mặc định khi website để trống
 
