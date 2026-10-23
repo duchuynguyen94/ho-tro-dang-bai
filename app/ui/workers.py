@@ -1224,3 +1224,92 @@ class ModelsWorker(TrackedThread):
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             self.failed.emit(str(exc))
+
+
+class ImageToolsWorker(TrackedThread):
+    """Công cụ ảnh: Trim / Xoá BG / Xoá BG + Trim cho NHIỀU file -> lưu vào 1 thư mục."""
+
+    log = Signal(str)
+    progress = Signal(int, int)          # (đã xong, tổng)
+    done = Signal(int, int, str)         # (thành công, tổng, thư mục)
+    failed = Signal(str)
+
+    def __init__(self, files: list, mode: str, out_dir: str) -> None:
+        super().__init__()
+        self.files = [str(f) for f in (files or []) if str(f).strip()]
+        self.mode = str(mode or "trim")
+        self.out_dir = str(out_dir or "")
+        self._stop = False
+
+    def stop(self) -> None:
+        self._stop = True
+
+    def run(self) -> None:
+        try:
+            ok = self._process()
+            self.done.emit(ok, len(self.files), self.out_dir)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+    def _process(self) -> int:
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        out = Path(self.out_dir)
+        out.mkdir(parents=True, exist_ok=True)
+        total = len(self.files)
+        ok = 0
+        for i, src in enumerate(self.files, 1):
+            if self._stop:
+                break
+            p = Path(src)
+            self.log.emit(f"[{i}/{total}] {p.name}…")
+            try:
+                dest = self._one(p, out)
+                self.log.emit(f"   -> {Path(dest).name}")
+                ok += 1
+            except Exception as exc:      # noqa: BLE001
+                self.log.emit(f"   ⚠ lỗi: {str(exc)[:90]}")
+            self.progress.emit(i, total)
+        return ok
+
+    def _one(self, src, out) -> str:
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        from PIL import Image
+
+        stem = src.stem
+        suffix = src.suffix.lower()
+        with tempfile.TemporaryDirectory() as td:
+            cur = Path(td) / ("img" + (suffix or ".png"))
+            shutil.copy2(src, cur)
+            if self.mode in ("nobg", "nobg_trim"):
+                from ..images.composer import remove_background_auto
+
+                im = remove_background_auto(Image.open(cur).convert("RGBA"), 42)
+                cur = Path(td) / "img_nobg.png"
+                im.save(cur)
+            if self.mode in ("trim", "nobg_trim"):
+                from ..images.composer import trim_borders
+
+                trimmed = Path(trim_borders(str(cur)))
+                if trimmed.exists():
+                    cur = trimmed
+            names = {
+                "trim": f"{stem}_trim",
+                "nobg": f"{stem}_nobg",
+                "nobg_trim": f"{stem}_nobg_trim",
+            }
+            base = names.get(self.mode, f"{stem}_{self.mode}")
+            ext = ".png" if self.mode != "trim" else (suffix if suffix else ".png")
+            dest = out / (base + ext)
+            n = 1
+            while dest.exists():          # không ghi đè
+                n += 1
+                dest = out / f"{base} ({n}){ext}"
+            shutil.copy2(cur, dest)
+            return str(dest)

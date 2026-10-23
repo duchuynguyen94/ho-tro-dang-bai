@@ -111,6 +111,13 @@ class MainWindow(QMainWindow):
         name = QLabel("WP Multi Poster")
         tl.addWidget(name)
         tl.addStretch(1)
+        # nút CÔNG CỤ ẢNH (🧰) ngay TRƯỚC bánh răng cài đặt
+        self.tools_btn = QPushButton("🧰")
+        self.tools_btn.setObjectName("gearBtn")
+        self.tools_btn.setToolTip("Công cụ ảnh: Trim / Xoá BG / Xoá BG + Trim")
+        self.tools_btn.setCursor(Qt.PointingHandCursor)
+        self.tools_btn.clicked.connect(self._open_image_tools)
+        tl.addWidget(self.tools_btn)
         # nút CÀI ĐẶT (icon răng cửa) ở GÓC PHẢI TRÊN
         self.gear_btn = QPushButton()
         self.gear_btn.setObjectName("gearBtn")
@@ -232,6 +239,15 @@ class MainWindow(QMainWindow):
         except Exception:      # noqa: BLE001
             pass
         show_toast(self, "Đã xoá cache — toàn bộ job và ảnh đã xoá", 3200)
+
+    def _open_image_tools(self) -> None:
+        """Mở popup "Công cụ ảnh" (Trim / Xoá BG / Xoá BG + Trim)."""
+        from .widgets.image_tools_dialog import ImageToolsDialog
+
+        try:
+            ImageToolsDialog(self.store, self).exec()
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
 
     def _on_config_changed(self) -> None:
         self.post_page.reload_sites()
