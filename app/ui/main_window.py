@@ -1131,7 +1131,8 @@ class MainWindow(QMainWindow):
                     changed = True
                     continue
                 try:
-                    alive = bool(_pids_using_profile(_user_data_dir(site.id)))
+                    # chỉ xét TIẾN TRÌNH CHÍNH (helper/--type= còn sót không tính là đang mở)
+                    alive = bool(_pids_using_profile(_user_data_dir(site.id), main_only=True))
                 except Exception:      # noqa: BLE001
                     alive = True
                 if alive:

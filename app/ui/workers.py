@@ -588,7 +588,7 @@ class PostWorker(TrackedThread):
             # (2) tiến trình Chrome của profile đã tắt hẳn
             if profile:
                 try:
-                    if not _pids_using_profile(profile):
+                    if not _pids_using_profile(profile, main_only=True):
                         break
                 except Exception:      # noqa: BLE001
                     pass

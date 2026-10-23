@@ -93,8 +93,12 @@ def profile_lock(site_id: str) -> threading.Lock:
         return _PROFILE_LOCKS.setdefault(site_id or "default", threading.Lock())
 
 
-def _pids_using_profile(user_data_dir: str) -> list[int]:
-    """Các tiến trình Chrome/Edge đang dùng profile của app (do lần trước còn sót)."""
+def _pids_using_profile(user_data_dir: str, main_only: bool = False) -> list[int]:
+    """Các tiến trình Chrome/Edge đang dùng profile của app (do lần trước còn sót).
+
+    main_only=True -> CHỈ tính tiến trình CHÍNH (bỏ renderer/gpu/crashpad --type=…).
+    Dùng để biết "trình duyệt đã đóng hẳn chưa" (helper có thể còn sót vài giây).
+    """
     pids: list[int] = []
     want = user_data_dir.lower()
     if os.name == "nt":
@@ -110,6 +114,21 @@ def _pids_using_profile(user_data_dir: str) -> list[int]:
                     pids.append(int(line))
         except Exception:
             pass
+        if main_only:
+            keep = []
+            for pid in pids:
+                try:
+                    cp = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command",
+                         f"(Get-CimInstance Win32_Process -Filter \"ProcessId={pid}\").CommandLine"],
+                        capture_output=True, text=True, timeout=10, **_no_window_kwargs())
+                    cmd = (cp.stdout or "").lower()
+                    if "--type=" in cmd or "crashpad" in cmd:
+                        continue
+                except Exception:
+                    pass
+                keep.append(pid)
+            return keep
         return pids
     try:
         out = subprocess.run(["ps", "-Ao", "pid=,command="],
@@ -123,6 +142,8 @@ def _pids_using_profile(user_data_dir: str) -> list[int]:
         pid_s, _, cmd = line.partition(" ")
         low = cmd.lower()
         if not any(k in low for k in ("chrome", "chromium", "msedge", "edge")):
+            continue
+        if main_only and ("--type=" in low or "crashpad" in low):
             continue
         try:
             pid = int(pid_s)
