@@ -442,6 +442,37 @@ def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
     return len(done)
 
 
+# Các khối LUÔN ẩn trên trang WordPress (chỉ ẩn trong trình duyệt của app)
+DEFAULT_HIDE_SELECTORS = (
+    "#rank_math_metabox_link_suggestions",
+    "#commentsdiv",
+    "#woocommerce-product-data",
+)
+
+
+def hide_elements(page: Page, extra: list | None = None) -> None:
+    """Ẩn các khối không dùng trên trang (tiêm CSS — KHÔNG sửa gì trên website)."""
+    sels = list(DEFAULT_HIDE_SELECTORS) + [str(x).strip() for x in (extra or []) if str(x).strip()]
+    if not sels:
+        return
+    css = "\n".join(f"{x} {{ display: none !important; }}" for x in sels)
+    try:
+        page.add_style_tag(content=css)
+    except Exception:
+        pass
+    try:      # khối có thể được thêm SAU khi trang tải -> ẩn lại 1 lần nữa
+        page.evaluate(
+            """(sels) => {
+                sels.forEach(sel => {
+                    try {
+                        document.querySelectorAll(sel).forEach(e => { e.style.display = 'none'; });
+                    } catch (err) {}
+                });
+            }""", sels)
+    except Exception:
+        pass
+
+
 def _dismiss_translate(page: Page) -> None:
     """Dọn bong bóng Google Dịch / banner dịch (hay che nút và chặn click)."""
     try:
@@ -1565,7 +1596,9 @@ def _dismiss_overlays(page: Page) -> None:
         pass
 
 
-def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4) -> None:
+def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4,
+         hide_selectors: list | None = None) -> None:
+    hide_elements(page, hide_selectors)      # ẩn khối không dùng TRƯỚC khi phát lại
     for i, step in enumerate(script.steps, 1):
         action = step.action
         # ĐIỀU KIỆN BƯỚC: có "when" mà render ra RỖNG -> BỎ QUA bước này

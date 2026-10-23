@@ -979,7 +979,12 @@ class MainWindow(QMainWindow):
                    "category_name", "brand_name", "ma_san_pham"):
             if str(snap.get(_k) or "").strip():
                 payload[_k] = snap.get(_k)
-        worker = PostWorker(site, payload)
+        try:
+            hide = [str(x).strip() for x in
+                    ((self.store.data.get("ui") or {}).get("hide_selectors") or []) if str(x).strip()]
+        except Exception:      # noqa: BLE001
+            hide = []
+        worker = PostWorker(site, payload, hide_selectors=hide)
         import time as _time
 
         self._post_workers[task.id] = worker

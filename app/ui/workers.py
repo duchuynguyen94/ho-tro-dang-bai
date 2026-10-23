@@ -535,11 +535,12 @@ class PostWorker(TrackedThread):
     failed = Signal(str)
     closed = Signal(str)          # người dùng đã đóng trình duyệt
 
-    def __init__(self, site, result: dict) -> None:
+    def __init__(self, site, result: dict, hide_selectors: list | None = None) -> None:
         super().__init__()
         import copy as _copy
 
         self.site = site
+        self.hide_selectors = list(hide_selectors or [])
         # BẢN SAO: đổi job A/B trên giao diện KHÔNG làm thay đổi dữ liệu đang đăng
         try:
             self.result = _copy.deepcopy(dict(result or {}))
@@ -668,7 +669,8 @@ class PostWorker(TrackedThread):
                 # đường dẫn (slug) tạo từ tiêu đề, tối đa 60 ký tự
                 ctx["slug"] = make_slug(ctx["title"], 59)
                 try:
-                    play_script(page, site.script, ctx, log=self.log.emit)
+                    play_script(page, site.script, ctx, log=self.log.emit,
+                                hide_selectors=self.hide_selectors)
                 except Exception as exc:
                     show_page_notice(
                         page,
