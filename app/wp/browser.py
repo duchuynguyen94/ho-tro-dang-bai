@@ -72,10 +72,63 @@ BROWSER_PATHS = [
 ]
 
 
+# TOÀN APP CHỈ DÙNG 1 PROFILE CHROME (mọi website + ChatGPT dùng chung)
+SHARED_PROFILE = "main"
+
+
+def _dir_size(d) -> int:
+    total = 0
+    try:
+        for f in d.rglob("*"):
+            try:
+                if f.is_file():
+                    total += f.stat().st_size
+            except OSError:
+                continue
+    except OSError:
+        return total
+    return total
+
+
+def _migrate_to_shared(base, shared) -> None:
+    """Lần đầu chạy bản 1 profile: copy profile sẵn có (ưu tiên ChatGPT) làm nền."""
+    import shutil
+
+    shared.mkdir(parents=True, exist_ok=True)
+    try:
+        if any(shared.iterdir()):
+            return
+    except OSError:
+        return
+    prefer = [base / "chatgpt"]
+    others = sorted(
+        [d for d in base.iterdir() if d.is_dir() and d.name != SHARED_PROFILE],
+        key=_dir_size, reverse=True,
+    )
+    src = next((d for d in prefer + others if d.is_dir() and _dir_size(d) > 0), None)
+    if src is None:
+        return
+    try:
+        shutil.copytree(
+            src, shared, dirs_exist_ok=True,
+            ignore=shutil.ignore_patterns("Singleton*", "*.lock", "lockfile"),
+            ignore_dangling_symlinks=True,
+        )
+    except Exception:      # noqa: BLE001
+        pass
+
+
 def _user_data_dir(site_id: str) -> str:
-    d = sessions_dir() / site_id
-    d.mkdir(parents=True, exist_ok=True)
-    return str(d)
+    """Luôn trả về CÙNG 1 thư mục profile cho mọi website/chatgpt."""
+    base = sessions_dir()
+    shared = base / SHARED_PROFILE
+    if not shared.exists():
+        try:
+            _migrate_to_shared(base, shared)
+        except Exception:      # noqa: BLE001
+            pass
+    shared.mkdir(parents=True, exist_ok=True)
+    return str(shared)
 
 
 LOCK_FILES = ("SingletonLock", "SingletonCookie", "SingletonSocket")
@@ -88,9 +141,10 @@ _PROFILE_LOCKS: dict[str, threading.Lock] = {}
 _PROFILE_LOCKS_GUARD = threading.Lock()
 
 
-def profile_lock(site_id: str) -> threading.Lock:
+def profile_lock(site_id: str = "") -> threading.Lock:
+    """Toàn app dùng CHUNG 1 profile -> 1 khoá chung (chỉ 1 Chrome tại 1 thời điểm)."""
     with _PROFILE_LOCKS_GUARD:
-        return _PROFILE_LOCKS.setdefault(site_id or "default", threading.Lock())
+        return _PROFILE_LOCKS.setdefault("__shared__", threading.Lock())
 
 
 def _pids_using_profile(user_data_dir: str, main_only: bool = False) -> list[int]:
@@ -245,13 +299,11 @@ class WPBrowser:
         # mỗi profile chỉ 1 trình duyệt: chờ tới lượt (tối đa 30 phút)
         lock = profile_lock(self.site_id)
         if not lock.acquire(timeout=0.5):
-            if self.log:
-                self.log("Đang chờ trình duyệt của việc khác đóng lại…")
-            if not lock.acquire(timeout=180):
-                raise RuntimeError(
-                    "Trình duyệt của việc khác đang mở quá lâu (quá 3 phút). "
-                    "Hãy đóng cửa sổ Chrome đó rồi thử lại."
-                )
+            # CHỈ 1 CHROME: đang mở cửa sổ khác -> báo luôn (không chờ)
+            raise RuntimeError(
+                "Đang có 1 cửa sổ Chrome của app đang mở.\n"
+                "Hãy đóng cửa sổ Chrome đó rồi thử lại."
+            )
         self._lock = lock
         try:
             return self._open_locked()
