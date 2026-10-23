@@ -324,9 +324,10 @@ class WPBrowser:
 
         # LUÔN ẨN các khối không dùng (áp cho mọi trang + mọi lần tải trong phiên)
         try:
-            from .player import DEFAULT_HIDE_SELECTORS, build_hide_script
+            from .player import DEFAULT_EXTRA_CSS, DEFAULT_HIDE_SELECTORS, build_hide_script
 
-            self.context.add_init_script(script=build_hide_script(DEFAULT_HIDE_SELECTORS))
+            self.context.add_init_script(
+                script=build_hide_script(DEFAULT_HIDE_SELECTORS, DEFAULT_EXTRA_CSS))
         except Exception:      # noqa: BLE001
             pass
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()

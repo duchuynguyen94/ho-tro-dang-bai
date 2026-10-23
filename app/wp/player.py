@@ -443,6 +443,11 @@ def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
 
 
 # Các khối LUÔN ẩn trên trang WordPress (chỉ ẩn trong trình duyệt của app)
+# CSS LUÔN ÁP trên trang WordPress (mọi website, mọi lần tải)
+DEFAULT_EXTRA_CSS = (
+    "#product_tag { max-height: 300px; overflow: auto; position: relative; }",
+)
+
 DEFAULT_HIDE_SELECTORS = (
     "#rank_math_metabox_link_suggestions",
     "#rank_math_metabox_content_ai",
@@ -452,16 +457,20 @@ DEFAULT_HIDE_SELECTORS = (
 )
 
 
-def build_hide_script(selectors) -> str:
+def build_hide_script(selectors, extra_css=None) -> str:
     """Script tiêm SỚM (init script): ẩn khối + TỰ ẨN LẠI mỗi khi trang vẽ thêm phần tử."""
     import json as _json
 
     sels = _json.dumps([str(x) for x in (selectors or []) if str(x).strip()])
+    extra = _json.dumps([str(x) for x in (extra_css if extra_css is not None else DEFAULT_EXTRA_CSS)
+                         if str(x).strip()])
     return """
 (() => {
   const SELS = %s;
-  if (!SELS.length) return;
-  const CSS = SELS.map(s => s + ' { display: none !important; }').join('\\n');
+  const EXTRA = %s;
+  if (!SELS.length && !EXTRA.length) return;
+  const CSS = SELS.map(s => s + ' { display: none !important; }')
+                  .concat(EXTRA).join('\\n');
   let scheduled = false;
   const apply = () => {
     scheduled = false;
@@ -501,7 +510,7 @@ def build_hide_script(selectors) -> str:
     start();
   }
 })();
-""" % sels
+""" % (sels, extra)
 
 
 def hide_elements(page: Page, extra: list | None = None) -> None:
@@ -509,7 +518,8 @@ def hide_elements(page: Page, extra: list | None = None) -> None:
     sels = list(DEFAULT_HIDE_SELECTORS) + [str(x).strip() for x in (extra or []) if str(x).strip()]
     if not sels:
         return
-    css = "\n".join(f"{x} {{ display: none !important; }}" for x in sels)
+    css = "\n".join([f"{x} {{ display: none !important; }}" for x in sels]
+                     + list(DEFAULT_EXTRA_CSS))
     try:
         page.add_style_tag(content=css)
     except Exception:
