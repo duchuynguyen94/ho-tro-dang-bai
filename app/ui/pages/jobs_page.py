@@ -495,12 +495,16 @@ class JobsPage(QWidget):
             "(dùng Nội dung của chính job đó) — có popup tiến trình 1/N."
         )
         self.seo_all_btn.clicked.connect(self.seo_all.emit)
-        left.add_header_widget(self.seo_all_btn)
         self.stop_all_btn = QPushButton("■ Dừng tất cả")
         self.stop_all_btn.setProperty("class", "danger")
         self.stop_all_btn.setToolTip("Dừng mọi việc đang chờ / đang tạo → chuyển thành \"chưa tạo\"")
         self.stop_all_btn.clicked.connect(self.stop_all.emit)
-        left.add_header_widget(self.stop_all_btn)
+        # 2 nút GOM 1 HÀNG, nằm NGAY DƯỚI tiêu đề "Công việc đang làm"
+        _btns = QHBoxLayout()
+        _btns.setSpacing(8)
+        _btns.addWidget(self.seo_all_btn, 1)
+        _btns.addWidget(self.stop_all_btn, 1)
+        left.body.insertLayout(0, _btns)
         self.count_badge = QLabel("0")
         self.count_badge.setObjectName("chipBlue")
         left.add_header_widget(self.count_badge)
