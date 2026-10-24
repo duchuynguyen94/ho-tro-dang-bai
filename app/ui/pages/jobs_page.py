@@ -1643,8 +1643,37 @@ class JobsPage(QWidget):
         if not path:
             show_toast(self, "Clipboard không có ảnh", 2400, ok=False)
             return
+        # Áp dụng tuỳ chọn "Khi dán ảnh": Xoá BG trước -> rồi Trim
+        try:
+            bg, trim = self.img_editor.paste_ops()
+        except Exception:      # noqa: BLE001
+            bg, trim = False, False
+        if bg or trim:
+            try:
+                path = self._apply_paste_ops(path, bg, trim)
+            except Exception as exc:      # noqa: BLE001
+                traceback.print_exc()
+                show_toast(self, f"Lỗi xử lý ảnh dán: {str(exc)[:60]}", 3200, ok=False)
         self._add_upload_component(path, getattr(self, "_sel_index", 0))
-        show_toast(self, "Đã dán ảnh vào canvas", 1800)
+        note = ("xử lý xong" if (bg or trim) else "giữ nguyên")
+        show_toast(self, f"Đã dán ảnh vào canvas ({note})", 1900)
+
+    @staticmethod
+    def _apply_paste_ops(path: str, bg: bool, trim: bool) -> str:
+        """Xoá nền (nếu tick) TRƯỚC, rồi TRIM (nếu tick)."""
+        from PIL import Image
+
+        from ...images.composer import remove_background_auto, trim_borders
+
+        cur = str(path)
+        if bg:
+            im = remove_background_auto(Image.open(cur).convert("RGBA"), 42)
+            out = Path(cur).with_name(Path(cur).stem + "_nobg.png")
+            im.save(out)
+            cur = str(out)
+        if trim:
+            cur = str(trim_borders(cur))
+        return cur
 
     @staticmethod
     def _is_text_widget(w) -> bool:

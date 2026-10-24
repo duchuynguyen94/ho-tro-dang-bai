@@ -323,6 +323,21 @@ class ImageEditorPanel(QFrame):
         foot_row.addWidget(self.footer_combo, 1)
         right.addLayout(foot_row)
 
+        # Tuỳ chọn TỰ ĐỘNG xử lý khi DÁN ảnh vào canvas
+        paste_row = QHBoxLayout()
+        paste_row.addWidget(QLabel("Khi dán ảnh:"))
+        self.cb_trim = QCheckBox("Trim hình")
+        self.cb_trim.setToolTip("Dán ảnh -> tự cắt viền thừa.")
+        paste_row.addWidget(self.cb_trim)
+        self.cb_bg = QCheckBox("Xoá BG")
+        self.cb_bg.setToolTip("Dán ảnh -> tự xoá nền (PNG trong suốt).")
+        paste_row.addWidget(self.cb_bg)
+        self.cb_both = QCheckBox("Xoá BG & Trim")
+        self.cb_both.setToolTip("Dán ảnh -> XOÁ NỀN trước, rồi TRIM.")
+        paste_row.addWidget(self.cb_both)
+        paste_row.addStretch(1)
+        right.addLayout(paste_row)
+
         right.addStretch(1)
         body.addLayout(right, 1)
 
@@ -344,6 +359,16 @@ class ImageEditorPanel(QFrame):
             w.valueChanged.connect(lambda _v: self._layout_watermark())
         self.footer_combo.currentIndexChanged.connect(self._on_footer_changed)
         polish_combos(self)
+
+    def paste_ops(self) -> tuple:
+        """(xoá nền?, trim?) theo các ô tick ở "Khi dán ảnh"."""
+        try:
+            both = bool(self.cb_both.isChecked())
+            bg = bool(self.cb_bg.isChecked()) or both
+            trim = bool(self.cb_trim.isChecked()) or both
+            return bg, trim
+        except Exception:      # noqa: BLE001
+            return False, False
 
     def _on_footer_changed(self, _index: int) -> None:
         """Đổi select "thanh thông tin": dựng lại NỀN canvas NGAY, rồi mới tới preview."""
