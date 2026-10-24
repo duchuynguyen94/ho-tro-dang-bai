@@ -246,14 +246,15 @@
       "force": false
     },
     {
-      "action": "wait",
+      "action": "wait_upload",
       "selector": "",
       "selectors": [],
-      "value": "8",
-      "note": "Chờ ảnh tải lên xong",
+      "value": "",
+      "note": "Chờ ảnh tải lên xong (tối đa 5 phút)",
       "source": "auto",
-      "optional": false,
-      "force": false
+      "optional": true,
+      "force": false,
+      "when": ""
     },
     {
       "action": "open_details",

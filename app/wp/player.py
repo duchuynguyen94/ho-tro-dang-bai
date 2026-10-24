@@ -1278,6 +1278,34 @@ def slug_if_needed(page: Page, new_slug: str, limit: int = 55, log=None) -> bool
         return False
 
 
+def wait_upload(page: Page, log=None, timeout: float = 300.0) -> bool:
+    """Chờ ảnh vừa chọn TẢI LÊN XONG (có bảng chi tiết + tiêu đề) — tối đa 5 phút."""
+    deadline = time.time() + timeout
+    next_log = time.time() + 15.0
+    start = time.time()
+    while time.time() < deadline:
+        try:
+            if page.locator("#attachment-details-title:visible").count():
+                try:
+                    val = str(page.locator("#attachment-details-title:visible").first
+                              .input_value(timeout=1500) or "").strip()
+                except Exception:
+                    val = ""
+                if val:
+                    if log:
+                        log(f"  (ảnh đã tải lên xong sau {int(time.time() - start)}s)")
+                    return True
+        except Exception:
+            pass
+        if log and time.time() >= next_log:
+            next_log = time.time() + 15.0
+            log(f"  (đang chờ ảnh tải lên… {int(time.time() - start)}s / tối đa {int(timeout)}s)")
+        page.wait_for_timeout(500)
+    if log:
+        log("  (hết thời gian chờ ảnh tải lên — đi tiếp)")
+    return False
+
+
 def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: str = "",
                                   log=None) -> int:
     """Thêm ảnh vào THƯ VIỆN ảnh sản phẩm — TỪNG ẢNH MỘT (giống cách làm ảnh đại diện).
@@ -1385,9 +1413,11 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                     log(f"  ⚠ Chưa bấm được tab “Tải lên tệp mới” | tab đang có: {tabs}")
             # 3) bấm chọn file (không delay)
             page.locator("input[type='file']").first.set_input_files(f)
-            # 4) chờ bảng chi tiết hiện
+            # 4) chờ bảng chi tiết hiện (tối đa 300 giây = 5 phút mỗi ảnh)
             ok = False
-            for _ in range(80):
+            _t0 = time.time()
+            _next = _t0 + 15.0
+            for _ in range(600):
                 page.wait_for_timeout(500)
                 try:
                     if page.locator("#attachment-details-title:visible").count():
@@ -1395,6 +1425,9 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                         break
                 except Exception:
                     pass
+                if log and time.time() >= _next:
+                    _next = time.time() + 15.0
+                    log(f"  (đang chờ ảnh tải lên… {int(time.time() - _t0)}s / tối đa 300s)")
             if ok:
                 # 5) điền các ô TRỐNG — ƯU TIÊN tiêu đề của CHÍNH ẢNH trong modal này
                 _fill_attachment_in_top_modal(page, fallback_title, log=log)
@@ -1752,6 +1785,8 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4,
                         raise
             elif action in ("save_post", "luu_bai", "submit_post"):
                 save_post(page, log=log)
+            elif action in ("wait_upload", "upload_wait", "wait_image_upload"):
+                wait_upload(page, log=log)
             elif action in ("scroll_top", "scroll_to_top", "top"):
                 scroll_top(page, log=log)
             elif action in ("add_tags", "add_tag", "tags_add"):
