@@ -672,6 +672,7 @@ class JobsPage(QWidget):
         self.img_editor.request_export.connect(
             lambda: self.current and self.export_images.emit(self.current))
         self.img_editor.request_source_picker.connect(self._pick_source_image)
+        self.img_editor.files_dropped.connect(self._on_files_dropped)
         self.img_editor.request_trim.connect(
             lambda kind, idx: self.current and self.trim_component.emit(self.current, kind, idx))
         ev2.addWidget(self.img_editor)
@@ -1837,8 +1838,66 @@ class JobsPage(QWidget):
         self.store.upsert_task(self.current)
         self.store.save()
 
+    def _on_files_dropped(self, paths: list, nx: float, ny: float) -> None:
+        """Kéo-thả ảnh (file hoặc URL) vào canvas -> thêm thành phần tại ĐÚNG chỗ thả."""
+        if not self.current or not paths:
+            return
+        import httpx
+
+        from ...config import media_dir
+
+        local: list[str] = []
+        QApplication.setOverrideCursor(Qt.WaitCursor)
+        try:
+            for raw in paths:
+                s_ = str(raw)
+                if s_ == "__clipboard__":
+                    p = clipboard_image_path()
+                    if p:
+                        local.append(p)
+                    continue
+                if s_.lower().startswith(("http://", "https://")):
+                    try:
+                        r = httpx.get(s_, timeout=25, follow_redirects=True,
+                                      headers={"User-Agent": "Mozilla/5.0"})
+                        r.raise_for_status()
+                        ext = Path(s_.split("?")[0]).suffix.lower()
+                        if ext not in (".png", ".jpg", ".jpeg", ".webp", ".bmp"):
+                            ext = ".png"
+                        d = media_dir()
+                        d.mkdir(parents=True, exist_ok=True)
+                        f = d / f"keo_{abs(hash(s_)) % 10**10}{ext}"
+                        f.write_bytes(r.content)
+                        local.append(str(f))
+                    except Exception:      # noqa: BLE001
+                        continue
+                elif Path(s_).exists():
+                    local.append(s_)
+        finally:
+            QApplication.restoreOverrideCursor()
+        if not local:
+            show_toast(self, "Không đọc được ảnh kéo vào", 2600, ok=False)
+            return
+        # Áp dụng tuỳ chọn "Khi dán ảnh" (Xoá BG trước -> Trim)
+        try:
+            bg, trim = self.img_editor.paste_ops()
+        except Exception:      # noqa: BLE001
+            bg, trim = False, False
+        out: list[str] = []
+        for p_ in local:
+            if bg or trim:
+                try:
+                    p_ = self._apply_paste_ops(p_, bg, trim)
+                except Exception:      # noqa: BLE001
+                    traceback.print_exc()
+            out.append(p_)
+        self._add_upload_components(out, getattr(self, "_sel_index", 0), first_pos=(nx, ny))
+        note = "xử lý xong" if (bg or trim) else "giữ nguyên"
+        show_toast(self, f"Đã thêm {len(out)} ảnh vào canvas ({note})", 2200)
+
     def _add_upload_components(self, paths: list[str], index: int,
-                               nobg: bool = False) -> None:
+                               nobg: bool = False,
+                               first_pos: tuple | None = None) -> None:
         """Thêm NHIỀU ảnh cùng lúc vào canvas (mỗi ảnh 1 thành phần)."""
         if not self.current or not paths:
             return
@@ -1853,6 +1912,11 @@ class JobsPage(QWidget):
         ups = list(lst[index].get("uploads") or [])
         real = [p for p in paths if p]
         spots = self._find_free_spots(len(real))     # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng)
+        if first_pos:
+            try:
+                spots[0] = [round(float(first_pos[0]), 4), round(float(first_pos[1]), 4)]
+            except Exception:      # noqa: BLE001
+                pass
         for p, spot in zip(real, spots):
             item = {"path": p, "pos": spot}
             if nobg:

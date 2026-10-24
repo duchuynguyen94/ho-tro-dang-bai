@@ -219,6 +219,7 @@ class ImageEditorPanel(QFrame):
     apply_opts = Signal(dict)
     changed = Signal()            # báo "canvas vừa đổi" -> cập nhật preview trong list ngay (0.2s)
     footer_changed = Signal(str)  # người dùng đổi select "thanh thông tin" -> dựng lại nền canvas NGAY
+    files_dropped = Signal(list, float, float)   # (danh sách đường dẫn/URL, x, y) theo tỉ lệ canvas
     request_upload = Signal()
     request_ai_edit = Signal()
     request_refetch = Signal()
@@ -261,6 +262,7 @@ class ImageEditorPanel(QFrame):
         self.canvas.setAlignment(Qt.AlignCenter)
         self.canvas.setFocusPolicy(Qt.ClickFocus)      # bấm vào canvas -> nhận con trỏ (để dán ảnh)
         self.canvas.installEventFilter(self)           # bấm vào thành phần -> biết đang CHỌN cái nào
+        self.canvas.setAcceptDrops(True)               # kéo-thả ảnh từ ngoài vào canvas
         self._sel_item = None
         left.addWidget(self.canvas)
 
@@ -377,9 +379,52 @@ class ImageEditorPanel(QFrame):
         self._schedule_save()          # 0.2s -> preview trong list · 0.5s -> ghép file thật
         self.footer_changed.emit(["bar1", "bar2"][max(0, min(1, self.footer_combo.currentIndex()))])
 
+    @staticmethod
+    def _drop_paths(mime) -> list:
+        """Lấy danh sách file ảnh / URL ảnh từ dữ liệu kéo-thả."""
+        out: list = []
+        try:
+            if mime is None:
+                return out
+            for u in (mime.urls() or []):
+                s = u.toString()
+                if u.isLocalFile():
+                    p = u.toLocalFile()
+                    if p.lower().endswith((".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif")):
+                        out.append(p)
+                elif s.lower().startswith(("http://", "https://")):
+                    out.append(s)
+            if not out and mime.hasImage():
+                out.append("__clipboard__")
+        except Exception:      # noqa: BLE001
+            pass
+        return out
+
     def eventFilter(self, obj, event):  # noqa: N802
         """Bấm vào thành phần trên canvas -> đánh dấu ĐANG CHỌN (để Ctrl+C copy)."""
         try:
+            if obj is self.canvas and event.type() in (QEvent.DragEnter, QEvent.DragMove):
+                try:
+                    if self._drop_paths(event.mimeData()):
+                        event.acceptProposedAction()
+                        return True
+                except Exception:      # noqa: BLE001
+                    pass
+            if obj is self.canvas and event.type() == QEvent.Drop:
+                paths = self._drop_paths(event.mimeData())
+                if paths:
+                    try:
+                        pos = event.position().toPoint()
+                    except Exception:      # noqa: BLE001
+                        pos = event.pos()
+                    nx = max(0.0, min(1.0, float(pos.x()) / max(1, CANVAS)))
+                    ny = max(0.0, min(1.0, float(pos.y()) / max(1, CANVAS)))
+                    self.files_dropped.emit(paths, nx, ny)
+                    try:
+                        event.acceptProposedAction()
+                    except Exception:      # noqa: BLE001
+                        pass
+                    return True
             if obj is self.canvas and event.type() == QEvent.MouseButtonPress:
                 w = self.canvas.childAt(event.pos())
                 while w is not None and not isinstance(w, DraggableImage):
