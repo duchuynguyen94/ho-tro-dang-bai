@@ -141,6 +141,17 @@
       "when": ""
     },
     {
+      "action": "scroll_top",
+      "selector": "",
+      "selectors": [],
+      "value": "",
+      "note": "Cuộn lên đầu trang (sau khi thêm thẻ)",
+      "source": "auto",
+      "optional": true,
+      "force": false,
+      "when": ""
+    },
+    {
       "action": "taxonomy_pick",
       "selector": "product_cat",
       "selectors": [],

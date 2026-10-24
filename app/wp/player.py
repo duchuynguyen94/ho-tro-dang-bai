@@ -674,6 +674,30 @@ def _tag_box_list(page: Page, box_id: str = "tagsdiv-product_tag") -> list:
         return []
 
 
+def scroll_top(page: Page, log=None) -> None:
+    """Cuộn lên ĐẦU TRANG (sau khi thêm thẻ) — giúp các bước sau thao tác ổn định."""
+    done = False
+    try:
+        page.evaluate(
+            """() => { try { window.scrollTo({top: 0, left: 0, behavior: 'instant'}); }
+                       catch (e) { window.scrollTo(0, 0); }
+                       const sc = document.scrollingElement || document.documentElement;
+                       if (sc) sc.scrollTop = 0; }"""
+        )
+        done = True
+    except Exception:
+        pass
+    if not done:
+        try:
+            page.keyboard.press("Home")
+        except Exception:
+            pass
+    try:
+        page.wait_for_timeout(300)
+    except Exception:
+        pass
+
+
 def add_tags(page: Page, tags: str, input_sel: str = "", log=None,
              box_id: str = "tagsdiv-product_tag") -> bool:
     """Thêm THẺ (tags) chắc chắn: gõ -> bấm "Thêm" -> KIỂM TRA -> thử lại 3 lần.
@@ -1728,6 +1752,8 @@ def play(page: Page, script: Script, ctx: dict, log=None, delay: float = 0.4,
                         raise
             elif action in ("save_post", "luu_bai", "submit_post"):
                 save_post(page, log=log)
+            elif action in ("scroll_top", "scroll_to_top", "top"):
+                scroll_top(page, log=log)
             elif action in ("add_tags", "add_tag", "tags_add"):
                 add_tags(page, render(step.value or "{{tags}}", ctx),
                          input_sel=step.selector, log=log)
