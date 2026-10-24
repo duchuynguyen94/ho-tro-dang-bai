@@ -372,15 +372,22 @@ def _sidebar_attach_id(page: Page) -> int:
         return 0
 
 
-_FILL_CURRENT_JS = r"""({val}) => {
+_FILL_CURRENT_JS = r"""({val}) => new Promise(resolveMain => {
     const mods = Array.from(document.querySelectorAll('.media-modal'))
                      .filter(m => (m.offsetWidth || m.offsetHeight));
     const md = mods.length ? mods[mods.length - 1] : document;   // MODAL TRÊN CÙNG
     const t = md.querySelector('#attachment-details-title');
     const own = t ? (t.value || '').trim() : '';
     const use = own || (val || '');
-    const res = {own: own, hasTitle: !!t, done: []};
-    if (!use) return res;
+    const res = {own: own, hasTitle: !!t, done: [], saved: false};
+    let finished = false;
+    const finish = (saved) => {
+        if (finished) return;
+        finished = true;
+        res.saved = !!saved;
+        resolveMain(res);
+    };
+    if (!use) return finish(false);
     const patch = {};
     [['#attachment-details-alt-text', 'alt'], ['#attachment-details-caption', 'caption'],
      ['#attachment-details-description', 'description']].forEach(([sel, key]) => {
@@ -392,18 +399,60 @@ _FILL_CURRENT_JS = r"""({val}) => {
         el.dispatchEvent(new Event('change', {bubbles: true}));
         patch[key] = use;
     });
-    try {      // lưu đúng MODEL của ảnh trong modal này
+    res.done = Object.keys(patch);
+    try {      // lưu đúng MODEL của ảnh trong modal này + CHỜ AJAX lưu xong
         const e = md.querySelector('.edit-attachment');
         const m = e && (e.getAttribute('href') || '').match(/post=(\d+)/);
         if (m && Object.keys(patch).length) {
             const model = wp.media.attachment(m[1]);
             model.set(patch);
-            model.save();
+            const pr = model.save();
+            if (pr && pr.always) {
+                pr.always(() => finish(true));
+            } else {
+                finish(true);
+            }
+        } else {
+            finish(false);
         }
-    } catch (err) {}
-    res.done = Object.keys(patch);
-    return res;
-}"""
+    } catch (err) {
+        finish(false);
+    }
+    setTimeout(() => finish(false), 20000);      // an toàn: tối đa 20 giây
+})"""
+
+
+_WAIT_SAVED_JS = r"""(timeoutSec) => new Promise(async (resolveMain) => {
+    const mods = Array.from(document.querySelectorAll('.media-modal'))
+                     .filter(m => (m.offsetWidth || m.offsetHeight));
+    const md = mods.length ? mods[mods.length - 1] : document;
+    const e = md.querySelector('.edit-attachment');
+    const m = e && (e.getAttribute('href') || '').match(/post=(\d+)/);
+    if (!m || !window.wp || !wp.media) return resolveMain(true);
+    const id = m[1];
+    const val = (sel) => {
+        const el = md.querySelector(sel);
+        return el ? (el.value || '').trim() : '';
+    };
+    const want = {alt: val('#attachment-details-alt-text'),
+                  caption: val('#attachment-details-caption'),
+                  description: val('#attachment-details-description')};
+    const deadline = Date.now() + Math.max(3, timeoutSec) * 1000;
+    while (Date.now() < deadline) {
+        const model = wp.media.attachment(id);
+        await new Promise(res => {
+            try { model.fetch().done(() => res()).fail(() => res()); } catch (err) { res(); }
+            setTimeout(res, 2000);
+        });
+        const got = (k) => String(model.get(k) || '').trim();
+        if (got('alt') === want.alt && got('caption') === want.caption
+                && got('description') === want.description) {
+            return resolveMain(true);
+        }
+        await new Promise(res => setTimeout(res, 500));
+    }
+    resolveMain(false);
+})"""
 
 
 def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
@@ -434,6 +483,12 @@ def _fill_attachment_in_top_modal(page: Page, value: str = "", log=None) -> int:
         if log:
             log(f"  (lỗi điền mô tả ảnh: {str(exc)[:80]})")
         return 0
+    # CHỜ WordPress LƯU XONG thật sự (đối chiếu lại với server) trước khi cho bấm chèn
+    if (res.get("done") or []) and not res.get("saved"):
+        try:
+            page.evaluate(_WAIT_SAVED_JS, 20)
+        except Exception:      # noqa: BLE001
+            pass
     done = res.get("done") or []
     if log:
         own = str(res.get("own") or "")
@@ -1433,8 +1488,11 @@ def add_gallery_images_one_by_one(page: Page, files: list[str], fallback_title: 
                 _fill_attachment_in_top_modal(page, fallback_title, log=log)
             elif log:
                 log(f"  (ảnh {Path(f).name}: không thấy bảng chi tiết)")
-            # 6) chèn vào thư viện (đóng modal)
-            page.wait_for_timeout(300)      # chờ WordPress lưu xong rồi mới chèn
+            # 6) chờ WordPress LƯU XONG (đối chiếu server) rồi mới chèn
+            try:
+                page.evaluate(_WAIT_SAVED_JS, 20)
+            except Exception:      # noqa: BLE001
+                page.wait_for_timeout(600)
             # nút "Thêm vào thư viện" — CHỈ nút trong modal ĐANG HIỆN
             page.locator("button.media-button-select:visible, .media-toolbar-primary .media-button-select:visible").first.click(timeout=20000)
             page.wait_for_timeout(1500)
