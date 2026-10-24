@@ -1107,7 +1107,7 @@ class MainWindow(QMainWindow):
     def _start_post_watchdog(self) -> None:
         """Mỗi 3 giây: job đang đăng mà KHÔNG còn Chrome -> tự mở khoá nút."""
         self._post_watchdog = QTimer(self)
-        self._post_watchdog.setInterval(3000)
+        self._post_watchdog.setInterval(1000)      # kiểm tra mỗi 1 giây -> đóng Chrome là mở khoá ngay
         self._post_watchdog.timeout.connect(self._check_posting_alive)
         self._post_watchdog.start()
 
@@ -1123,7 +1123,7 @@ class MainWindow(QMainWindow):
             changed = False
             for tid in list(busy.keys()):
                 started = float(self._post_started.get(tid, 0) or 0)
-                if started and (_time.time() - started) < 12:
+                if started and (_time.time() - started) < 6:
                     continue                 # đang mở trình duyệt -> chưa kiểm tra
                 site = self._post_sites.get(tid)          # website chọn lúc bấm Đăng
                 if site is None:

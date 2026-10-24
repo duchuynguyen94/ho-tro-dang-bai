@@ -570,7 +570,7 @@ class PostWorker(TrackedThread):
         deadline = time.time() + timeout
         last_n = -1
         while self._running and time.time() < deadline:
-            time.sleep(3)
+            time.sleep(1)          # kiểm tra mỗi 1 giây -> đóng Chrome là báo xong ngay
             # (1) đã đóng HẾT TAB -> coi như xong (Chrome có thể vẫn chạy nền)
             try:
                 n_tabs = len(page.context.pages)
