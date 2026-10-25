@@ -269,7 +269,7 @@ class PostPage(QWidget):
         show_toast(self, f"Đã lấy {len(got)} link sản phẩm", 2600)
 
     def _links(self) -> list[str]:
-        """Tách các link nguồn (mỗi dòng 1 link), bỏ trùng, tối đa 20."""
+        """Tách các link nguồn (mỗi dòng 1 link), bỏ trùng, tối đa 500."""
         import re as _re
 
         raw = _re.split(r"[\s,;]+", self.source_url.toPlainText())
@@ -279,7 +279,7 @@ class PostPage(QWidget):
             if not u or u in out:
                 continue
             out.append(u)
-            if len(out) >= 20:
+            if len(out) >= 500:
                 break
         return out
 

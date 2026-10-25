@@ -1291,7 +1291,7 @@ class SourceLinksWorker(TrackedThread):
                     continue
                 seen.add(u)
                 out.append(u)
-                if len(out) >= 20:
+                if len(out) >= 500:
                     break
             if not out:
                 raise RuntimeError(
