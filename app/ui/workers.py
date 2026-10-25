@@ -25,8 +25,19 @@ class TrackedThread(QThread):
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
+        self._stop = False
         ACTIVE_THREADS.add(self)
         self.finished.connect(lambda: ACTIVE_THREADS.discard(self))
+
+    # Mọi worker đều DỪNG được (lớp con có thể ghi đè stop() riêng)
+    def stop(self) -> None:
+        self._stop = True
+
+    def stopped(self) -> bool:
+        return bool(getattr(self, "_stop", False))
+
+    def cancel(self) -> None:
+        self.stop()
 
 
 def shutdown_all_threads(timeout: int = 6000) -> None:

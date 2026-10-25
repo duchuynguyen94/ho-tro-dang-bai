@@ -368,7 +368,9 @@ class MainWindow(QMainWindow):
             pass
 
     def _on_content_ok(self, task, result: dict) -> None:
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh = self._live_task(task)
+        if fresh is None:
+            return                           # job đã bị xoá -> bỏ kết quả của luồng cũ
         content_only = task.id in self._content_only_ids
         try:
             if content_only:
@@ -544,7 +546,27 @@ class MainWindow(QMainWindow):
         self._refresh_count()
         self.status("Sẵn sàng")
 
+    def _stop_task_workers(self, task_id: str) -> None:
+        """Dừng các luồng đang chạy của 1 job (job đã xoá -> không ghi đè / treo)."""
+        for bucket in (self._content_workers, self._img_workers, self._post_workers):
+            try:
+                w = bucket.get(task_id)
+            except Exception:      # noqa: BLE001
+                w = None
+            if w is None:
+                continue
+            try:
+                w.stop()          # TrackedThread có stop() cho MỌI worker
+            except Exception:      # noqa: BLE001
+                log_error("MainWindow._stop_task_workers", f"không dừng được worker của {task_id}")
+
+    def _live_task(self, task):
+        """Bản MỚI NHẤT trong store; None nếu job ĐÃ BỊ XOÁ (bỏ kết quả worker cũ)."""
+        tid = getattr(task, "id", "")
+        return next((t for t in self.store.tasks if t.id == tid), None)
+
     def _on_delete_task(self, task_id: str) -> None:
+        self._stop_task_workers(task_id)     # dừng luồng của job trước khi xoá
         self.store.set_tasks([t for t in self.store.tasks if t.id != task_id])
         self.store.save()
         self.jobs_page.refresh()
@@ -561,7 +583,9 @@ class MainWindow(QMainWindow):
         self._start_images_worker(task, None, None, "Đang tạo lại ảnh…")
 
     def _on_images_ok(self, task, images: list) -> None:
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh = self._live_task(task)
+        if fresh is None:
+            return                           # job đã bị xoá -> bỏ kết quả ghép ảnh
         cur = list(fresh.result.get("images") or [])
         if images and all("index" in im for im in images) and len(images) == 1:
             idx = images[0]["index"]
@@ -897,7 +921,10 @@ class MainWindow(QMainWindow):
 
     def _on_seo_json_ok(self, task, seo: dict) -> None:
         """Có JSON SEO -> điền vào Title / Description / Focus keyword / Tags."""
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh = self._live_task(task)
+        if fresh is None:
+            self.jobs_page.set_seo_busy(False)
+            return                           # job đã bị xoá
         r = fresh.result = dict(fresh.result or {})
         for k in ("title", "description", "focus_keyword", "tags",
                   "category_name", "brand_name", "ma_san_pham"):
@@ -1507,7 +1534,10 @@ class MainWindow(QMainWindow):
         self.status("Sẵn sàng")
 
     def _on_ai_edit_ok(self, task, index: int, path: str) -> None:
-        fresh = next((t for t in self.store.tasks if t.id == task.id), task)
+        fresh = self._live_task(task)
+        if fresh is None:
+            self.status("Đã sửa ảnh bằng AI (công việc đã bị xoá).")
+            return
         images = fresh.result.setdefault("images", [])
         while len(images) <= index:
             images.append({"path": "", "footer": ""})
