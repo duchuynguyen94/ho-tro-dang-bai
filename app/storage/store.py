@@ -9,6 +9,7 @@ import uuid
 from pathlib import Path
 
 from .. import config
+from ..log import log_error
 from .models import DEFAULT_CONFIG, DEFAULT_SITES, Script, ScriptStep, Site, Task
 
 
@@ -38,8 +39,8 @@ class Store:
             # MÁY MỚI CÀI: tạo sẵn các website mặc định (+ kịch bản kèm theo nếu có)
             try:
                 self._seed_default_sites()
-            except Exception:
-                pass
+            except Exception:      # noqa: BLE001
+                log_error("Store.load", "không tạo được website mặc định")
         if p.exists():
             try:
                 raw = json.loads(p.read_text(encoding="utf-8"))
@@ -49,17 +50,19 @@ class Store:
                 try:
                     if self.sync_default_scripts():
                         self.save()
-                except Exception:
-                    pass
+                except Exception:      # noqa: BLE001
+                    log_error("Store.load", "không đồng bộ được kịch bản mặc định")
                 # thứ tự website theo danh sách mặc định (ngochuyduong, tudonghoa, congnghiep…)
                 try:
                     if self.order_default_sites():
                         self.save()
-                except Exception:
-                    pass
+                except Exception:      # noqa: BLE001
+                    log_error("Store.load", "không sắp được thứ tự website mặc định")
                 return
-            except (json.JSONDecodeError, OSError):
-                pass
+            except (json.JSONDecodeError, OSError) as exc:
+                # config.json hỏng -> app chạy bằng cấu hình mặc định (mất job trên màn hình)
+                log_error("Store.load",
+                          f"config.json KHÔNG đọc được, dùng cấu hình mặc định: {p}", exc)
         self.data = copy.deepcopy(DEFAULT_CONFIG)
 
     def _migrate(self) -> None:

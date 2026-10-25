@@ -21,6 +21,7 @@ from PySide6.QtWidgets import (
 )
 
 from .. import __version__
+from ..log import log_error
 from ..storage.models import (
     Site,
     STATUS_CANCELLED,
@@ -584,8 +585,8 @@ class MainWindow(QMainWindow):
             if 0 <= idx < len(imgs):
                 # dựng lại ảnh nền "SẠCH" ở LUỒNG RIÊNG (không đứng giao diện)
                 self.jobs_page._request_canvas_bg(fresh, idx)
-        except Exception:
-            pass
+        except Exception:      # noqa: BLE001
+            log_error("MainWindow._on_images_ok", "không dựng lại được ảnh nền canvas")
         self.status("Đã tạo lại ảnh.")
 
     def _on_split_task(self, task, n: int) -> None:

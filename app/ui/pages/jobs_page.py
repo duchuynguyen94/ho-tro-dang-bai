@@ -40,6 +40,7 @@ from ...storage.models import (
 from ...config import output_dir
 from ...images import compose
 from ..style import Card, polish_combos
+from ...log import log_error
 from ..workers import _remove_bg_opts
 from ..widgets.image_editor import ImageEditorPanel
 from ..widgets.rich_editor import RichEditor
@@ -1528,8 +1529,8 @@ class JobsPage(QWidget):
             sc = float(comp.get("scale", 1.0) or 1.0)
             if abs(sc - 1.0) > 0.001:
                 item["scale"] = round(sc, 3)
-        except Exception:
-            pass
+        except Exception:      # noqa: BLE001
+            log_error("JobsPage._paste_component", "tỉ lệ ảnh dán không hợp lệ — dùng 1.0")
         if comp.get("nobg"):
             item["nobg"] = True
         if len(ups) >= 20:
@@ -1591,8 +1592,8 @@ class JobsPage(QWidget):
         """Ghép NGAY phần vừa sửa của ẢNH ĐANG MỞ (đúng ảnh đó, không lây sang ảnh khác)."""
         try:
             self.img_editor.flush()
-        except Exception:
-            pass
+        except Exception:      # noqa: BLE001
+            log_error("JobsPage._flush_editor", "không chốt được phần vừa sửa của ảnh")
 
     def _build_preview(self, task, index: int, mode_override: str = "") -> dict:
         site = self._site_of(task)
@@ -1753,8 +1754,8 @@ class JobsPage(QWidget):
         try:
             self.store.upsert_task(self.current)   # lưu ngay -> nạp lại panel vẫn giữ lựa chọn
             self.store.save()
-        except Exception:
-            pass
+        except Exception:      # noqa: BLE001
+            log_error("JobsPage._on_footer_changed", "không lưu được lựa chọn thanh thông tin")
         self._request_canvas_bg(self.current, idx, mode)
 
     def _queue_thumb_sync(self) -> None:

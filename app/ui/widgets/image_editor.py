@@ -649,8 +649,10 @@ class ImageEditorPanel(QFrame):
                 pm2 = QPixmap(buf)
                 if not pm2.isNull():
                     pm = pm2
-            except Exception:
-                pass
+            except Exception:      # noqa: BLE001
+                from ...log import log_error
+                log_error("ImageEditor._display_pixmap",
+                          f"không xoá nền được khi hiển thị: {path}")
         cache[key] = pm
         return pm
 
