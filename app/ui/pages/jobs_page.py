@@ -668,10 +668,10 @@ class JobsPage(QWidget):
         self._drop_jobs: dict = {}
         self.img_editor.apply_opts.connect(self._apply_image_opts)
         # Canvas thay đổi -> KHÔNG chụp ngay (kéo slider 20 nấc = 20 lần chụp = giật).
-        # Ngừng thao tác 1 GIÂY -> chụp ĐÚNG 1 lần.
+        # Ngừng thao tác 3 GIÂY -> chụp ĐÚNG 1 lần.
         self._thumb_sync_timer = QTimer(self)
         self._thumb_sync_timer.setSingleShot(True)
-        self._thumb_sync_timer.setInterval(1000)
+        self._thumb_sync_timer.setInterval(3000)
         self._thumb_sync_timer.timeout.connect(self._sync_thumb_from_canvas)
         self.img_editor.changed.connect(self._queue_thumb_sync)
         self.img_editor.footer_changed.connect(self._on_footer_changed)
@@ -1606,7 +1606,7 @@ class JobsPage(QWidget):
         self._request_canvas_bg(self.current, idx, mode)
 
     def _queue_thumb_sync(self) -> None:
-        """Canvas 'changed' -> hẹn 1 giây mới chụp (kéo tiếp thì đếm lại) -> chỉ 1 lần chụp."""
+        """Canvas 'changed' -> hẹn 3 giây mới chụp (kéo tiếp thì đếm lại) -> chỉ 1 lần chụp."""
         try:
             t = getattr(self, "_thumb_sync_timer", None)
             if t is not None:
