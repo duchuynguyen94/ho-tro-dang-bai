@@ -94,6 +94,7 @@ SLUG_TAIL_PHRASES = (
     "phan-phoi",
     "ho-tro-ky-thuat",
     "bao-hanh-chinh-hang",
+    "chinh-hang",
 )
 
 
