@@ -421,7 +421,7 @@ class WPBrowser:
             return False
         target = (site.new_post_url or "").strip() or f"{base}/wp-admin/post-new.php?post_type=product"
         page.goto(target, wait_until="domcontentloaded")
-        time.sleep(1.2)
+        time.sleep(0.6)          # (cũ 1.2s) đủ để WP chuyển trang nếu chưa đăng nhập
         if "/wp-login.php" not in page.url:
             return True  # session còn hiệu lực -> đang ở đúng trang tạo bài
 
@@ -438,7 +438,7 @@ class WPBrowser:
                 pass
             page.click("#wp-submit")
             page.wait_for_load_state("domcontentloaded")
-            time.sleep(1.8)
+            time.sleep(0.9)      # (cũ 1.8s)
         except PWTimeout:
             pass
         if "/wp-login.php" in page.url:
@@ -447,7 +447,7 @@ class WPBrowser:
         if site.new_post_url and "post-new.php" not in page.url:
             try:
                 page.goto(site.new_post_url, wait_until="domcontentloaded")
-                time.sleep(1.0)
+                time.sleep(0.5)   # (cũ 1.0s)
             except Exception:
                 pass
         return True

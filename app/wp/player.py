@@ -1733,36 +1733,64 @@ def _wait_editors_ready(page: Page, timeout: int = 15000) -> None:
 
 
 def wait_editor_ready(page: Page, log=None, timeout: int = 60000) -> None:
-    """Chờ trang soạn thảo (Gutenberg/Classic) TẢI XONG mới cho phát lại kịch bản."""
-    try:
-        page.wait_for_load_state("domcontentloaded", timeout=timeout)
-    except Exception:
-        pass
-    # trang tải xong hẳn (ảnh / script) — tối đa 10 giây rồi đi tiếp
-    try:
-        page.wait_for_load_state("load", timeout=45000)
-    except Exception:
-        pass
-    # mạng tạm yên (WordPress hay có "nhịp tim" nên chỉ chờ tối đa 15 giây)
-    try:
-        page.wait_for_load_state("networkidle", timeout=15000)
-    except Exception:
-        pass
-    # khung soạn thảo đã có mặt
-    deadline = time.time() + timeout / 1000.0
-    while time.time() < deadline:
+    """Chờ trang soạn thảo (Gutenberg/Classic) SẴN SÀNG rồi mới phát lại kịch bản.
+
+    Tối ưu: **KHUNG SOẠN THẢO CÓ MẶT LÀ ĐI** — không chờ `load`/`networkidle` nữa
+    (WordPress có "nhịp tim" nên `networkidle` hay treo đủ 15 giây).
+    Trang chậm thì tự quay lại cách chờ cũ.
+    """
+    _t0 = time.time()
+
+    def _ready() -> bool:
         for sel in EDITOR_READY:
             try:
                 if page.locator(sel).count() > 0:
-                    time.sleep(0.6)
-                    _dismiss_overlays(page)
-                    _wait_editors_ready(page)
-                    return
+                    return True
             except Exception:
                 continue
+        return False
+
+    def _finish() -> None:
+        # mạng ngắn (tối đa 1,5 giây) để dữ liệu danh mục/attribute kịp về
+        try:
+            page.wait_for_load_state("networkidle", timeout=1500)
+        except Exception:
+            pass
+        _dismiss_overlays(page)
+        _wait_editors_ready(page)
+
+    try:
+        page.wait_for_load_state("domcontentloaded", timeout=min(timeout, 20000))
+    except Exception:
+        pass
+
+    # ĐƯỜNG NHANH: chờ khung soạn thảo xuất hiện (tối đa 8 giây)
+    quick_deadline = min(time.time() + 8.0, _t0 + timeout / 1000.0)
+    while time.time() < quick_deadline:
+        if _ready():
+            time.sleep(0.4)
+            _finish()
+            return
+        time.sleep(0.15)
+
+    # ĐƯỜNG CHẬM (trang nặng): chờ load ngắn rồi tìm lại
+    try:
+        page.wait_for_load_state("load", timeout=15000)
+    except Exception:
+        pass
+    if _ready():
         time.sleep(0.4)
-    _dismiss_overlays(page)
-    _wait_editors_ready(page)
+        _finish()
+        return
+
+    # cuối cùng: chờ tới hạn rồi đi tiếp
+    deadline = _t0 + timeout / 1000.0
+    while time.time() < deadline:
+        if _ready():
+            time.sleep(0.4)
+            break
+        time.sleep(0.3)
+    _finish()
 
 
 def _dismiss_overlays(page: Page) -> None:
