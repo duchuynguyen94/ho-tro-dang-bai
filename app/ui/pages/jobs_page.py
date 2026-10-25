@@ -85,6 +85,55 @@ def clipboard_image_path() -> str:
     return ""
 
 
+# ---- D1: CACHE thumbnail (chỉ cần 600px) theo đường dẫn + thời gian sửa + kích thước ----
+_THUMB_CACHE: "dict[tuple, QPixmap]" = {}
+_THUMB_CACHE_ORDER: list = []
+_THUMB_CACHE_MAX = 40          # ~1,4 MB/ảnh 600px -> tối đa ~56 MB
+
+
+def thumb_pixmap(path: str, max_side: int = 600) -> QPixmap:
+    """Pixmap thumbnail tối đa 600px, CACHE theo (đường dẫn, mtime, kích thước file).
+
+    Ảnh đổi trên đĩa -> mtime đổi -> tự nạp lại. Đổi job không phải giải mã lại.
+    """
+    try:
+        p = Path(str(path or ""))
+        stt = p.stat()
+        key = (str(p), int(stt.st_mtime_ns), int(stt.st_size), int(max_side))
+    except Exception:      # noqa: BLE001
+        return QPixmap()
+    pm = _THUMB_CACHE.get(key)
+    if pm is not None:
+        try:
+            _THUMB_CACHE_ORDER.remove(key)
+            _THUMB_CACHE_ORDER.append(key)
+        except ValueError:
+            pass
+        return pm
+    try:
+        from PySide6.QtGui import QImageReader
+
+        rd = QImageReader(str(p))
+        rd.setAutoTransform(True)
+        sz = rd.size()
+        if sz.isValid() and (sz.width() > max_side or sz.height() > max_side):
+            rd.setScaledSize(sz.scaled(max_side, max_side, Qt.KeepAspectRatio))
+        img = rd.read()
+        pm = QPixmap.fromImage(img) if not img.isNull() else QPixmap(str(p))
+    except Exception:      # noqa: BLE001
+        pm = QPixmap(str(p))
+    if pm.isNull():
+        return pm
+    if pm.width() > max_side or pm.height() > max_side:
+        pm = pm.scaled(max_side, max_side, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    _THUMB_CACHE[key] = pm
+    _THUMB_CACHE_ORDER.append(key)
+    while len(_THUMB_CACHE_ORDER) > _THUMB_CACHE_MAX:
+        old = _THUMB_CACHE_ORDER.pop(0)
+        _THUMB_CACHE.pop(old, None)
+    return pm
+
+
 class ThumbImage(QLabel):
     """Ảnh thumbnail: tự phóng đầy khung (cắt cạnh thừa)."""
 
@@ -312,12 +361,13 @@ class TaskRow(QFrame):
         v.addWidget(self.status_lbl)
         self.refresh_info()
 
-        if task.status == STATUS_GENERATING:
-            bar = QProgressBar()
-            bar.setRange(0, 0)
-            bar.setTextVisible(False)
-            bar.setFixedHeight(4)
-            v.addWidget(bar)
+        # thanh tiến trình LUÔN có (ẩn/hiện khi trạng thái đổi) -> cập nhật tại chỗ
+        self._bar = QProgressBar()
+        self._bar.setRange(0, 0)
+        self._bar.setTextVisible(False)
+        self._bar.setFixedHeight(4)
+        self._bar.setVisible(task.status == STATUS_GENERATING)
+        v.addWidget(self._bar)
 
         h.addLayout(v, 1)
 
@@ -367,6 +417,21 @@ class TaskRow(QFrame):
         except Exception:      # noqa: BLE001
             pass
 
+    def update_from(self, task) -> None:
+        """Cập nhật NỘI DUNG dòng theo task MỚI (không dựng lại widget)."""
+        self._task = task
+        self.task_id = task.id
+        self.source_url = task.source_url or ""
+        self.kind = str(getattr(task, "kind", "") or "")
+        self.site_id = str(getattr(task, "site_id", "") or "")
+        self._split_no = int(getattr(task, "split_no", 0) or 0)
+        self._is_blank = (self.kind == "blank")
+        self.refresh_title()
+        self.refresh_info()
+        bar = getattr(self, "_bar", None)
+        if bar is not None:
+            bar.setVisible(getattr(task, "status", "") == STATUS_GENERATING)
+
     def refresh_title(self) -> None:
         """Cập nhật TIÊU ĐỀ item (job blank -> lấy theo ô Tiêu đề; rỗng -> "(blank)")."""
         task = getattr(self, "_task", None)
@@ -380,7 +445,16 @@ class TaskRow(QFrame):
             srcs = [u for u in (getattr(task, "source_urls", None) or []) if u]
             if not srcs and task.source_url:
                 srcs = [task.source_url]
-            lbl.setText(_row_title(task, srcs))
+            lbl.setText(f"Bài {split_no} - {task.source_url or '(blank)'}"
+                        if split_no > 0 else _row_title(task, srcs))
+            purple = (split_no > 0) or bool(getattr(self, "_is_blank", False))
+            obj = "taskTitleBlank" if purple else "taskTitle"
+            if lbl.objectName() != obj:
+                lbl.setObjectName(obj)
+                st = lbl.style()
+                st.unpolish(lbl)
+                st.polish(lbl)
+            lbl.update()
         except Exception:      # noqa: BLE001
             pass
 
@@ -775,29 +849,57 @@ class JobsPage(QWidget):
         return box
 
     # ------------------------------------------------------------------ #
+    def _make_row(self, t) -> TaskRow:
+        """Tạo 1 dòng danh sách + nối tín hiệu."""
+        row = TaskRow(t)
+        row.clicked.connect(self.select_task)
+        row.delete.connect(self._confirm_delete)
+        row.copied.connect(lambda _u: show_toast(self, "Đã sao chép link nguồn"))
+        row.clone.connect(self._clone_task)
+        return row
+
+    def _sync_row_order(self, want: list[str]) -> None:
+        """Sắp lại thứ tự dòng — CHỈ đụng layout khi vị trí thật sự khác."""
+        for i, tid in enumerate(want):
+            row = self._rows.get(tid)
+            if row is None:
+                continue
+            if self.tasks_box.indexOf(row) != i:
+                self.tasks_box.removeWidget(row)
+                self.tasks_box.insertWidget(i, row)
+
     def refresh(self) -> None:
+        """Cập nhật danh sách job — GIỮ dòng cũ, chỉ đổi nội dung dòng thay đổi."""
         tasks = self.store.tasks
         self.count_badge.setText(str(len(tasks)))
         busy = any(t.status in (STATUS_QUEUED, STATUS_GENERATING) for t in tasks)
         self.stop_all_btn.setEnabled(busy)
         self._ordered = list(reversed(tasks))
+        want = [t.id for t in self._ordered]
+        want_set = set(want)
 
-        while self.tasks_box.count() > 1:
-            it = self.tasks_box.takeAt(0)
-            w = it.widget()
-            if w is not None:
-                w.setParent(None)
-                w.deleteLater()
-        self._rows.clear()
+        # 1) bỏ dòng của job đã xoá
+        for tid in [x for x in list(self._rows) if x not in want_set]:
+            row = self._rows.pop(tid)
+            row.setParent(None)
+            row.deleteLater()
 
+        # 2) cập nhật NỘI DUNG dòng cũ / tạo dòng mới
         for t in self._ordered:
-            row = TaskRow(t)
-            row.clicked.connect(self.select_task)
-            row.delete.connect(self._confirm_delete)
-            row.copied.connect(lambda _u: show_toast(self, "Đã sao chép link nguồn"))
-            row.clone.connect(self._clone_task)
-            self._rows[t.id] = row
-            self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
+            row = self._rows.get(t.id)
+            if row is None:
+                self._rows[t.id] = self._make_row(t)
+            else:
+                try:
+                    row.update_from(t)
+                except Exception:      # noqa: BLE001
+                    self._rows[t.id] = self._make_row(t)
+
+        # 3) đưa dòng mới vào layout + sắp thứ tự (chỉ khi cần)
+        for row in self._rows.values():
+            if self.tasks_box.indexOf(row) < 0:
+                self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
+        self._sync_row_order(want)
 
         if not self._ordered:
             self.current = None
@@ -1090,14 +1192,21 @@ class JobsPage(QWidget):
 
         pic = ThumbImage()
         box.pic = pic
-        p = Path(im.get("path", ""))
-        if p.exists():
-            pm = QPixmap()
-            try:                     # đọc lại bytes -> chắc chắn là ảnh MỚI
-                pm.loadFromData(p.read_bytes())
-            except Exception:
-                pm = QPixmap(str(p))
+        raw = str(im.get("path", "") or "").strip()
+        p = Path(raw) if raw else None
+        if p is not None and p.exists():
+            # cache 600px theo (đường dẫn, mtime, size) -> đổi job không giải mã lại
+            pm = thumb_pixmap(str(p))
+            if pm.isNull():
+                pm = QPixmap()
+                try:
+                    pm.loadFromData(p.read_bytes())
+                except Exception:      # noqa: BLE001
+                    pm = QPixmap(str(p))
             pic.set_source(pm)
+            if pm.isNull():
+                pic.clear()
+                pic.setText("(chưa có ảnh)")
         else:
             pic.setText("(chưa có ảnh)")
         bl.addWidget(pic)
