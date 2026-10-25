@@ -78,10 +78,42 @@ def show_page_notice(page: Page, text: str, ok: bool = True, hold_ms: int = 3000
         pass
 
 
+# Đuôi USP thường bị AI nhét vào CUỐI tiêu đề -> bỏ khỏi slug
+SLUG_TAIL_PHRASES = (
+    "hang-chinh-hang",
+    "gia-tot",
+    "co-cq-day-du",
+    "cocq-day-du",
+    "bao-gia-nhanh",
+    "hang-san",
+    "giao-nhanh",
+    "dai-ly",
+    "phan-phoi",
+    "ho-tro-ky-thuat",
+    "bao-hanh-chinh-hang",
+)
+
+
+def _strip_slug_tails(s: str) -> str:
+    """Bỏ các cụm USP ở CUỐI slug (lặp tới khi không còn)."""
+    changed = True
+    while changed and s:
+        changed = False
+        for tail in SLUG_TAIL_PHRASES:
+            if s == tail:
+                return ""
+            if s.endswith("-" + tail):
+                s = s[: -(len(tail) + 1)].rstrip("-")
+                changed = True
+                break
+    return s
+
+
 def make_slug(text: str, max_len: int = 60) -> str:
     """Tạo đường dẫn (slug) từ tiêu đề: bỏ dấu tiếng Việt, thường hoá, nối bằng '-'.
 
     Tối đa `max_len` ký tự (cắt ở ranh giới từ, không để dấu '-' ở cuối).
+    BỎ các cụm USP ở cuối (hàng chính hãng / giá tốt / CO-CQ…).
     """
     import unicodedata
 
@@ -90,6 +122,7 @@ def make_slug(text: str, max_len: int = 60) -> str:
     s = "".join(ch for ch in s if unicodedata.category(ch) != "Mn")
     s = re.sub(r"[^a-z0-9]+", "-", s)
     s = re.sub(r"-{2,}", "-", s).strip("-")
+    s = _strip_slug_tails(s)
     if len(s) > max_len:
         cut = s[:max_len]
         if "-" in cut:
@@ -1271,10 +1304,10 @@ def set_post_status(page: Page, status: str = "pending", label: str = "", log=No
         return False
 
 
-def slug_if_needed(page: Page, new_slug: str, limit: int = 55, log=None) -> bool:
-    """Chỉnh đường dẫn (slug) — CHỈ KHI slug hiện tại DÀI TỪ `limit` ký tự trở lên.
+def slug_if_needed(page: Page, new_slug: str, limit: int = 0, log=None) -> bool:
+    """Đặt đường dẫn (slug) = slug đã make_slug (KHÔNG kiểm tra độ dài nữa).
 
-    Slug hiện tại < 55 ký tự -> BỎ QUA (giữ nguyên slug WordPress tự tạo).
+    WordPress vừa sinh slug từ tiêu đề -> ghi đè luôn bằng slug sạch của app.
     """
     cur = ""
     try:
@@ -1289,11 +1322,11 @@ def slug_if_needed(page: Page, new_slug: str, limit: int = 55, log=None) -> bool
         cur = ""
     if cur and "/" in cur:
         cur = cur.rstrip("/").split("/")[-1]
-    if cur and len(cur) < int(limit):
-        if log:
-            log(f"  (bỏ qua chỉnh slug — slug hiện tại {len(cur)} ký tự < {limit}: {cur[:40]})")
-        return False
     if not str(new_slug or "").strip():
+        return False
+    if cur and cur == str(new_slug).strip():
+        if log:
+            log("  (slug đã đúng — không cần chỉnh)")
         return False
     try:
         # mở ô chỉnh slug

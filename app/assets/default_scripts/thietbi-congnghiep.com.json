@@ -200,7 +200,7 @@
       "selector": "",
       "selectors": [],
       "value": "{{slug}}",
-      "note": "Chỉnh đường dẫn (slug) — chỉ khi slug hiện tại >= 55 ký tự",
+      "note": "Đặt đường dẫn (slug) = slug sạch từ tiêu đề (bỏ đuôi USP)",
       "source": "auto",
       "optional": true,
       "force": false,
