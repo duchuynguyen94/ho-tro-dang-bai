@@ -90,6 +90,8 @@ _STOP_SELECTORS = (
     '[aria-label*="Stop streaming"]',
     'button[aria-label*="Stop"]',
     'button[aria-label*="Dừng"]',
+    '[class*="result-streaming"]',        # dấu hiệu câu trả lời ĐANG chảy chữ
+    '[class*="streaming"]',
 )
 
 
@@ -245,6 +247,26 @@ def _clean_reply(txt: str) -> str:
     return "\n".join(lines).strip()
 
 
+# Chữ CHROME của giao diện ChatGPT — KHÔNG phải câu trả lời
+_UI_CHROME = (
+    "ChatGPT can make mistakes",
+    "Latest response",
+    "Writing code? Meet Codex",
+    "Install Codex",
+    "Response complete",
+    "ChatGPT said:",
+    "Thinking",
+)
+
+
+def _looks_like_ui_chrome(t: str) -> bool:
+    low = (t or "").lower()
+    if not low.strip():
+        return False
+    hits = sum(1 for m in _UI_CHROME if m.lower() in low)
+    return hits >= 2 or (hits >= 1 and len(low) < 400)
+
+
 def _reply_text(page, prompt: str = "") -> str:
     txt = ""
     try:
@@ -280,7 +302,10 @@ def _reply_text(page, prompt: str = "") -> str:
             txt = ""
     if txt and _same_as_prompt(txt, prompt):
         return ""
-    return _clean_reply(txt)
+    txt = _clean_reply(txt)
+    if txt and _looks_like_ui_chrome(txt):
+        return ""                      # chỉ là chữ giao diện -> coi như CHƯA có câu trả lời
+    return txt
 
 
 _LIMIT_UI_JS = r"""() => {
@@ -752,7 +777,7 @@ def _wait_plain_reply(page, prompt: str, timeout: int = 600,
         if text.strip():
             if text == last and not _is_streaming(page):
                 stable += 1
-                if stable >= 2:
+                if stable >= 3:          # giữ 3 nhịp (~3,6 giây) cho chắc đã viết xong
                     return text
             else:
                 stable = 0
@@ -761,7 +786,11 @@ def _wait_plain_reply(page, prompt: str, timeout: int = 600,
             raise AIError(LIMIT_MSG)
     if last.strip():
         return last
-    raise AIError("ChatGPT không trả lời. Thử lại giúp.")
+    raise AIError(
+        "ChatGPT không trả lời (chỉ thấy chữ giao diện). "
+        "Kiểm tra: đã đăng nhập ChatGPT chưa, Project còn mở được không, "
+        "và bật 'Hiện cửa sổ Chrome' để xem."
+    )
 
 
 def ask_project(pcfg: dict, prompt: str, files=None, log=None,

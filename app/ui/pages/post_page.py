@@ -278,22 +278,29 @@ class PostPage(QWidget):
         return out
 
     def _sync_split_enabled(self, n_links: int) -> None:
-        """Tick "chia nhiều bài" chỉ HIỆN khi có ĐÚNG 1 link (nhiều link / không link -> ẩn)."""
-        only_one = (n_links == 1)
-        self.split_box.setVisible(only_one)      # ẩn -> KHÔNG chiếm chỗ
-        self.split_check.setEnabled(only_one)
-        if not only_one and self.split_check.isChecked():
+        """Tick "chia nhiều bài": HIỆN khi có 1 hoặc NHIỀU link (0 link -> ẩn).
+
+        - 1 link  : AI chia danh sách sản phẩm trong trang -> N job trống.
+        - M link  : tạo N job, chia đều M link cho N job (dư dồn job cuối).
+        """
+        has = (n_links >= 1)
+        self.split_box.setVisible(has)           # ẩn -> KHÔNG chiếm chỗ
+        self.split_check.setEnabled(has)
+        if not has and self.split_check.isChecked():
             self.split_check.setChecked(False)
-        # Ô SỐ LƯỢNG: chỉ HIỆN khi đã tick "chia nhiều bài" (gọn giao diện)
-        show_count = bool(only_one and self.split_check.isChecked())
+        show_count = bool(has and self.split_check.isChecked())
         self.split_count.setVisible(show_count)
         self.split_count.setEnabled(show_count)
-        self.split_check.setToolTip(
-            "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
-            "Mỗi bài tạo 1 JOB TRỐNG (chọn website lúc bấm Đăng)."
-            if only_one else
-            "Chỉ dùng được khi nhập ĐÚNG 1 link (nhiều link luôn là 1 bài viết)"
-        )
+        if n_links == 1:
+            self.split_check.setToolTip(
+                "Chia 1 link nguồn thành nhiều bài viết (chỉ content, không JSON SEO).\n"
+                "Mỗi bài tạo 1 JOB TRỐNG (chọn website lúc bấm Đăng)."
+            )
+        else:
+            self.split_check.setToolTip(
+                "Chia NHIỀU link nguồn thành nhiều bài viết.\n"
+                "Ví dụ: 10 link + chọn 2 bài -> 2 job, mỗi job tổng hợp 5 link."
+            )
 
     def _on_split_toggled(self, on: bool) -> None:
         show = bool(on) and self.split_check.isEnabled()
@@ -340,6 +347,51 @@ class PostPage(QWidget):
             brand = self.brand_logo.text().strip()
             if not brand:
                 return                                  # Huỷ hộp chọn file -> không tạo
+        links = self._links()
+        n_split = self._split_count_value()
+        if split_mode and len(links) > 1:
+            # NHIỀU LINK + CHIA NHIỀU BÀI -> tạo N job, chia đều link (dư dồn job cuối)
+            if n_split > len(links):
+                from PySide6.QtWidgets import QMessageBox as _MB2
+
+                _MB2.warning(
+                    self, "Không chia được",
+                    f"Số bài ({n_split}) nhiều hơn số link nguồn ({len(links)}).\n"
+                    "Giảm số bài hoặc thêm link nguồn.",
+                )
+                return
+            base, rem = divmod(len(links), n_split)
+            sizes = [base] * (n_split - rem) + ([base + 1] * rem if rem else [])
+            chunks: list[list[str]] = []
+            i = 0
+            for size in sizes:
+                chunks.append(links[i:i + size])
+                i += size
+            detail = "\n".join(f"• Job {k + 1}: {len(c)} link" for k, c in enumerate(chunks))
+            from PySide6.QtWidgets import QMessageBox as _MB3
+
+            box = _MB3(self)
+            box.setWindowTitle("Chia nhiều bài")
+            box.setText(f"Sẽ tạo {len(chunks)} job từ {len(links)} link nguồn.")
+            box.setInformativeText(detail + "\n\nTiếp tục?")
+            ok = box.addButton("Tạo", _MB3.AcceptRole)
+            box.addButton("Huỷ", _MB3.RejectRole)
+            box.exec()
+            if box.clickedButton() is not ok:
+                return
+            for chunk in chunks:
+                task = Task(
+                    source_url=chunk[0],
+                    source_urls=list(chunk),
+                    kind="",
+                    brand_logo_fallback=brand,
+                    image_count=count,
+                )
+                self.create_task.emit(task)
+            self.source_url.clear()
+            self.brand_logo.clear()
+            return
+
         splitting = split_mode
         # CHIA NHIỀU BÀI (chỉ khi đúng 1 link): chưa tạo job — chờ provider chia xong
         if splitting:
