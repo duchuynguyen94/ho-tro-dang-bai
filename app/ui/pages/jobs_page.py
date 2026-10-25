@@ -659,6 +659,11 @@ class JobsPage(QWidget):
         self.images_box.reordered.connect(self._reorder_images)
 
         self.img_editor = ImageEditorPanel()
+        try:
+            self.img_editor.store = self.store           # để nhớ 3 ô tick "Khi dán ảnh"
+            self.img_editor.reload_paste_ops()
+        except Exception:      # noqa: BLE001
+            pass
         # KÉO-THẢ ẢNH vào canvas: file trong máy (Finder/Desktop) hoặc ảnh từ web (link http)
         try:
             self.img_editor.canvas.setAcceptDrops(True)
@@ -1888,6 +1893,20 @@ class JobsPage(QWidget):
             show_toast(self, f"{len(real) - len(ok)} ảnh không đọc được (đã bỏ qua)",
                        2600, ok=False)
         real = ok
+        # 3 ô tick "Khi dán ảnh": Xoá BG trước -> Trim (CHỈ ảnh mới thêm)
+        try:
+            _bg, _trim = self.img_editor.paste_ops()
+        except Exception:      # noqa: BLE001
+            _bg, _trim = False, False
+        if real and (_bg or _trim):
+            done: list[str] = []
+            for p_ in real:
+                try:
+                    done.append(self._apply_paste_ops(p_, _bg, _trim))
+                except Exception:      # noqa: BLE001
+                    traceback.print_exc()
+                    done.append(p_)
+            real = done
         if not real:
             return
         # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng); có chỗ thả -> ảnh đầu đúng chỗ thả
@@ -2005,6 +2024,23 @@ class JobsPage(QWidget):
                 f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} {msg}\n")
         except Exception:      # noqa: BLE001
             pass
+
+    @staticmethod
+    def _apply_paste_ops(path: str, bg: bool, trim: bool) -> str:
+        """Xoá nền (nếu tick) TRƯỚC, rồi TRIM (nếu tick) — cho ảnh MỚI thêm."""
+        from PIL import Image
+
+        from ...images.composer import remove_background_auto, trim_borders
+
+        cur = str(path)
+        if bg:
+            im = remove_background_auto(Image.open(cur).convert("RGBA"), 42)
+            out = Path(cur).with_name(Path(cur).stem + "_nobg.png")
+            im.save(out)
+            cur = str(out)
+        if trim:
+            cur = str(trim_borders(cur))
+        return cur
 
     @staticmethod
     def _ensure_readable_image(path: str) -> str:
@@ -2224,6 +2260,15 @@ class JobsPage(QWidget):
         if not path:
             show_toast(self, "Ảnh không đọc được", 2400, ok=False)
             return
+        try:
+            _bg, _trim = self.img_editor.paste_ops()
+        except Exception:      # noqa: BLE001
+            _bg, _trim = False, False
+        if _bg or _trim:
+            try:
+                path = self._apply_paste_ops(path, _bg, _trim)
+            except Exception:      # noqa: BLE001
+                traceback.print_exc()
         self._save()
         fresh = self._fresh_current()
         if fresh is None:
