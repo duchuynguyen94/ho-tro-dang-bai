@@ -81,20 +81,20 @@ def show_page_notice(page: Page, text: str, ok: bool = True, hold_ms: int = 3000
 # Đuôi USP thường bị AI nhét vào CUỐI tiêu đề -> bỏ khỏi slug
 SLUG_TAIL_PHRASES = (
     "hang-chinh-hang",
-    "gia-tot",
     "co-cq-day-du",
     "cocq-day-du",
+    "bao-gia-nhanh",
     "bao-gia-nhanh-chinh-hang",
     "bao-gia-nhanh-toan-quoc",
-    "bao-gia-nhanh",
     "hang-san",
-    "giao-nhanh",
-    "dai-ly",
     "phan-phoi-chinh-hang",
-    "phan-phoi",
     "ho-tro-ky-thuat",
     "bao-hanh-chinh-hang",
     "chinh-hang",
+    "gia-tot",
+    "giao-nhanh",
+    "dai-ly",
+    "phan-phoi",
 )
 
 
