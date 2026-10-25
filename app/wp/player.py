@@ -84,6 +84,7 @@ SLUG_TAIL_PHRASES = (
     "gia-tot",
     "co-cq-day-du",
     "cocq-day-du",
+    "bao-gia-nhanh-toan-quoc",
     "bao-gia-nhanh",
     "hang-san",
     "giao-nhanh",
