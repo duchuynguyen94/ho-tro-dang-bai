@@ -795,11 +795,15 @@ def _wait_plain_reply(page, prompt: str, timeout: int = 600,
 
 def ask_project(pcfg: dict, prompt: str, files=None, log=None,
                 timeout: int = 600, should_stop=None,
-                show_browser: bool = False, log_send: str = "Đang gửi yêu cầu…") -> str:
-    """Mở PROJECT ChatGPT -> (đính kèm file) -> gửi prompt -> trả lời dạng text."""
+                show_browser: bool = False, log_send: str = "Đang gửi yêu cầu…",
+                chat_url: str = "") -> str:
+    """Mở ChatGPT (Project hoặc URL bất kỳ) -> gửi prompt -> trả lời dạng text.
+
+    `chat_url`: nếu có (vd "https://chatgpt.com") thì dùng URL này thay cho Project.
+    """
     from ..wp import WPBrowser
 
-    project_url = str((pcfg or {}).get("project_url", "") or "").strip()
+    project_url = str(chat_url or (pcfg or {}).get("project_url", "") or "").strip()
     if not project_url:
         raise AIError(
             "Chưa có URL Project. Vào Cài đặt → AI nội dung → ChatGPT "

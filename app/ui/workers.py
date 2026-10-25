@@ -1273,6 +1273,7 @@ class SourceLinksWorker(TrackedThread):
                 pcfg, prompt, log=self.log.emit, should_stop=self.stopped,
                 show_browser=bool(pcfg.get("show_browser", False)),
                 log_send="Đang nhờ ChatGPT lấy danh sách link sản phẩm…",
+                chat_url="https://chatgpt.com",      # chat thường (KHÔNG vào Project)
             )
             host = _urlparse(self.page_url).netloc.lower()
             out: list[str] = []
