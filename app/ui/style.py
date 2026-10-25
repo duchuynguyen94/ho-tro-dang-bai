@@ -43,11 +43,20 @@ def register_bundled_fonts() -> list[str]:
     return names
 
 
+_FONT_CACHE: list = []      # QFontDatabase.families() rất chậm (~250ms) -> chỉ dò 1 lần
+
+
 def app_font() -> QFont:
-    for name in ("Segoe UI", "Helvetica Neue", "Helvetica", "Arial"):
-        if name in QFontDatabase.families():
-            return QFont(name, 10)
-    return QFont()
+    if not _FONT_CACHE:
+        name = ""
+        fams = set(QFontDatabase.families())
+        for cand in ("Segoe UI", "Helvetica Neue", "Helvetica", "Arial"):
+            if cand in fams:
+                name = cand
+                break
+        _FONT_CACHE.append(name)
+    name = _FONT_CACHE[0]
+    return QFont(name, 10) if name else QFont()
 
 
 def _ensure_arrow() -> str:

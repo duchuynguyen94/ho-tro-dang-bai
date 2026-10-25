@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import os
 import sys
+from functools import lru_cache
 from pathlib import Path
 
 APP_NAME = "Ho Tro Dang Bai"
@@ -39,6 +40,7 @@ def _sub(name: str) -> Path:
     return d
 
 
+@lru_cache(maxsize=1)
 def app_assets_dir() -> Path:
     """Thư mục asset đóng gói KÈM app (mặc định của phần mềm).
 
@@ -54,12 +56,14 @@ def app_assets_dir() -> Path:
     return Path(__file__).resolve().parent / "assets"
 
 
+@lru_cache(maxsize=256)
 def default_asset_path(rel: str) -> str:
     """Đường dẫn asset mặc định theo đường dẫn con (vd "default_rules/rule_content.pdf")."""
     p = app_assets_dir() / rel
     return str(p) if p.exists() else ""
 
 
+@lru_cache(maxsize=256)
 def default_asset(name: str) -> str:
     """Đường dẫn asset mặc định của phần mềm (rỗng nếu chưa có file)."""
     p = app_assets_dir() / "default" / name

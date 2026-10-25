@@ -4,6 +4,7 @@ from __future__ import annotations
 import copy
 import json
 import shutil
+import threading
 import uuid
 from pathlib import Path
 
@@ -201,13 +202,19 @@ class Store:
         self.data["sites"] = [s.to_dict() for s in sites]
         self.save()
 
+    _save_lock = threading.Lock()
+
     def save(self) -> None:
+        """Ghi config.json (file tạm -> thay thế). BỎ QUA nếu dữ liệu KHÔNG ĐỔI."""
         p = config.config_path()
-        tmp = p.with_suffix(".json.tmp")
-        tmp.write_text(
-            json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-        tmp.replace(p)
+        text = json.dumps(self.data, ensure_ascii=False, indent=2)
+        with Store._save_lock:
+            if getattr(self, "_last_saved_text", None) == text:
+                return                       # y hệt lần ghi trước -> khỏi ghi đĩa
+            tmp = p.with_suffix(".json.tmp")
+            tmp.write_text(text, encoding="utf-8")
+            tmp.replace(p)
+            self._last_saved_text = text
 
     # ------------------------------------------------------------------ #
     # Sites

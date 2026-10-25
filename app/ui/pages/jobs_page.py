@@ -5,7 +5,7 @@ import traceback
 from pathlib import Path
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl, Signal
-from PySide6.QtGui import (QCursor, QPixmapCache, QDesktopServices, QDrag,
+from PySide6.QtGui import (QCursor, QDesktopServices, QDrag,
                              QImage, QKeySequence, QPixmap)
 from PySide6.QtWidgets import (
     QApplication,
@@ -1049,12 +1049,6 @@ class JobsPage(QWidget):
             if w:
                 w.deleteLater()
 
-        # xoá cache pixmap -> thumbnail đọc lại file ảnh MỚI từ đĩa (tránh ảnh cũ bị cache)
-        try:
-            QPixmapCache.clear()
-        except Exception:
-            pass
-
         images = r.get("images", [])
         self._thumbs = []
         for i, im in enumerate(images, 1):
@@ -1289,10 +1283,6 @@ class JobsPage(QWidget):
             images = r.get("images") or []
             if not images:
                 return
-            try:
-                QPixmapCache.clear()
-            except Exception:
-                pass
             while self.images_row.count():
                 it = self.images_row.takeAt(0)
                 wd = it.widget()
