@@ -312,12 +312,12 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         # CHATGPT: prompt gọn (rule_content.pdf nằm trong Project)
         return (
             f"Dựa vào nguồn sau:\n{link_line}\n\n"
-            f"Hãy lấy danh sách link sản phẩm thực tế từ nguồn trên, sau đó chia các link "
-            f"thành {n} nhóm và viết {n} bài dựa trên nội dung của các trang sản phẩm tương ứng.\n"
-            f"Cách chia bài: Nếu thu thập được 100 link sản phẩm mà cần {n} bài, thì mỗi bài "
-            f"sẽ là 100/{n} nếu số link không chia hết cho {n}, các link dư sẽ được đưa vào "
-            f'bài cuối. Mỗi bài dài 800–1000 từ theo rule_content.pdf đã đính kèm trong '
-            f"Project này.\n"
+            f"Hãy lấy danh sách sản phẩm thực tế từ nguồn trên, sau đó chia các sản phẩm "
+            f"thành {n} nhóm và viết {n} bài dựa trên các sản phẩm tương ứng trong nhóm đó. "
+            f"Mỗi bài dài 800–1000 từ theo rule_content.pdf đã đính kèm trong Project này.\n"
+            f"Cách chia bài ví dụ: Nếu thu thập được 100 sản phẩm mà cần {n} bài, thì mỗi bài "
+            f"sẽ là 100/{n} nếu số sản phẩm không chia hết cho {n}, các sản phẩm dư sẽ được "
+            f"đưa vào bài cuối. \n\n"
             f"KHÔNG tạo thông tin SEO và KHÔNG trả về JSON.\n\n"
             f"=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC)  ===\n\n"
             f"Mỗi BÀI VIẾT ngăn cách nhau theo kiểu ví dụ: === Bài  1 ===, === Bài 2 ===\n"
