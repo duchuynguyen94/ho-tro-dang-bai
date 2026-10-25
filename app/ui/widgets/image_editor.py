@@ -702,8 +702,11 @@ class ImageEditorPanel(QFrame):
 
     def _on_upload_moved(self) -> None:  # noqa: D401
         ups = list(self._opts.get("uploads") or [])
-        for i, it in enumerate(self._upload_items):
-            if i < len(ups) and isinstance(ups[i], dict):
+        # LƯU THEO ĐÚNG index của từng object (it.index) — nếu lưu theo thứ tự vẽ,
+        # khi có object bị bỏ qua/đổi thứ tự thì vị trí sẽ ghi SANG object khác.
+        for it in self._upload_items:
+            i = getattr(it, "index", None)
+            if isinstance(i, int) and 0 <= i < len(ups) and isinstance(ups[i], dict):
                 ups[i]["pos"] = [round((it.x() + it.width() / 2) / CANVAS, 4),
                                  round((it.y() + it.height() / 2) / CANVAS, 4)]
         self._opts["uploads"] = ups

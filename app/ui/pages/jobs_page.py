@@ -2084,7 +2084,8 @@ class JobsPage(QWidget):
             if not self.isVisible() or not self.current:
                 show_toast(self, "Chưa chọn công việc để thêm ảnh", 2400, ok=False)
                 return False
-            index = int(getattr(self, "_sel_index", 0))
+            # DÙNG ẢNH ĐANG MỞ (giống _apply_image_opts) — không dùng ảnh vừa bấm
+            index = int(getattr(self, "_edit_index", getattr(self, "_sel_index", 0)) or 0)
             pos = self._drop_point(event)
             if files:
                 self._add_upload_components(files, index, pos=pos)
