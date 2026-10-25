@@ -1899,6 +1899,10 @@ class JobsPage(QWidget):
         try:
             if md is None:
                 return files, links
+            try:
+                cls._drop_log(f"drop: formats={md.formats()}")
+            except Exception:      # noqa: BLE001
+                pass
             if md.hasUrls():
                 for u in md.urls():
                     lp = u.toLocalFile()
@@ -1955,6 +1959,19 @@ class JobsPage(QWidget):
         return files, links
 
     @staticmethod
+    def _drop_log(msg: str) -> None:
+        """Ghi log CHẨN ĐOÁN cho tính năng kéo-thả (xem: <dữ liệu>/drop_debug.log)."""
+        try:
+            from datetime import datetime
+
+            from ...config import app_data_dir
+
+            with (app_data_dir() / "drop_debug.log").open("a", encoding="utf-8") as f:
+                f.write(f"{datetime.now():%Y-%m-%d %H:%M:%S} {msg}\n")
+        except Exception:      # noqa: BLE001
+            pass
+
+    @staticmethod
     def _ensure_readable_image(path: str) -> str:
         """Bảo đảm Qt ĐỌC ĐƯỢC ảnh; nếu không (AVIF, HEIC…) -> chuyển sang PNG.
 
@@ -1964,9 +1981,12 @@ class JobsPage(QWidget):
             from PySide6.QtGui import QImageReader
 
             if not path or not Path(path).exists():
+                JobsPage._drop_log(f"ensure: KHONG TON TAI {path}")
                 return ""
-            if QImageReader(path).canRead():
+            rd = QImageReader(path)
+            if rd.canRead():
                 return path
+            JobsPage._drop_log(f"ensure: Qt KHONG doc duoc {path} | {rd.errorString()}")
             # Qt không đọc được -> thử chuyển bằng Pillow (AVIF/HEIC/...)
             from PIL import Image as _Img
 
@@ -1982,12 +2002,11 @@ class JobsPage(QWidget):
                 Path(path).unlink(missing_ok=True)
             except Exception:      # noqa: BLE001
                 pass
-            return str(out) if QImageReader(str(out)).canRead() else ""
-        except Exception:      # noqa: BLE001
-            try:
-                Path(path).unlink(missing_ok=True)
-            except Exception:      # noqa: BLE001
-                pass
+            ok = QImageReader(str(out)).canRead()
+            JobsPage._drop_log(f"ensure: chuyen PNG {'OK' if ok else 'LOI'} {out}")
+            return str(out) if ok else ""
+        except Exception as exc:      # noqa: BLE001
+            JobsPage._drop_log(f"ensure: PIL LOI cho {path}: {type(exc).__name__}: {exc}")
             return ""
 
     @staticmethod
@@ -2082,8 +2101,10 @@ class JobsPage(QWidget):
         from ...config import media_dir
 
         if not data:
+            JobsPage._drop_log("save: du lieu RONG")
             return ""
         head = data[:16]
+        JobsPage._drop_log(f"save: {len(data)} bytes | head={head[:8]!r}")
         if head.startswith(b"\x89PNG"):
             ext = ".png"
         elif head.startswith(b"\xff\xd8"):
@@ -2135,6 +2156,7 @@ class JobsPage(QWidget):
             if not info:
                 return
             saved = list(info.get("saved") or [])
+            self._drop_log(f"worker xong: saved={len(saved)}")
             if not saved:
                 show_toast(self, "Không tải được ảnh từ link", 2600, ok=False)
                 return
