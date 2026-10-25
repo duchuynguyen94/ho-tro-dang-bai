@@ -667,7 +667,13 @@ class JobsPage(QWidget):
         self._drop_workers: list = []
         self._drop_jobs: dict = {}
         self.img_editor.apply_opts.connect(self._apply_image_opts)
-        self.img_editor.changed.connect(self._sync_thumb_from_canvas)
+        # Canvas thay đổi -> KHÔNG chụp ngay (kéo slider 20 nấc = 20 lần chụp = giật).
+        # Ngừng thao tác 1 GIÂY -> chụp ĐÚNG 1 lần.
+        self._thumb_sync_timer = QTimer(self)
+        self._thumb_sync_timer.setSingleShot(True)
+        self._thumb_sync_timer.setInterval(1000)
+        self._thumb_sync_timer.timeout.connect(self._sync_thumb_from_canvas)
+        self.img_editor.changed.connect(self._queue_thumb_sync)
         self.img_editor.footer_changed.connect(self._on_footer_changed)
         self.img_editor.request_upload.connect(
             lambda: self._upload_image(getattr(self, "_sel_index", 0)))
@@ -1543,8 +1549,8 @@ class JobsPage(QWidget):
                 return
             if path:
                 self.img_editor.set_background(path)
-                # canvas vừa có nền mới -> cập nhật luôn preview trong danh sách ảnh
-                QTimer.singleShot(150, self._sync_thumb_from_canvas)
+                # canvas vừa có nền mới -> cập nhật thumbnail của ĐÚNG job + ảnh này
+                QTimer.singleShot(150, lambda: self._sync_thumb_from_canvas(task, index))
         except Exception:      # noqa: BLE001
             traceback.print_exc()
 
@@ -1555,6 +1561,10 @@ class JobsPage(QWidget):
             pass
 
     def _refresh_preview(self, task) -> None:
+        try:
+            self._thumb_sync_timer.stop()      # huỷ hẹn giờ của job/ảnh TRƯỚC đó
+        except Exception:      # noqa: BLE001
+            pass
         r = task.result or {}
         images = r.get("images") or []
         idx = getattr(self, "_sel_index", 0)
@@ -1595,18 +1605,51 @@ class JobsPage(QWidget):
             pass
         self._request_canvas_bg(self.current, idx, mode)
 
-    def _sync_thumb_from_canvas(self) -> None:
-        """Chụp canvas -> cập nhật preview trong danh sách ảnh (nhanh, không cần worker)."""
+    def _queue_thumb_sync(self) -> None:
+        """Canvas 'changed' -> hẹn 1 giây mới chụp (kéo tiếp thì đếm lại) -> chỉ 1 lần chụp."""
         try:
-            idx = self._sel_index
+            t = getattr(self, "_thumb_sync_timer", None)
+            if t is not None:
+                t.start()
+        except Exception:      # noqa: BLE001
+            pass
+
+    def _sync_thumb_from_canvas(self, task=None, index=None) -> None:
+        """Chụp canvas -> thumbnail (thấy đúng như khung đang chỉnh).
+
+        `task`/`index` = job + số ảnh LÚC HẸN GIỜ: đã đổi thì bỏ qua.
+        Bỏ qua cả khi canvas CHƯA CÓ NỀN (tránh ghi khung trắng vào thumbnail).
+        """
+        try:
+            cur = self.current
+            if cur is None:
+                return
+            loaded = getattr(self, "_loaded_task_id", "")
+            if loaded and loaded != getattr(cur, "id", ""):
+                return                       # panel đang hiện job khác
+            if task is not None and getattr(cur, "id", "") != getattr(task, "id", ""):
+                return                       # đã đổi job từ lúc hẹn giờ
+            idx = int(getattr(self, "_edit_index", getattr(self, "_sel_index", 0)) or 0)
+            if index is not None and int(index) != idx:
+                return                       # đã đổi ảnh
             if not (0 <= idx < len(self._thumbs)):
                 return
+            bg = self.img_editor.canvas.pixmap()
+            if bg is None or bg.isNull():
+                return                       # canvas chưa có nền -> không chụp
             pm = self.img_editor.canvas.grab()
             box = self._thumbs[idx]
             pic = getattr(box, "pic", None)
-            if pic is not None and not pm.isNull():
-                pic.set_source(pm)
-        except Exception:
+            if pic is None or pm.isNull():
+                return
+            # thu nhỏ ngay về 2x cỡ ô -> lần vẽ sau không phải scale ảnh 400px
+            w = max(40, pic.width())
+            h = max(40, pic.height())
+            if pm.width() > w * 2 or pm.height() > h * 2:
+                pm = pm.scaled(w * 2, h * 2, Qt.KeepAspectRatioByExpanding,
+                               Qt.SmoothTransformation)
+            pic.set_source(pm)
+        except Exception:      # noqa: BLE001
             pass
 
     def _apply_image_opts(self, opts: dict) -> None:
