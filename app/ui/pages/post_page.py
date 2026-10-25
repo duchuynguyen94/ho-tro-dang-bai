@@ -76,8 +76,8 @@ class PostPage(QWidget):
         b = self.card.body
 
         lrow = QHBoxLayout()
-        lbl = QLabel("Link nguồn (mỗi link 1 dòng)")
-        lrow.addWidget(lbl)
+        self.source_label = QLabel("Link nguồn (mỗi link 1 dòng)")
+        lrow.addWidget(self.source_label)
         lrow.addStretch(1)
         self.get_links_btn = QPushButton("Lấy danh sách link sản phẩm")
         self.get_links_btn.setProperty("class", "ghost")
@@ -172,6 +172,12 @@ class PostPage(QWidget):
     def _validate(self) -> None:
         links = self._links()
         has_link = bool(links)
+        # hiện SỐ DÒNG link đang có (ví dụ: "- Đang có 17 dòng")
+        try:
+            base = "Link nguồn (mỗi link 1 dòng)"
+            self.source_label.setText(f"{base} - Đang có {len(links)} dòng" if links else base)
+        except Exception:      # noqa: BLE001
+            pass
         self._sync_split_enabled(len(links))
         has_rule = self.store.has_format_content()
         self.create_btn.setEnabled(bool(has_rule)
