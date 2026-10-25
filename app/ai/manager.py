@@ -316,7 +316,7 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
             f'hoàn chỉnh theo file "rule_content.pdf" đã đính kèm trong Project này.\n\n\n'
             f"=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC)  ===\n\n"
             f"Mỗi nội dung ngăn cách nhau theo kiểu ví dụ: === Nội dung  1 ===, === Nội dung 2 ===\n"
-            f'Mỗi nội dung bài viết nằm trong 1 block và rule là  "HTML" theo “TEMPLATE” '
+            f'Mỗi nội dung bài viết (trên 1500 từ) nằm trong 1 block và rule là  "HTML" theo “TEMPLATE” '
             f"trong file “rule_content.pdf”.\n"
             f"KHÔNG tạo thông tin SEO và KHÔNG trả về JSON — chỉ trả về nội dung HTML "
             f"của từng nhóm.\n"
