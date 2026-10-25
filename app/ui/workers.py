@@ -300,7 +300,12 @@ def build_template_images(site, task, brand_logo: str, product_paths: list[str],
         if rule:
             name = _re.sub(r"[^\w\-\. ]+", "", render_rule(rule, {**ctx, "index": i + 1})).strip()
         fname = f"{name.replace(' ', '-')[:80]}_{i + 1}.png" if name else f"{task.id}_{i + 1}.png"
-        out = output_dir() / fname
+        # MỖI JOB 1 THƯ MỤC RIÊNG: nếu để chung output/ thì 2 job cùng "Rule ảnh"
+        # sẽ TRÙNG TÊN FILE -> job sau GHI ĐÈ ảnh của job trước.
+        # Giữ nguyên TÊN file (upload WordPress/SEO không đổi), chỉ đổi thư mục.
+        job_dir = output_dir() / task.id
+        job_dir.mkdir(parents=True, exist_ok=True)
+        out = job_dir / fname
         save_composed(img, str(out))
         images.append({"index": i, "path": str(out), "footer": footer})
     if log:
