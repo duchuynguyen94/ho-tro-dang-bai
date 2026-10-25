@@ -38,6 +38,19 @@ def _install_error_log() -> None:
     threading.excepthook = thread_hook
 
 
+def _startup_free_profile() -> None:
+    """B) Mở app -> tắt Chrome 'mồ côi' còn giữ profile (chỉ Chrome của app)."""
+    def _run() -> None:
+        try:
+            from .wp.browser import close_app_browser
+
+            close_app_browser()
+        except Exception:      # noqa: BLE001
+            pass
+
+    threading.Thread(target=_run, name="free-profile", daemon=True).start()
+
+
 def _check_browser() -> int:
     """Chẩn đoán: thử mở trình duyệt và ghi kết quả ra file (dùng khi đóng gói .app)."""
     import traceback
@@ -147,6 +160,8 @@ def main() -> int:
     # Đã có bản đang chạy -> đưa lên trước rồi thoát (chỉ 1 bản duy nhất)
     if _notify_running_instance():
         return 0
+
+    _startup_free_profile()          # tắt Chrome "mồ côi" còn giữ profile
 
     win = MainWindow()
     _single_server = _start_single_server(win)      # giữ tham chiếu (không để bị xoá)

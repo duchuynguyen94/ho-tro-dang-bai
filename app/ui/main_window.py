@@ -1594,4 +1594,15 @@ class MainWindow(QMainWindow):
             self.store.save()
         except Exception:
             pass
+        # A) thoát app -> đóng Chrome của app + DỌN CACHE (giữ đăng nhập)
+        try:
+            from ..log import log_error
+            from ..wp.browser import clean_profile_cache, close_app_browser, profile_size
+
+            close_app_browser()
+            if profile_size() > 50 * 1024 * 1024:      # > 50 MB mới dọn
+                freed = clean_profile_cache()
+                log_error("MainWindow.closeEvent", f"đã dọn cache Chrome: {freed // 1048576} MB")
+        except Exception:      # noqa: BLE001
+            pass
         super().closeEvent(event)

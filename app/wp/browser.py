@@ -90,6 +90,68 @@ def _dir_size(d) -> int:
     return total
 
 
+# Các thư mục CACHE của Chrome — xoá được mà KHÔNG mất đăng nhập (cookie vẫn giữ)
+CACHE_SUBDIRS = (
+    "Default/Cache",
+    "Default/Code Cache",
+    "Default/GPUCache",
+    "Default/DawnCache",
+    "Default/ShaderCache",
+    "Default/GrShaderCache",
+    "Default/Media Cache",
+    "Default/Service Worker/CacheStorage",
+    "Default/Service Worker/ScriptCache",
+    "GrShaderCache",
+    "ShaderCache",
+    "GPUCache",
+    "component_crx_cache",
+)
+
+
+def shared_profile_dir():
+    """Thư mục profile Chrome DÙNG CHUNG của app."""
+    from pathlib import Path as _P
+
+    return _P(_user_data_dir(""))
+
+
+def profile_size(profile=None) -> int:
+    """Dung lượng thư mục profile Chrome (byte)."""
+    d = profile or shared_profile_dir()
+    return _dir_size(d) if d.exists() else 0
+
+
+def clean_profile_cache(profile=None) -> int:
+    """Xoá CACHE của Chrome (GIỮ cookie / đăng nhập). Trả về số byte giải phóng."""
+    import shutil as _sh
+
+    base = profile or shared_profile_dir()
+    if not base.exists():
+        return 0
+    before = _dir_size(base)
+    for rel in CACHE_SUBDIRS:
+        d = base / rel
+        try:
+            if d.exists():
+                _sh.rmtree(d, ignore_errors=True)
+        except Exception:      # noqa: BLE001
+            continue
+    after = _dir_size(base)
+    return max(0, before - after)
+
+
+def close_app_browser() -> int:
+    """Đóng Chrome DO APP MỞ (chỉ tiến trình có --user-data-dir của app)."""
+    try:
+        d = _user_data_dir("")
+        _clear_profile_lock(d)
+        n = _kill_profile_browsers(d)
+        _clear_profile_lock(d)
+        return int(n or 0)
+    except Exception:      # noqa: BLE001
+        return 0
+
+
 def _migrate_to_shared(base, shared) -> None:
     """Lần đầu chạy bản 1 profile: copy profile sẵn có (ưu tiên ChatGPT) làm nền."""
     import shutil

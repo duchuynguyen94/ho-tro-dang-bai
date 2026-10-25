@@ -98,11 +98,45 @@ class CachePanel(QWidget):
         body.addLayout(row)
 
         v.addWidget(card)
+
+        # ---- Chrome: dung lượng profile + dọn cache / đóng Chrome ----
+        chrome_card = Card("Chrome (phiên đăng nhập)")
+        cdesc = QLabel(
+            "Profile Chrome giữ <b>đăng nhập website</b>. Nếu Chrome treo hoặc profile "
+            "phình to, bấm <b>Đóng Chrome</b> / <b>Dọn cache Chrome</b>.<br>"
+            "Dọn cache <b>KHÔNG</b> mất đăng nhập (chỉ xoá cache tạm)."
+        )
+        cdesc.setProperty("class", "sub")
+        cdesc.setWordWrap(True)
+        chrome_card.body.addWidget(cdesc)
+
+        self.chrome_info = QLabel("")
+        self.chrome_info.setObjectName("taskMeta")
+        chrome_card.body.addWidget(self.chrome_info)
+
+        crow = QHBoxLayout()
+        self.chrome_clean_btn = QPushButton("Dọn cache Chrome")
+        self.chrome_clean_btn.setProperty("class", "ghost")
+        self.chrome_clean_btn.clicked.connect(self._clean_chrome)
+        crow.addWidget(self.chrome_clean_btn)
+        self.chrome_close_btn = QPushButton("Đóng Chrome")
+        self.chrome_close_btn.setProperty("class", "danger")
+        self.chrome_close_btn.clicked.connect(self._close_chrome)
+        crow.addWidget(self.chrome_close_btn)
+        self.chrome_size_btn = QPushButton("Tính lại dung lượng")
+        self.chrome_size_btn.setProperty("class", "ghost")
+        self.chrome_size_btn.clicked.connect(self.refresh_chrome)
+        crow.addWidget(self.chrome_size_btn)
+        crow.addStretch(1)
+        chrome_card.body.addLayout(crow)
+        v.addWidget(chrome_card)
+
         v.addStretch(1)
         scroll.setWidget(root)
         outer.addWidget(scroll, 1)
         make_cfg_panel(self)
         dim_when_disabled(self.btn)
+        self.refresh_chrome()
 
     # ------------------------------------------------------------------ #
     def refresh(self) -> None:
@@ -118,6 +152,59 @@ class CachePanel(QWidget):
             parts.append(f"{label}: {_mb(size)}")
         parts.append(f"TỔNG: {_mb(total)}")
         self.info.setText("  ·  ".join(parts))
+
+    def refresh_chrome(self) -> None:
+        """Hiện dung lượng profile Chrome + số Chrome đang mở."""
+        try:
+            from ...wp.browser import profile_size
+
+            size = profile_size()
+            self.chrome_info.setText(f"Profile Chrome: {_mb(size)}")
+        except Exception:      # noqa: BLE001
+            self.chrome_info.setText("Profile Chrome: (không đọc được)")
+
+    def _clean_chrome(self) -> None:
+        """Xoá cache Chrome (GIỮ đăng nhập)."""
+        from PySide6.QtWidgets import QMessageBox
+
+        box = QMessageBox(self)
+        box.setIcon(QMessageBox.Question)
+        box.setWindowTitle("Dọn cache Chrome")
+        box.setText("Xoá cache của Chrome (giữ nguyên đăng nhập website)?")
+        box.setInformativeText("Nên đóng Chrome trước khi dọn. Dung lượng sẽ giảm đáng kể.")
+        yes = box.addButton("Dọn cache", QMessageBox.AcceptRole)
+        box.addButton("Huỷ", QMessageBox.RejectRole)
+        box.exec()
+        if box.clickedButton() is not yes:
+            return
+        try:
+            from ...config import app_data_dir
+            from ...log import log_error
+            from ...wp.browser import clean_profile_cache, close_app_browser
+
+            close_app_browser()
+            freed = clean_profile_cache()
+            log_error("CachePanel", f"dọn cache Chrome thủ công: {freed // 1048576} MB")
+            QMessageBox.information(self, "Dọn cache Chrome",
+                                    f"Đã giải phóng {_mb(freed)}.")
+        except Exception as exc:      # noqa: BLE001
+            QMessageBox.warning(self, "Dọn cache Chrome", f"Lỗi: {exc}")
+        self.refresh_chrome()
+
+    def _close_chrome(self) -> None:
+        """Đóng Chrome do app mở (chỉ tiến trình của app)."""
+        from PySide6.QtWidgets import QMessageBox
+
+        try:
+            from ...wp.browser import close_app_browser
+
+            n = close_app_browser()
+            QMessageBox.information(self, "Đóng Chrome",
+                                    f"Đã đóng {n} tiến trình Chrome của app." if n
+                                    else "Không có Chrome nào của app đang mở.")
+        except Exception as exc:      # noqa: BLE001
+            QMessageBox.warning(self, "Đóng Chrome", f"Lỗi: {exc}")
+        self.refresh_chrome()
 
     def _confirm(self) -> None:
         box = QMessageBox(self)
