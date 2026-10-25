@@ -314,7 +314,7 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
             f"Dựa vào nguồn sau:\n{link_line}\n\n"
             f"Hãy lấy danh sách sản phẩm thực tế từ nguồn trên, sau đó chia các sản phẩm "
             f"thành {n} nhóm và viết {n} bài dựa trên các sản phẩm tương ứng trong nhóm đó. "
-            f"Mỗi bài dài 800–1000 từ theo rule_content.pdf đã đính kèm trong Project này.\n"
+            f"Mỗi bài dài 800–1000 từ  BẮT BUỘC theo rule file rule_content.pdf đã đính kèm trong Project này.\n"
             f"Cách chia bài ví dụ: Nếu thu thập được 100 sản phẩm mà cần {n} bài, thì mỗi bài "
             f"sẽ là 100/{n} nếu số sản phẩm không chia hết cho {n}, các sản phẩm dư sẽ được "
             f"đưa vào bài cuối. \n\n"
