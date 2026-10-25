@@ -329,9 +329,7 @@ class ImageEditorPanel(QFrame):
         self.cb_trim.setToolTip("Ảnh mới thêm → tự cắt viền thừa.")
         self.cb_bg = QCheckBox("Xoá BG")
         self.cb_bg.setToolTip("Ảnh mới thêm → tự xoá nền (PNG trong suốt).")
-        self.cb_both = QCheckBox("Xoá BG & Trim")
-        self.cb_both.setToolTip("Ảnh mới thêm → XOÁ NỀN trước, rồi TRIM.")
-        for _cb in (self.cb_trim, self.cb_bg, self.cb_both):
+        for _cb in (self.cb_trim, self.cb_bg):
             _cb.toggled.connect(self._save_paste_ops)
             right.addWidget(_cb)               # mỗi ô 1 dòng
         self.reload_paste_ops()
@@ -367,7 +365,7 @@ class ImageEditorPanel(QFrame):
             ops = dict((st.data.get("ui") or {}).get("paste_ops") or {})
         except Exception:      # noqa: BLE001
             ops = {}
-        for cb, key in ((self.cb_trim, "trim"), (self.cb_bg, "bg"), (self.cb_both, "both")):
+        for cb, key in ((self.cb_trim, "trim"), (self.cb_bg, "bg")):
             try:
                 cb.blockSignals(True)
                 cb.setChecked(bool(ops.get(key, False)))
@@ -389,7 +387,6 @@ class ImageEditorPanel(QFrame):
             ui["paste_ops"] = {
                 "trim": bool(self.cb_trim.isChecked()),
                 "bg": bool(self.cb_bg.isChecked()),
-                "both": bool(self.cb_both.isChecked()),
             }
             st.save()
         except Exception:      # noqa: BLE001
@@ -398,10 +395,7 @@ class ImageEditorPanel(QFrame):
     def paste_ops(self) -> tuple:
         """(xoá nền?, trim?) theo 3 ô tick "Khi dán ảnh"."""
         try:
-            both = bool(self.cb_both.isChecked())
-            bg = bool(self.cb_bg.isChecked()) or both
-            trim = bool(self.cb_trim.isChecked()) or both
-            return bg, trim
+            return bool(self.cb_bg.isChecked()), bool(self.cb_trim.isChecked())
         except Exception:      # noqa: BLE001
             return False, False
 
