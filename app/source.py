@@ -154,20 +154,33 @@ def fetch_source(url: str, max_chars: int = 6000) -> dict:
     except OSError:
         pass
 
-    r = httpx.get(url, headers=UA, follow_redirects=True, timeout=60)
-    r.raise_for_status()
+    html = ""
+    ctype = ""
+    try:
+        r = httpx.get(url, headers=UA, follow_redirects=True, timeout=60)
+        ctype = (r.headers.get("content-type") or "").lower()
+        # nguồn là PDF?
+        if url.lower().split("?")[0].endswith(".pdf") or "application/pdf" in ctype \
+                or r.content[:4] == b"%PDF":
+            try:
+                return _pdf_source(url, r.content, max_chars)
+            except Exception as exc:      # noqa: BLE001
+                raise RuntimeError(f"Không đọc được file PDF: {exc}") from exc
+        # 403/4xx/5xx hoặc trang quá ngắn (SPA/chặn bot) -> sẽ đọc bằng CHROME
+        if r.status_code < 400 and len(r.content) > 800:
+            html = r.text
+    except Exception:      # noqa: BLE001
+        html = ""
 
-    # nguồn là PDF?
-    ctype = (r.headers.get("content-type") or "").lower()
-    if url.lower().split("?")[0].endswith(".pdf") or "application/pdf" in ctype \
-            or r.content[:4] == b"%PDF":
-        try:
-            return _pdf_source(url, r.content, max_chars)
-        except Exception as exc:      # noqa: BLE001
-            raise RuntimeError(f"Không đọc được file PDF: {exc}") from exc
+    if not html:
+        # FALLBACK: mở CHROME THẬT (headless, profile tạm) để đọc trang bị chặn
+        return _fetch_with_browser(url, max_chars)
 
-    html = r.text
+    return _parse_html(html, url, max_chars)
 
+
+def _parse_html(html: str, url: str, max_chars: int = 6000) -> dict:
+    """Bóc tiêu đề / văn bản / ảnh từ HTML."""
     soup = BeautifulSoup(html, "lxml")
     title = ""
     if soup.title and soup.title.string:
@@ -181,9 +194,56 @@ def fetch_source(url: str, max_chars: int = 6000) -> dict:
     text = "\n".join(ln for ln in lines if ln)
     text = re.sub(r"\n{3,}", "\n\n", text)[:max_chars]
 
-    images = _extract_images(soup, url)
-    return {"url": url, "title": title, "text": text, "images": images,
+    return {"url": url, "title": title, "text": text,
+            "images": _extract_images(soup, url),
             "images_meta": extract_images_meta(soup, url)}
+
+
+def _fetch_with_browser(url: str, max_chars: int = 6000) -> dict:
+    """Đọc trang bằng CHROME THẬT (headless) khi httpx bị chặn (403 / SPA / bot-check).
+
+    Dùng profile TẠM (Playwright tự tạo) -> KHÔNG đụng profile đăng nhập của app.
+    """
+    from playwright.sync_api import sync_playwright
+
+    errors: list[str] = []
+    html = ""
+    with sync_playwright() as pw:
+        for label, kw in (("chrome", {"channel": "chrome"}), ("chromium", {})):
+            try:
+                b = pw.chromium.launch(
+                    headless=True,
+                    args=["--disable-blink-features=AutomationControlled",
+                          "--no-default-browser-check", "--disable-translate"],
+                    **kw,
+                )
+            except Exception as exc:      # noqa: BLE001
+                errors.append(f"{label}: {str(exc).splitlines()[0][:120]}")
+                continue
+            try:
+                page = b.new_page()
+                page.set_default_navigation_timeout(60000)
+                page.goto(url, wait_until="domcontentloaded")
+                try:                      # chờ mạng ngắn (tối đa 6 giây)
+                    page.wait_for_load_state("networkidle", timeout=6000)
+                except Exception:      # noqa: BLE001
+                    pass
+                page.wait_for_timeout(600)
+                html = page.content() or ""
+            except Exception as exc:      # noqa: BLE001
+                errors.append(f"{label}: {str(exc).splitlines()[0][:120]}")
+                html = ""
+            finally:
+                try:
+                    b.close()
+                except Exception:      # noqa: BLE001
+                    pass
+            if html and len(html) > 500:
+                return _parse_html(html, url, max_chars)
+
+    detail = " | ".join(errors) if errors else "trang rỗng"
+    raise RuntimeError(
+        "Không đọc được trang nguồn (trang có thể CHẶN truy cập tự động): " + detail)
 
 
 def find_brand_logo(url: str) -> str:
