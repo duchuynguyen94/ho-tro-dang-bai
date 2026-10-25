@@ -90,6 +90,7 @@ class ImageToolsDialog(QDialog):
         self.start_btn.setProperty("class", "green")
         self.start_btn.clicked.connect(self._start)
         right.addWidget(self.start_btn, alignment=Qt.AlignLeft)
+        right.addSpacing(10)          # margin-bottom: 10px dưới nút "Bắt đầu"
 
         self.bar = QProgressBar()
         self.bar.setValue(0)
