@@ -1566,12 +1566,11 @@ class JobsPage(QWidget):
             pass
 
     def _sync_seo_btn(self) -> None:
-        """Nút "Tạo JSON SEO": chỉ hiện khi job TRỐNG và ô Nội dung CÓ chữ."""
+        """Nút "Tạo JSON SEO": hiện với MỌI LOẠI job khi ô Nội dung CÓ chữ."""
         try:
             task = self.current
-            kind = str(getattr(task, "kind", "") or "") if task is not None else ""
             has_text = bool(self.content_edit.get_text().strip())
-            show = (kind == "blank") and has_text
+            show = (task is not None) and has_text
             self.seo_btn.setVisible(show)
             self.seo_btn.setEnabled(show and not self._seo_busy
                                      and not getattr(self, "_busy", False))
