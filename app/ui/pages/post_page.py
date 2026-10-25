@@ -10,6 +10,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
     QLineEdit,
+    QMessageBox,
     QPlainTextEdit,
     QPushButton,
     QScrollArea,
@@ -19,6 +20,7 @@ from PySide6.QtWidgets import (
 
 from ...storage.models import Task
 from ..style import dim_when_disabled, Card, polish_combos
+from ..toast import show_toast
 
 
 class PostPage(QWidget):
@@ -73,7 +75,21 @@ class PostPage(QWidget):
 
         b = self.card.body
 
-        b.addWidget(QLabel("Link nguồn (mỗi link 1 dòng — nhiều link = 1 bài viết)"))
+        lrow = QHBoxLayout()
+        lbl = QLabel("Link nguồn (mỗi link 1 dòng — nhiều link = 1 bài viết)")
+        lrow.addWidget(lbl)
+        lrow.addStretch(1)
+        self.get_links_btn = QPushButton("Lấy danh sách link sản phẩm")
+        self.get_links_btn.setProperty("class", "ghost")
+        self.get_links_btn.setToolTip(
+            "Nhờ ChatGPT mở LINK ĐẦU TIÊN trong ô này và lấy danh sách link sản phẩm,\n"
+            "rồi điền các link đó vào ô (mỗi dòng 1 link).\n"
+            "Cần đã cài URL Project ChatGPT trong Cài đặt → AI nội dung."
+        )
+        self.get_links_btn.clicked.connect(self._fetch_source_links)
+        lrow.addWidget(self.get_links_btn)
+        b.addLayout(lrow)
+
         self.source_url = QPlainTextEdit()
         self.source_url.setPlaceholderText("https://...\nhttps://...")
         self.source_url.setFixedHeight(84)
@@ -180,8 +196,74 @@ class PostPage(QWidget):
             pass
         self._validate()
 
+    def _fetch_source_links(self) -> None:
+        """Nhờ ChatGPT mở LINK ĐẦU TIÊN -> lấy danh sách link sản phẩm -> điền vào ô."""
+        w = getattr(self, "_links_worker", None)
+        if w is not None and w.isRunning():
+            try:
+                w.stop()                       # bấm lần nữa = DỪNG
+            except Exception:      # noqa: BLE001
+                pass
+            self.get_links_btn.setText("Đang dừng…")
+            return
+        links = self._links()
+        if not links:
+            show_toast(self, "Dán link trang danh mục vào ô Link nguồn trước", 2600, ok=False)
+            return
+        page = links[0]
+        from ..workers import SourceLinksWorker
+
+        w = SourceLinksWorker(self.store, page)
+        self._links_worker = w
+        self.get_links_btn.setText("Đang lấy link… (bấm để dừng)")
+        w.ok.connect(self._on_source_links_ok)
+        w.failed.connect(self._on_source_links_failed)
+        w.finished.connect(self._reset_links_btn)
+        w.start()
+
+    def _reset_links_btn(self) -> None:
+        try:
+            self.get_links_btn.setText("Lấy danh sách link sản phẩm")
+        except Exception:      # noqa: BLE001
+            pass
+
+    def _on_source_links_failed(self, err: str) -> None:
+        show_toast(self, f"Không lấy được link: {str(err)[:80]}", 4200, ok=False)
+        self._reset_links_btn()
+
+    def _on_source_links_ok(self, urls: list) -> None:
+        got = [str(u).strip() for u in (urls or []) if str(u).strip()]
+        if not got:
+            self._reset_links_btn()
+            return
+        old = self.source_url.toPlainText().strip()
+        cur = self._links()
+        # ô đang chỉ có đúng link trang nguồn -> THAY THẾ luôn
+        only_page = (not old) or (len(cur) == 1 and old == cur[0])
+        text = "\n".join(got)
+        if not only_page:
+            box = QMessageBox(self)
+            box.setIcon(QMessageBox.Question)
+            box.setWindowTitle("Lấy danh sách link sản phẩm")
+            box.setText(f"Đã lấy {len(got)} link sản phẩm. Ô Link nguồn đang có link khác.")
+            box.setInformativeText("Bạn muốn THAY THẾ hay THÊM VÀO?")
+            rep = box.addButton("Thay thế", QMessageBox.DestructiveRole)
+            add = box.addButton("Thêm vào", QMessageBox.AcceptRole)
+            box.addButton("Huỷ", QMessageBox.RejectRole)
+            box.exec()
+            if box.clickedButton() is rep:
+                pass
+            elif box.clickedButton() is add:
+                text = (old + "\n" + text) if old else text
+            else:
+                self._reset_links_btn()
+                return
+        self.source_url.setPlainText(text)
+        self._validate()
+        show_toast(self, f"Đã lấy {len(got)} link sản phẩm", 2600)
+
     def _links(self) -> list[str]:
-        """Tách các link nguồn (mỗi dòng 1 link), bỏ trùng, tối đa 10."""
+        """Tách các link nguồn (mỗi dòng 1 link), bỏ trùng, tối đa 20."""
         import re as _re
 
         raw = _re.split(r"[\s,;]+", self.source_url.toPlainText())
@@ -191,7 +273,7 @@ class PostPage(QWidget):
             if not u or u in out:
                 continue
             out.append(u)
-            if len(out) >= 10:
+            if len(out) >= 20:
                 break
         return out
 

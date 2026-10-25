@@ -764,10 +764,10 @@ def _wait_plain_reply(page, prompt: str, timeout: int = 600,
     raise AIError("ChatGPT không trả lời. Thử lại giúp.")
 
 
-def extract_product_models(pcfg: dict, prompt: str, files=None, log=None,
-                           timeout: int = 600, should_stop=None,
-                           show_browser: bool = False) -> str:
-    """Mở PROJECT ChatGPT -> đính kèm file (nếu có) -> gửi prompt -> lấy kết quả."""
+def ask_project(pcfg: dict, prompt: str, files=None, log=None,
+                timeout: int = 600, should_stop=None,
+                show_browser: bool = False, log_send: str = "Đang gửi yêu cầu…") -> str:
+    """Mở PROJECT ChatGPT -> (đính kèm file) -> gửi prompt -> trả lời dạng text."""
     from ..wp import WPBrowser
 
     project_url = str((pcfg or {}).get("project_url", "") or "").strip()
@@ -781,7 +781,7 @@ def extract_product_models(pcfg: dict, prompt: str, files=None, log=None,
         page = _open_page(br, project_url, log, should_stop)
         _attach_files(page, files, log)
         if log:
-            log("Đang gửi yêu cầu trích xuất Product Models…")
+            log(log_send)
         _send(page, prompt)
         return _wait_plain_reply(page, prompt, timeout, should_stop, log=log)
     finally:
@@ -789,3 +789,12 @@ def extract_product_models(pcfg: dict, prompt: str, files=None, log=None,
             br.close()
         except Exception:      # noqa: BLE001
             pass
+
+
+def extract_product_models(pcfg: dict, prompt: str, files=None, log=None,
+                           timeout: int = 600, should_stop=None,
+                           show_browser: bool = False) -> str:
+    """Mở PROJECT ChatGPT -> đính kèm file (nếu có) -> gửi prompt -> lấy kết quả."""
+    return ask_project(pcfg, prompt, files=files, log=log, timeout=timeout,
+                       should_stop=should_stop, show_browser=show_browser,
+                       log_send="Đang gửi yêu cầu trích xuất Product Models…")

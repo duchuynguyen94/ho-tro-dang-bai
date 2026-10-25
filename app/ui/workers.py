@@ -1242,6 +1242,67 @@ class ModelsWorker(TrackedThread):
             self.failed.emit(str(exc))
 
 
+class SourceLinksWorker(TrackedThread):
+    """Nhờ ChatGPT (Project) mở 1 trang và trả về DANH SÁCH LINK SẢN PHẨM."""
+
+    log = Signal(str)
+    ok = Signal(list)          # list[str] link cùng tên miền
+    failed = Signal(str)
+
+    def __init__(self, store, page_url: str) -> None:
+        super().__init__()
+        self.store = store
+        self.page_url = str(page_url or "").strip()
+
+    def run(self) -> None:      # noqa: D401
+        import re as _re
+        from urllib.parse import urlparse as _urlparse
+
+        try:
+            from ..ai.chatgpt_browser import ask_project
+
+            prompt = (
+                f"Mở trang sau: {self.page_url}. "
+                "Hãy lấy TOÀN BỘ link sản phẩm thực tế trên trang. "
+                "Trả về DUY NHẤT danh sách link đầy đủ, mỗi dòng 1 link bắt đầu bằng http, "
+                "không đánh số, không markdown, không giải thích."
+            )
+            cfg = self.store.ai_content or {}
+            pcfg = dict((cfg.get("providers") or {}).get("chatgpt") or {})
+            reply = ask_project(
+                pcfg, prompt, log=self.log.emit, should_stop=self.stopped,
+                show_browser=bool(pcfg.get("show_browser", False)),
+                log_send="Đang nhờ ChatGPT lấy danh sách link sản phẩm…",
+            )
+            host = _urlparse(self.page_url).netloc.lower()
+            out: list[str] = []
+            seen: set[str] = set()
+            for u in _re.findall(r"https?://[^\s<>\"'`)\]]+", str(reply or ""), _re.I):
+                u = u.rstrip(".,;:!?*").strip()
+                if not u:
+                    continue
+                try:
+                    if _urlparse(u).netloc.lower() != host:
+                        continue          # chỉ nhận link CÙNG TÊN MIỀN
+                except Exception:      # noqa: BLE001
+                    continue
+                if u in seen:
+                    continue
+                seen.add(u)
+                out.append(u)
+                if len(out) >= 20:
+                    break
+            if not out:
+                raise RuntimeError(
+                    "ChatGPT không trả về link sản phẩm nào cùng tên miền. "
+                    "Thử link trang danh mục con, hoặc bật 'Hiện cửa sổ Chrome' để kiểm tra."
+                )
+            self.ok.emit(out)
+        except Exception as exc:      # noqa: BLE001
+            traceback.print_exc()
+            self.failed.emit(str(exc))
+
+
 class ImageToolsWorker(TrackedThread):
     """Công cụ ảnh: Trim / Xoá BG / Xoá BG + Trim cho NHIỀU file -> lưu vào 1 thư mục."""
 
