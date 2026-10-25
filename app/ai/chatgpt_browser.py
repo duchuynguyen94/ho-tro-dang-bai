@@ -171,7 +171,7 @@ def _click_send(page) -> bool:
     return False
 
 
-def _wait_composer(page, timeout: float = 45.0, should_stop=None):
+def _wait_composer(page, timeout: float = 300.0, should_stop=None):
     deadline = time.time() + timeout
     while time.time() < deadline:
         if should_stop and should_stop():
@@ -367,7 +367,7 @@ def _open_page(br, project_url: str, log=None, should_stop=None):
                 log("Đã bỏ phần ?query/#hash trong URL project.")
     except Exception:      # noqa: BLE001
         pass
-    page.goto(target, wait_until="domcontentloaded", timeout=120000)
+    page.goto(target, wait_until="domcontentloaded", timeout=300000)
     page.wait_for_timeout(1200)
     _dismiss_modals(page)
     if _wait_composer(page, 25) is None:
