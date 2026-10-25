@@ -1,4 +1,4 @@
 """Hỗ trợ đăng bài WordPress đa website."""
 
-__version__ = "1.1.30"
+__version__ = "1.1.31"
 APP_NAME = "Ho Tro Dang Bai"

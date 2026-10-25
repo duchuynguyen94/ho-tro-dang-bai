@@ -803,7 +803,7 @@ class MainWindow(QMainWindow):
         if fresh is None:
             return
         r = fresh.result = dict(fresh.result or {})
-        for k in ("title", "description", "tags", "ma_san_pham"):
+        for k in ("title", "description", "tags"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
@@ -935,7 +935,7 @@ class MainWindow(QMainWindow):
             self.jobs_page.set_seo_busy(False)
             return                           # job đã bị xoá
         r = fresh.result = dict(fresh.result or {})
-        for k in ("title", "description", "tags", "ma_san_pham"):
+        for k in ("title", "description", "tags"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
