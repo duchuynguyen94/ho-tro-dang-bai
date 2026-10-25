@@ -659,6 +659,13 @@ class JobsPage(QWidget):
         self.images_box.reordered.connect(self._reorder_images)
 
         self.img_editor = ImageEditorPanel()
+        # KÉO-THẢ ẢNH vào canvas: file trong máy (Finder/Desktop) hoặc ảnh từ web (link http)
+        try:
+            self.img_editor.canvas.setAcceptDrops(True)
+        except Exception:      # noqa: BLE001
+            pass
+        self._drop_workers: list = []
+        self._drop_jobs: dict = {}
         self.img_editor.apply_opts.connect(self._apply_image_opts)
         self.img_editor.changed.connect(self._sync_thumb_from_canvas)
         self.img_editor.footer_changed.connect(self._on_footer_changed)
@@ -1658,6 +1665,19 @@ class JobsPage(QWidget):
         Ở ô nhập liệu (Tiêu đề / Nội dung…) thì để widget tự dán text như bình thường.
         """
         try:
+            if event.type() in (QEvent.DragEnter, QEvent.DragMove):
+                if obj is self.img_editor.canvas:
+                    files, links = self._drop_paths(event.mimeData())
+                    if files or links:
+                        event.acceptProposedAction()
+                        return True
+                return False
+            if event.type() == QEvent.Drop:
+                if obj is self.img_editor.canvas:
+                    if self._drop_on_canvas(event):
+                        event.acceptProposedAction()
+                        return True
+                    return False
             if event.type() in (QEvent.MouseMove, QEvent.Leave):
                 self._track_row_hover()
             # macOS: phím "delete" trên bàn phím = Backspace; Windows: Delete
@@ -1809,8 +1829,11 @@ class JobsPage(QWidget):
         self.store.save()
 
     def _add_upload_components(self, paths: list[str], index: int,
-                               nobg: bool = False) -> None:
-        """Thêm NHIỀU ảnh cùng lúc vào canvas (mỗi ảnh 1 thành phần)."""
+                               nobg: bool = False, pos=None) -> None:
+        """Thêm NHIỀU ảnh cùng lúc vào canvas (mỗi ảnh 1 thành phần).
+
+        `pos` = [x, y] (tỉ lệ 0..1) — chỗ THẢ CHUỘT; ảnh đầu nằm đúng đó.
+        """
         if not self.current or not paths:
             return
         self._save()
@@ -1823,7 +1846,8 @@ class JobsPage(QWidget):
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
         real = [p for p in paths if p]
-        spots = self._find_free_spots(len(real))     # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng)
+        # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng); có chỗ thả -> ảnh đầu đúng chỗ thả
+        spots = self._spots_for(len(real), pos)
         for p, spot in zip(real, spots):
             item = {"path": p, "pos": spot}
             if nobg:
@@ -1840,6 +1864,156 @@ class JobsPage(QWidget):
         self.recompose_image.emit(self.current, index)
         show_toast(self, f"Đã thêm {len(paths)} ảnh vào canvas", 2200)
 
+    # ---------------- KÉO-THẢ ẢNH VÀO CANVAS ---------------- #
+    @staticmethod
+    def _drop_paths(md) -> tuple[list[str], list[str]]:
+        """Đọc dữ liệu kéo-thả -> (file ảnh trong máy, link ảnh http)."""
+        files: list[str] = []
+        links: list[str] = []
+        try:
+            if md is None:
+                return files, links
+            if md.hasUrls():
+                for u in md.urls():
+                    lp = u.toLocalFile()
+                    if lp:
+                        if Path(lp).suffix.lower() in IMAGE_EXTS:
+                            files.append(lp)
+                        continue
+                    s_url = u.toString()
+                    if s_url.lower().startswith(("http://", "https://")):
+                        links.append(s_url)
+            if not files and not links and md.hasText():
+                txt = md.text().strip()
+                if txt.lower().startswith(("http://", "https://")):
+                    links.append(txt)
+        except Exception:      # noqa: BLE001
+            pass
+        return files, links
+
+    def _spots_for(self, n: int, pos=None) -> list[list[float]]:
+        """n chỗ đặt ảnh: ảnh đầu ĐÚNG chỗ thả (nếu có), còn lại là chỗ trống."""
+        n = max(1, int(n or 1))
+        free = self._find_free_spots(n) or [[0.5, 0.5]]
+        if not pos:
+            return free
+        try:
+            px = min(0.9, max(0.1, float(pos[0])))
+            py = min(0.9, max(0.1, float(pos[1])))
+        except Exception:      # noqa: BLE001
+            return free
+        out: list[list[float]] = [[round(px, 4), round(py, 4)]]
+        for p in free:
+            if len(out) >= n:
+                break
+            if abs(p[0] - px) < 0.15 and abs(p[1] - py) < 0.15:
+                continue                      # quá gần ảnh vừa thả -> tránh chồng
+            out.append(p)
+        while len(out) < n:
+            out.append([0.5, 0.5])
+        return out
+
+    def _drop_point(self, event) -> list[float]:
+        """Đổi toạ độ con trỏ lúc thả -> tỉ lệ 0..1 trên canvas."""
+        try:
+            cv = self.img_editor.canvas
+            p = event.position().toPoint()
+            w = max(1, cv.width())
+            h = max(1, cv.height())
+            return [min(0.9, max(0.1, p.x() / w)), min(0.9, max(0.1, p.y() / h))]
+        except Exception:      # noqa: BLE001
+            return [0.5, 0.5]
+
+    def _drop_on_canvas(self, event) -> bool:
+        """Thả ảnh vào canvas -> thành thành phần như ảnh tải lên (kéo/resize/menu chuột phải)."""
+        try:
+            files, links = self._drop_paths(event.mimeData())
+            if not files and not links:
+                return False
+            if not self.isVisible() or not self.current:
+                show_toast(self, "Chưa chọn công việc để thêm ảnh", 2400, ok=False)
+                return False
+            index = int(getattr(self, "_sel_index", 0))
+            pos = self._drop_point(event)
+            if files:
+                self._add_upload_components(files, index, pos=pos)
+            if links:
+                self._drop_download_images(links, index, pos, self.current.id)
+            return True
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            return False
+
+    @staticmethod
+    def _save_dropped_bytes(data: bytes) -> str:
+        """Lưu ảnh tải từ link vào thư mục media -> trả về đường dẫn."""
+        from datetime import datetime
+
+        from ...config import media_dir
+
+        if not data:
+            return ""
+        head = data[:16]
+        if head.startswith(b"\x89PNG"):
+            ext = ".png"
+        elif head.startswith(b"\xff\xd8"):
+            ext = ".jpg"
+        elif data[8:12] == b"WEBP":
+            ext = ".webp"
+        elif head[:6] in (b"GIF87a", b"GIF89a"):
+            ext = ".gif"
+        else:
+            ext = ".png"
+        d = media_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        p = d / f"keo_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{ext}"
+        p.write_bytes(data)
+        return str(p)
+
+    def _drop_download_images(self, links: list[str], index: int, pos, task_id: str) -> None:
+        """Ảnh kéo từ WEB (link http) -> tải ở luồng nền rồi thêm vào canvas."""
+        try:
+            from ..workers import SourceImageDownloadWorker
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+            return
+        show_toast(self, f"Đang tải {len(links)} ảnh từ link…", 2200)
+        saved: list[str] = []
+
+        def _on_done(_url: str, data: bytes) -> None:
+            try:
+                p = self._save_dropped_bytes(data)
+                if p:
+                    saved.append(p)
+            except Exception:      # noqa: BLE001
+                pass
+
+        w = SourceImageDownloadWorker(list(links))
+        w.done.connect(_on_done)
+        self._drop_jobs[w] = {"saved": saved, "index": index, "pos": pos, "task": task_id}
+        w.finished.connect(self._on_drop_worker_finished)
+        self._drop_workers.append(w)
+        w.start()
+
+    def _on_drop_worker_finished(self) -> None:
+        """Tải link xong -> thêm ảnh vào canvas (chạy ở LUỒNG GIAO DIỆN)."""
+        try:
+            w = self.sender()
+            info = getattr(self, "_drop_jobs", {}).pop(w, None)
+            self._drop_workers = [x for x in getattr(self, "_drop_workers", []) if x is not w]
+            if not info:
+                return
+            saved = list(info.get("saved") or [])
+            if not saved:
+                show_toast(self, "Không tải được ảnh từ link", 2600, ok=False)
+                return
+            if not self.current or getattr(self.current, "id", "") != info.get("task"):
+                return                        # đã đổi job -> bỏ qua
+            self._add_upload_components(saved, int(info.get("index") or 0),
+                                         pos=info.get("pos"))
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+
     def _fresh_current(self):
         """Bản MỚI NHẤT của job đang mở (tránh ghi đè bằng bản cũ đang giữ trong UI)."""
         if not self.current:
@@ -1850,8 +2024,11 @@ class JobsPage(QWidget):
         self.current = fresh          # UI theo bản mới nhất
         return fresh
 
-    def _add_upload_component(self, path: str, index: int) -> None:
-        """Thêm 1 ảnh (tải lên / dán / chọn từ nguồn) thành thành phần ở giữa canvas."""
+    def _add_upload_component(self, path: str, index: int, pos=None) -> None:
+        """Thêm 1 ảnh (tải lên / dán / chọn từ nguồn / KÉO-THẢ) thành thành phần trên canvas.
+
+        `pos` = [x, y] (tỉ lệ 0..1) — chỗ THẢ CHUỘT; bỏ trống -> tự tìm chỗ trống.
+        """
         if not self.current or not path:
             return
         self._save()
@@ -1863,8 +2040,8 @@ class JobsPage(QWidget):
         while len(lst) <= index:
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
-        # TÌM CHỖ TRỐNG (giống tải lên / hình tự tìm) — không dán vào chính giữa nữa
-        spot = (self._find_free_spots(1) or [[0.5, 0.5]])[0]
+        # CHỖ THẢ CHUỘT nếu có, không thì TÌM CHỖ TRỐNG (giống tải lên / hình tự tìm)
+        spot = (self._spots_for(1, pos) or [[0.5, 0.5]])[0]
         if len(ups) >= 20:
             ups[-1] = {"path": path, "pos": spot}         # đủ 20 -> thay cái cuối
         else:
