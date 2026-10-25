@@ -46,6 +46,41 @@ def register_bundled_fonts() -> list[str]:
 _FONT_CACHE: list = []      # QFontDatabase.families() rất chậm (~250ms) -> chỉ dò 1 lần
 
 
+def white_icon(text: str, px: int = 20) -> "QIcon":
+    """Vẽ emoji/ký tự thành icon MÀU TRẮNG (giữ nguyên hình dạng).
+
+    Emoji hệ thống luôn có màu -> vẽ ra pixmap rồi đổi mọi điểm ảnh thành trắng.
+    """
+    from PySide6.QtCore import QSize, Qt
+    from PySide6.QtGui import QColor, QFont, QIcon, QImage, QPainter, QPixmap
+
+    scale = 3                                   # vẽ 3x cho nét
+    side = int(px * scale)
+    pm = QPixmap(side, side)
+    pm.fill(Qt.transparent)
+    painter = QPainter(pm)
+    try:
+        f = QFont()
+        f.setPixelSize(int(side * 0.92))
+        painter.setFont(f)
+        painter.setPen(QColor("#ffffff"))
+        painter.drawText(pm.rect(), Qt.AlignCenter, text)
+    finally:
+        painter.end()
+    img = pm.toImage().convertToFormat(QImage.Format_ARGB32)
+    for y in range(img.height()):
+        for x in range(img.width()):
+            c = img.pixelColor(x, y)
+            if c.alpha() > 24:                  # giữ alpha, đổi RGB thành trắng
+                c.setRed(255)
+                c.setGreen(255)
+                c.setBlue(255)
+                img.setPixelColor(x, y, c)
+    out = QPixmap.fromImage(img)
+    out.setDevicePixelRatio(float(scale))
+    return QIcon(out)
+
+
 def app_font() -> QFont:
     if not _FONT_CACHE:
         name = ""

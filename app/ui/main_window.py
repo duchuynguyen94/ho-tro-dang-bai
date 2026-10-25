@@ -113,8 +113,15 @@ class MainWindow(QMainWindow):
         tl.addWidget(name)
         tl.addStretch(1)
         # nút CÔNG CỤ ẢNH (🧰) ngay TRƯỚC bánh răng cài đặt
-        self.tools_btn = QPushButton("🧰")
+        self.tools_btn = QPushButton()
         self.tools_btn.setObjectName("gearBtn")
+        try:
+            from .style import white_icon
+
+            self.tools_btn.setIcon(white_icon("🧰", 20))     # icon MÀU TRẮNG
+            self.tools_btn.setIconSize(QSize(20, 20))
+        except Exception:      # noqa: BLE001
+            self.tools_btn.setText("🧰")
         self.tools_btn.setToolTip("Công cụ ảnh: Trim / Xoá BG / Xoá BG + Trim")
         self.tools_btn.setCursor(Qt.PointingHandCursor)
         self.tools_btn.clicked.connect(self._open_image_tools)
