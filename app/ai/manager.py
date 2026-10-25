@@ -12,9 +12,10 @@ from . import providers
 
 API_PROVIDERS = ("gemini", "groq", "openai", "deepseek")
 
-REQUIRED_KEYS = ("title", "focus_keyword", "description", "tags")
-# 2 trường MỚI: tùy chọn (AI thiếu cũng không báo lỗi)
-OPTIONAL_KEYS = ("category_name", "brand_name", "ma_san_pham")
+# BẮT BUỘC: thiếu là báo lỗi
+REQUIRED_KEYS = ("title", "description", "tags")
+# ĐƯỢC PHÉP THIẾU (AI trả thiếu -> chấp nhận, ô nhập để TRỐNG)
+OPTIONAL_KEYS = ("focus_keyword", "category_name", "brand_name", "ma_san_pham")
 
 # Kết quả bước 1 (theo Rule Content)
 CONTENT_OUTPUT_SPEC = (

@@ -803,11 +803,13 @@ class MainWindow(QMainWindow):
         if fresh is None:
             return
         r = fresh.result = dict(fresh.result or {})
-        for k in ("title", "description", "focus_keyword", "tags",
-                  "category_name", "brand_name", "ma_san_pham"):
+        for k in ("title", "description", "tags", "ma_san_pham"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
+        # 3 trường ĐƯỢC PHÉP THIẾU: thiếu -> để TRỐNG (không giữ giá trị cũ)
+        for k in ("focus_keyword", "category_name", "brand_name"):
+            r[k] = str((seo or {}).get(k, "") or "").strip()
         self.store.upsert_task(fresh)
         self.store.save()
         try:      # nếu đang mở đúng job đó -> điền luôn vào các ô
@@ -933,11 +935,13 @@ class MainWindow(QMainWindow):
             self.jobs_page.set_seo_busy(False)
             return                           # job đã bị xoá
         r = fresh.result = dict(fresh.result or {})
-        for k in ("title", "description", "focus_keyword", "tags",
-                  "category_name", "brand_name", "ma_san_pham"):
+        for k in ("title", "description", "tags", "ma_san_pham"):
             v = str((seo or {}).get(k, "") or "").strip()
             if v:
                 r[k] = v
+        # 3 trường ĐƯỢC PHÉP THIẾU: thiếu -> để TRỐNG (không giữ giá trị cũ)
+        for k in ("focus_keyword", "category_name", "brand_name"):
+            r[k] = str((seo or {}).get(k, "") or "").strip()
         self.store.upsert_task(fresh)
         self.store.save()
         self.jobs_page.set_seo_busy(False)
