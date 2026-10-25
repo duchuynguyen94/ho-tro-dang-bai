@@ -1845,6 +1845,18 @@ class JobsPage(QWidget):
             lst.append({})
         ups = list(lst[index].get("uploads") or [])
         real = [p for p in paths if p]
+        # CHỈ nhận ảnh ĐỌC ĐƯỢC (nếu không sẽ thêm object vô hình vào canvas)
+        ok: list[str] = []
+        for p in real:
+            good = self._ensure_readable_image(p)
+            if good:
+                ok.append(good)
+        if len(ok) < len(real):
+            show_toast(self, f"{len(real) - len(ok)} ảnh không đọc được (đã bỏ qua)",
+                       2600, ok=False)
+        real = ok
+        if not real:
+            return
         # mỗi ảnh 1 CHỖ TRỐNG (không xếp chồng); có chỗ thả -> ảnh đầu đúng chỗ thả
         spots = self._spots_for(len(real), pos)
         for p, spot in zip(real, spots):
@@ -1941,6 +1953,42 @@ class JobsPage(QWidget):
         except Exception:      # noqa: BLE001
             pass
         return files, links
+
+    @staticmethod
+    def _ensure_readable_image(path: str) -> str:
+        """Bảo đảm Qt ĐỌC ĐƯỢC ảnh; nếu không (AVIF, HEIC…) -> chuyển sang PNG.
+
+        Trả về "" nếu file không phải ảnh -> KHÔNG thêm object vô hình vào canvas.
+        """
+        try:
+            from PySide6.QtGui import QImageReader
+
+            if not path or not Path(path).exists():
+                return ""
+            if QImageReader(path).canRead():
+                return path
+            # Qt không đọc được -> thử chuyển bằng Pillow (AVIF/HEIC/...)
+            from PIL import Image as _Img
+
+            img = _Img.open(path)
+            img.load()
+            has_alpha = "A" in img.getbands() or img.mode in ("RGBA", "LA", "P")
+            img = img.convert("RGBA" if has_alpha else "RGB")
+            out = Path(path).with_suffix(".png")
+            if out == Path(path):
+                out = Path(path).with_name(Path(path).stem + "_conv.png")
+            img.save(out, "PNG")
+            try:
+                Path(path).unlink(missing_ok=True)
+            except Exception:      # noqa: BLE001
+                pass
+            return str(out) if QImageReader(str(out)).canRead() else ""
+        except Exception:      # noqa: BLE001
+            try:
+                Path(path).unlink(missing_ok=True)
+            except Exception:      # noqa: BLE001
+                pass
+            return ""
 
     @staticmethod
     def _save_qimage(img) -> str:
@@ -2050,7 +2098,8 @@ class JobsPage(QWidget):
         d.mkdir(parents=True, exist_ok=True)
         p = d / f"keo_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}{ext}"
         p.write_bytes(data)
-        return str(p)
+        # Avatar Google thường là AVIF -> Qt không đọc được -> đổi sang PNG ngay
+        return JobsPage._ensure_readable_image(str(p))
 
     def _drop_download_images(self, links: list[str], index: int, pos, task_id: str) -> None:
         """Ảnh kéo từ WEB (link http) -> tải ở luồng nền rồi thêm vào canvas."""
@@ -2112,6 +2161,10 @@ class JobsPage(QWidget):
         `pos` = [x, y] (tỉ lệ 0..1) — chỗ THẢ CHUỘT; bỏ trống -> tự tìm chỗ trống.
         """
         if not self.current or not path:
+            return
+        path = self._ensure_readable_image(path)
+        if not path:
+            show_toast(self, "Ảnh không đọc được", 2400, ok=False)
             return
         self._save()
         fresh = self._fresh_current()
