@@ -76,7 +76,7 @@ def clipboard_image_path() -> str:
             d.mkdir(parents=True, exist_ok=True)
             p = d / f"dan_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
             if img.save(str(p), "PNG"):
-                return str(p)
+                return JobsPage._ensure_readable_image(str(p))
     if md.hasUrls():
         for u in md.urls():
             lp = u.toLocalFile()
@@ -1903,6 +1903,20 @@ class JobsPage(QWidget):
                 cls._drop_log(f"drop: formats={md.formats()}")
             except Exception:      # noqa: BLE001
                 pass
+            # (1) ƯU TIÊN ảnh THẬT đính kèm trong dữ liệu kéo (Chrome/Google Images gửi
+            #     application/x-qt-image) — KHÔNG cần tải link (link google là trang HTML).
+            try:
+                if md.hasImage():
+                    qv = md.imageData()
+                    img = qv if isinstance(qv, QImage) else QImage(qv)
+                    if img is not None and not img.isNull():
+                        p_img = cls._save_qimage(img)
+                        if p_img:
+                            files.append(p_img)
+                            cls._drop_log(f"drop: dung anh dinh kem -> {Path(p_img).name}")
+                            return files, links
+            except Exception:      # noqa: BLE001
+                pass
             if md.hasUrls():
                 for u in md.urls():
                     lp = u.toLocalFile()
@@ -1917,18 +1931,6 @@ class JobsPage(QWidget):
                         p = cls._save_data_uri(s_url)
                         if p:
                             files.append(p)
-            # ảnh nhị phân (Chrome/Google Images thường gửi image/png|jpeg)
-            if not files and not links:
-                try:
-                    if md.hasImage():
-                        qv = md.imageData()
-                        img = qv if isinstance(qv, QImage) else QImage(qv)
-                        if img is not None and not img.isNull():
-                            p = cls._save_qimage(img)
-                            if p:
-                                files.append(p)
-                except Exception:      # noqa: BLE001
-                    pass
             # HTML có <img src="...">
             if not files and not links:
                 try:
