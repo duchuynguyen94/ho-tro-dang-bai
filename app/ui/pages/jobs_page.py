@@ -6,7 +6,7 @@ from pathlib import Path
 
 from PySide6.QtCore import QEvent, QMimeData, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import (QCursor, QPixmapCache, QDesktopServices, QDrag,
-                             QKeySequence, QPixmap)
+                             QImage, QKeySequence, QPixmap)
 from PySide6.QtWidgets import (
     QApplication,
     QDialog,
@@ -1667,8 +1667,7 @@ class JobsPage(QWidget):
         try:
             if event.type() in (QEvent.DragEnter, QEvent.DragMove):
                 if obj is self.img_editor.canvas:
-                    files, links = self._drop_paths(event.mimeData())
-                    if files or links:
+                    if self._drop_maybe_image(event.mimeData()):
                         event.acceptProposedAction()
                         return True
                 return False
@@ -1866,8 +1865,23 @@ class JobsPage(QWidget):
 
     # ---------------- KÉO-THẢ ẢNH VÀO CANVAS ---------------- #
     @staticmethod
-    def _drop_paths(md) -> tuple[list[str], list[str]]:
-        """Đọc dữ liệu kéo-thả -> (file ảnh trong máy, link ảnh http)."""
+    def _drop_maybe_image(md) -> bool:
+        """Dữ liệu kéo có thể là ảnh không? (file, link, ảnh nhị phân, HTML có <img>)."""
+        try:
+            if md is None:
+                return False
+            return bool(md.hasUrls() or md.hasImage() or md.hasHtml()
+                        or (md.hasText() and md.text().strip()))
+        except Exception:      # noqa: BLE001
+            return False
+
+    @classmethod
+    def _drop_paths(cls, md) -> tuple[list[str], list[str]]:
+        """Đọc dữ liệu kéo-thả -> (file ảnh trong máy, link ảnh cần tải).
+
+        Hỗ trợ: file trong Finder · link http(s) · `data:image/...` (Google Images)
+        · ảnh nhị phân trong dữ liệu kéo (Chrome/Firefox) · HTML có <img src=...>.
+        """
         files: list[str] = []
         links: list[str] = []
         try:
@@ -1883,13 +1897,80 @@ class JobsPage(QWidget):
                     s_url = u.toString()
                     if s_url.lower().startswith(("http://", "https://")):
                         links.append(s_url)
+                    elif s_url.lower().startswith("data:image/"):
+                        p = cls._save_data_uri(s_url)
+                        if p:
+                            files.append(p)
+            # ảnh nhị phân (Chrome/Google Images thường gửi image/png|jpeg)
+            if not files and not links:
+                try:
+                    if md.hasImage():
+                        qv = md.imageData()
+                        img = qv if isinstance(qv, QImage) else QImage(qv)
+                        if img is not None and not img.isNull():
+                            p = cls._save_qimage(img)
+                            if p:
+                                files.append(p)
+                except Exception:      # noqa: BLE001
+                    pass
+            # HTML có <img src="...">
+            if not files and not links:
+                try:
+                    if md.hasHtml():
+                        import re as _re
+                        m = _re.search(r'<img[^>]+src=["\']([^"\']+)["\']',
+                                       md.html() or "", _re.I)
+                        if m:
+                            src = m.group(1).strip()
+                            if src.lower().startswith("data:image/"):
+                                p = cls._save_data_uri(src)
+                                if p:
+                                    files.append(p)
+                            elif src.lower().startswith(("http://", "https://")):
+                                links.append(src)
+                except Exception:      # noqa: BLE001
+                    pass
             if not files and not links and md.hasText():
                 txt = md.text().strip()
                 if txt.lower().startswith(("http://", "https://")):
                     links.append(txt)
+                elif txt.lower().startswith("data:image/"):
+                    p = cls._save_data_uri(txt)
+                    if p:
+                        files.append(p)
         except Exception:      # noqa: BLE001
             pass
         return files, links
+
+    @staticmethod
+    def _save_qimage(img) -> str:
+        """Lưu QImage (ảnh nhận từ dữ liệu kéo) vào media -> đường dẫn."""
+        try:
+            from datetime import datetime
+
+            from ...config import media_dir
+
+            d = media_dir()
+            d.mkdir(parents=True, exist_ok=True)
+            p = d / f"keo_{datetime.now().strftime('%Y%m%d_%H%M%S_%f')}.png"
+            if img.save(str(p), "PNG"):
+                return str(p)
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
+        return ""
+
+    @classmethod
+    def _save_data_uri(cls, uri: str) -> str:
+        """Giải mã `data:image/...;base64,...` -> lưu file, trả về đường dẫn."""
+        try:
+            import base64
+
+            head, _, payload = str(uri or "").partition(",")
+            if ";base64" not in head.lower() or not payload:
+                return ""
+            return cls._save_dropped_bytes(base64.b64decode(payload))
+        except Exception:      # noqa: BLE001
+            return ""
 
     def _spots_for(self, n: int, pos=None) -> list[list[float]]:
         """n chỗ đặt ảnh: ảnh đầu ĐÚNG chỗ thả (nếu có), còn lại là chỗ trống."""
@@ -1929,6 +2010,7 @@ class JobsPage(QWidget):
         try:
             files, links = self._drop_paths(event.mimeData())
             if not files and not links:
+                show_toast(self, "Không đọc được ảnh từ nội dung kéo", 2600, ok=False)
                 return False
             if not self.isVisible() or not self.current:
                 show_toast(self, "Chưa chọn công việc để thêm ảnh", 2400, ok=False)
