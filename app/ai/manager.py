@@ -227,24 +227,27 @@ def build_combined_short_prompt(source: dict) -> str:
     if not urls:
         u = str(source.get("url", "") or "").strip()
         urls = [u] if u else []
+    tail = (
+        "Sau đó tạo thông tin JSON SEO DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra "
+        'và BẮT BUỘC theo rule trong file "rule_seo.pdf" bao gồm '
+        "{title, description, focus_keyword, tags, category_name, brand_name, ma_san_pham}.\n"
+        f"{SEO_FIELDS_DETAIL}\n\n"
+        "=== THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===\n\n"
+        ' Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" gom lại trong block HTML cho gọn.\n'
+        " Cuối cùng: Một khối JSON thông tin SEO gom lại trong block JSON cho gọn.\n\n"
+        "Không giải thích gì thêm."
+    )
     if len(urls) > 1:
         head = ("Đọc bài viết tại các nguồn sau:\n"
                 + "\n".join(f"- {u}" for u in urls)
-                + "\nSau đó tổng hợp các nguồn trên và tạo thành 1 bài nội dung "
-                  'theo file "rule_content.pdf" đã đính kèm trong Project này')
-    else:
-        head = (f"Đọc bài viết tại link nguồn {urls[0] if urls else ''}\n"
-                'Sau đó tạo nội dung theo file "rule_content.pdf" đã đính kèm '
-                "trong Project này.")
-    return f"""{head}
-Sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Project này.
-
-=== THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
-
- Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf” viết trên 1500 từ gom lại trong block HTML cho gọn.
- Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra và theo rule trong file "rule_seo.pdf" bao gồm {{title, description, focus_keyword, tags, category_name, brand_name, ma_san_pham}} gom lại trong block JSON cho gọn.
-{SEO_FIELDS_DETAIL}
-Không giải thích gì thêm."""
+                + "\nSau đó tổng hợp các nguồn trên và tạo thành 1 bài viết "
+                  'độ dài 800 - 1000 BẮT BUỘC theo rule file "rule_content.pdf" '
+                  "đã đính kèm trong Project này.")
+        return f"{head}\n\n{tail}"
+    head = f"Đọc bài viết tại link nguồn {urls[0] if urls else ''}"
+    make = ('Sau đó tạo bài viết độ dài 800 - 1000 BẮT BUỘC theo rule file '
+            '"rule_content.pdf" đã đính kèm trong Project này.')
+    return f"{head}\n\n{make}\n{tail}"
 
 
 AUTO_FMT_ATTR = 'data-auto-format="true"'
@@ -312,15 +315,13 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
         # CHATGPT: prompt gọn (rule_content.pdf nằm trong Project)
         return (
             f"Đọc bài viết tại link nguồn sau:\n{link_line}\n\n"
-            f'Lấy "danh sách sản phẩm" từ link nguồn. Sau đó chia đều danh sách sản phẩm '
-            f"thành {n} nhóm (mỗi mã sản phẩm chỉ thuộc 1 nhóm). Hãy viết mỗi nhóm 1 nội dung "
-            f'hoàn chỉnh theo file "rule_content.pdf" đã đính kèm trong Project này.\n\n\n'
+            f"Từ link nguồn chia đều các mã sản phẩm thành {n} bài viết, ghi rõ mã sản phẩm, "
+            f'mỗi bài viết có độ dài 800 - 1000 BẮT BUỘC theo rule file "rule_content.pdf" '
+            f"đã đính kèm trong Project này.\n"
+            f"KHÔNG tạo thông tin SEO và KHÔNG trả về JSON.\n\n"
             f"=== ĐỊNH DẠNG TRẢ VỀ (BẮT BUỘC)  ===\n\n"
-            f"Mỗi nội dung ngăn cách nhau theo kiểu ví dụ: === Nội dung  1 ===, === Nội dung 2 ===\n"
-            f'Mỗi nội dung bài viết (trên 1500 từ) nằm trong 1 block và rule là  "HTML" theo “TEMPLATE” '
-            f"trong file “rule_content.pdf”.\n"
-            f"KHÔNG tạo thông tin SEO và KHÔNG trả về JSON — chỉ trả về nội dung HTML "
-            f"của từng nhóm.\n"
+            f"Mỗi BÀI VIẾT ngăn cách nhau theo kiểu ví dụ: === Bài  1 ===, === Bài 2 ===\n"
+            f'Mỗi bài viết dưới dạng "HTML" gom lại trong block HTML cho gọn.\n'
             f"Không giải thích gì thêm.\n"
         )
 
