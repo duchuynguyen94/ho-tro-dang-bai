@@ -368,7 +368,7 @@ def compose(
     return base
 
 
-def trim_borders(path: str, tol: int = 16) -> str:
+def trim_borders(path: str, tol: int = 16, out_path: str = "") -> str:
     """CẮT VIỀN quanh đối tượng (viền trong suốt hoặc màu nền ở 4 góc).
 
     Trả về đường dẫn file mới (thêm hậu tố _trim). Nếu không cắt được gì thì trả về path cũ.
@@ -401,8 +401,9 @@ def trim_borders(path: str, tol: int = 16) -> str:
     w, h = box[2] - box[0], box[3] - box[1]
     if w < 8 or h < 8 or (w >= im.width - 2 and h >= im.height - 2):
         return path
-    out = p.with_name(f"{p.stem}_trim{p.suffix}")
+    out = Path(out_path) if str(out_path or "").strip() else p.with_name(f"{p.stem}_trim{p.suffix}")
     try:
+        out.parent.mkdir(parents=True, exist_ok=True)
         im.crop(box).save(out)
     except Exception:
         return path

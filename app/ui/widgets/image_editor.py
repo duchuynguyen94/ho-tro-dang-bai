@@ -643,8 +643,13 @@ class ImageEditorPanel(QFrame):
 
                 img = _Img.open(path).convert("RGBA")
                 img = remove_background_auto(img, 42)
-                # KHÔNG tạo thư mục con: lưu file *_nobg.png NGAY CẠNH ảnh gốc
-                buf = str(Path(path).with_suffix("")) + "_nobg.png"
+                # Lưu file *_nobg.png vào THƯ MỤC TEMP của job (nếu có), tránh lẫn cạnh ảnh gốc
+                tdir = str(getattr(self, "temp_dir", "") or "")
+                if tdir:
+                    Path(tdir).mkdir(parents=True, exist_ok=True)
+                    buf = str(Path(tdir) / (Path(path).stem + "_nobg.png"))
+                else:
+                    buf = str(Path(path).with_suffix("")) + "_nobg.png"
                 img.save(buf)
                 pm2 = QPixmap(buf)
                 if not pm2.isNull():

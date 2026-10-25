@@ -1726,6 +1726,10 @@ class JobsPage(QWidget):
         # job trống: không chạy AI -> ẩn nút Random lại
         self.regen_all_btn.setVisible((getattr(task, "kind", "") or "") != "blank")
         self._edit_index = idx           # nhớ ĐÚNG ảnh đang mở -> mọi thay đổi áp cho ảnh này
+        try:
+            self.img_editor.temp_dir = str(self._paste_temp_dir())   # file phụ -> temp của job
+        except Exception:      # noqa: BLE001
+            pass
         self.img_editor.load(preview, opts_i, self._footer_mode_of(task, idx), title)
         self._request_canvas_bg(task, idx)      # dựng nền ở luồng riêng
         self._sync_seo_btn()
@@ -2167,22 +2171,35 @@ class JobsPage(QWidget):
         except Exception:      # noqa: BLE001
             pass
 
-    @staticmethod
-    def _apply_paste_ops(path: str, bg: bool, trim: bool) -> str:
-        """Xoá nền (nếu tick) TRƯỚC, rồi TRIM (nếu tick) — cho ảnh MỚI thêm."""
+    def _paste_temp_dir(self) -> Path:
+        """Thư mục TEMP riêng của job: products/<job_id>/temp (file xoá nền / trim)."""
+        from ...config import product_dir
+
+        task_id = str(getattr(self.current, "id", "") or "temp")
+        d = product_dir() / task_id / "temp"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def _apply_paste_ops(self, path: str, bg: bool, trim: bool) -> str:
+        """Xoá nền (nếu tick) TRƯỚC, rồi TRIM (nếu tick) — cho ảnh MỚI thêm.
+
+        File tạo ra được đưa vào **products/<job_id>/temp/** (không để lẫn cạnh ảnh gốc).
+        """
         from PIL import Image
 
         from ...images.composer import remove_background_auto, trim_borders
 
-        cur = str(path)
+        tmp = self._paste_temp_dir()
+        cur = Path(path)
         if bg:
             im = remove_background_auto(Image.open(cur).convert("RGBA"), 42)
-            out = Path(cur).with_name(Path(cur).stem + "_nobg.png")
+            out = tmp / f"{cur.stem}_nobg.png"
             im.save(out)
-            cur = str(out)
+            cur = out
         if trim:
-            cur = str(trim_borders(cur))
-        return cur
+            out2 = tmp / f"{cur.stem}_trim{cur.suffix or '.png'}"
+            cur = Path(trim_borders(str(cur), out_path=str(out2)))
+        return str(cur)
 
     @staticmethod
     def _ensure_readable_image(path: str) -> str:
