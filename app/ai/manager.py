@@ -240,7 +240,7 @@ Sau đó tạo thông tin SEO theo file "rule_seo.pdf" đã đính kèm trong Pr
 
 === THỨ TỰ TRẢ VỀ (BẮT BUỘC) ===
 
- Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf” gom lại trong block HTML cho gọn.
+ Đầu tiên: Toàn bộ nội dung bài viết dưới dạng "HTML" theo “TEMPLATE” trong file “rule_content.pdf” viết trên 1500 từ gom lại trong block HTML cho gọn.
  Cuối cùng: Một khối JSON thông tin SEO được tạo DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT bên trên bạn tạo ra và theo rule trong file "rule_seo.pdf" bao gồm {{title, description, focus_keyword, tags, category_name, brand_name, ma_san_pham}} gom lại trong block JSON cho gọn.
 {SEO_FIELDS_DETAIL}
 Không giải thích gì thêm."""
