@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 UA = {"User-Agent": "Mozilla/5.0 (WP Multi Poster)"}
-TIMEOUT = 90
+TIMEOUT = 240
 
 
 class AIError(RuntimeError):

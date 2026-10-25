@@ -171,7 +171,7 @@ def _click_send(page) -> bool:
     return False
 
 
-def _wait_composer(page, timeout: float = 25.0, should_stop=None):
+def _wait_composer(page, timeout: float = 45.0, should_stop=None):
     deadline = time.time() + timeout
     while time.time() < deadline:
         if should_stop and should_stop():
@@ -367,7 +367,7 @@ def _open_page(br, project_url: str, log=None, should_stop=None):
                 log("Đã bỏ phần ?query/#hash trong URL project.")
     except Exception:      # noqa: BLE001
         pass
-    page.goto(target, wait_until="domcontentloaded", timeout=60000)
+    page.goto(target, wait_until="domcontentloaded", timeout=120000)
     page.wait_for_timeout(1200)
     _dismiss_modals(page)
     if _wait_composer(page, 25) is None:
@@ -474,7 +474,7 @@ def _strip_fences(text: str) -> str:
     return t.strip()
 
 
-def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None,
+def _wait_reply_full(page, prompt: str, timeout: int = 900, should_stop=None,
                      log=None) -> str:
     """Chờ tới khi câu trả lời có đủ JSON + nội dung và ChatGPT viết xong."""
     deadline = time.time() + timeout
@@ -519,7 +519,7 @@ def _wait_reply_full(page, prompt: str, timeout: int = 420, should_stop=None,
     )
 
 
-def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = False,
+def _wait_reply(page, prompt: str, timeout: int = 600, require_json: bool = False,
                 should_stop=None, log=None) -> str:
     deadline = time.time() + timeout
     last = ""
@@ -562,7 +562,7 @@ def _wait_reply(page, prompt: str, timeout: int = 300, require_json: bool = Fals
 # --------------------------------------------------------------------------- #
 # API chính
 # --------------------------------------------------------------------------- #
-def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
+def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 600,
                           require_json: bool = False, show_browser: bool = True,
                           should_stop=None) -> str:
     """1 lượt: gửi prompt, chờ trả lời. show_browser=False -> chạy ẩn (có tự thử lại khi lỗi)."""
@@ -599,7 +599,7 @@ def generate_with_chatgpt(pcfg: dict, prompt: str, log=None, timeout: int = 300,
 
 
 def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,
-                  log=None, timeout: int = 420, should_stop=None) -> str:
+                  log=None, timeout: int = 900, should_stop=None) -> str:
     from ..wp import WPBrowser
 
     br = WPBrowser(headless=headless, site_id="chatgpt", log=log)
@@ -616,7 +616,7 @@ def _run_combined(pcfg: dict, prompt: str, project_url: str, headless: bool,
             pass
 
 
-def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
+def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 900,
                       should_stop=None) -> str:
     """1 tin nhắn: JSON SEO + nội dung. Có thể chạy ẩn (không hiện cửa sổ)."""
     project_url = (pcfg or {}).get("project_url", "") or ""
@@ -636,7 +636,7 @@ def generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
         ) from exc
 
 
-def _unused_generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 420,
+def _unused_generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 900,
                               should_stop=None) -> str:
     try:
         page = _open_page(br, project_url, log, should_stop)
@@ -652,7 +652,7 @@ def _unused_generate_combined(pcfg: dict, prompt: str, log=None, timeout: int = 
 
 
 def generate_two_step(pcfg: dict, content_prompt: str, seo_prompt: str,
-                      log=None, timeout: int = 420) -> tuple[str, str]:
+                      log=None, timeout: int = 900) -> tuple[str, str]:
     """2 bước trong CÙNG 1 cửa sổ / đoạn chat: viết nội dung → tạo SEO.
 
     Trả về (nội dung bài viết, JSON SEO).
@@ -683,7 +683,7 @@ def generate_two_step(pcfg: dict, content_prompt: str, seo_prompt: str,
 # --------------------------------------------------------------------------- #
 # Trích xuất Product Models (nút "Product Models") — dùng PROJECT + đính kèm file
 # --------------------------------------------------------------------------- #
-def _attach_files(page, files, log=None, timeout: float = 180.0) -> int:
+def _attach_files(page, files, log=None, timeout: float = 300.0) -> int:
     """Đính kèm file vào CHATBOX ChatGPT (nút "Add files and more").
 
     Trả về số file đã đính kèm. Chờ tới khi file hiện trong chatbox và không còn
@@ -732,7 +732,7 @@ def _attach_files(page, files, log=None, timeout: float = 180.0) -> int:
     return len(stems)
 
 
-def _wait_plain_reply(page, prompt: str, timeout: int = 300,
+def _wait_plain_reply(page, prompt: str, timeout: int = 600,
                       should_stop=None, log=None) -> str:
     """Chờ câu trả lời dạng VĂN BẢN THƯỜNG (không cần JSON) viết xong."""
     deadline = time.time() + timeout
@@ -765,7 +765,7 @@ def _wait_plain_reply(page, prompt: str, timeout: int = 300,
 
 
 def extract_product_models(pcfg: dict, prompt: str, files=None, log=None,
-                           timeout: int = 300, should_stop=None,
+                           timeout: int = 600, should_stop=None,
                            show_browser: bool = False) -> str:
     """Mở PROJECT ChatGPT -> đính kèm file (nếu có) -> gửi prompt -> lấy kết quả."""
     from ..wp import WPBrowser
