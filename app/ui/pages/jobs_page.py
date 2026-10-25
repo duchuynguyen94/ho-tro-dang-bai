@@ -594,6 +594,13 @@ class JobsPage(QWidget):
         self.tasks_box.addStretch(1)
         self.tasks_scroll.setWidget(holder)
         left.body.addWidget(self.tasks_scroll, 1)
+        # D2: chỉ dựng 60 dòng đầu, còn lại bấm "Xem thêm"
+        self._show_limit = 60
+        self.more_btn = QPushButton("Xem thêm…")
+        self.more_btn.setProperty("class", "ghost")
+        self.more_btn.clicked.connect(self._show_more_rows)
+        self.more_btn.setVisible(False)
+        left.body.addWidget(self.more_btn)
         split.addWidget(left)
 
         # ---------- panel kết quả ----------
@@ -858,6 +865,11 @@ class JobsPage(QWidget):
         row.clone.connect(self._clone_task)
         return row
 
+    def _show_more_rows(self) -> None:
+        """Hiện thêm 60 công việc nữa trong danh sách."""
+        self._show_limit = int(getattr(self, "_show_limit", 60) or 60) + 60
+        self.refresh()
+
     def _sync_row_order(self, want: list[str]) -> None:
         """Sắp lại thứ tự dòng — CHỈ đụng layout khi vị trí thật sự khác."""
         for i, tid in enumerate(want):
@@ -875,7 +887,15 @@ class JobsPage(QWidget):
         busy = any(t.status in (STATUS_QUEUED, STATUS_GENERATING) for t in tasks)
         self.stop_all_btn.setEnabled(busy)
         self._ordered = list(reversed(tasks))
-        want = [t.id for t in self._ordered]
+        # giữ job ĐANG MỞ trong danh sách hiển thị
+        if self.current is not None:
+            for i, t in enumerate(self._ordered):
+                if t.id == self.current.id:
+                    if i >= self._show_limit:
+                        self._show_limit = i + 1
+                    break
+        visible = self._ordered[:max(1, int(self._show_limit))]
+        want = [t.id for t in visible]
         want_set = set(want)
 
         # 1) bỏ dòng của job đã xoá
@@ -884,8 +904,8 @@ class JobsPage(QWidget):
             row.setParent(None)
             row.deleteLater()
 
-        # 2) cập nhật NỘI DUNG dòng cũ / tạo dòng mới
-        for t in self._ordered:
+        # 2) cập nhật NỘI DUNG dòng cũ / tạo dòng mới (chỉ các dòng ĐANG HIỂN THỊ)
+        for t in visible:
             row = self._rows.get(t.id)
             if row is None:
                 self._rows[t.id] = self._make_row(t)
@@ -900,6 +920,15 @@ class JobsPage(QWidget):
             if self.tasks_box.indexOf(row) < 0:
                 self.tasks_box.insertWidget(self.tasks_box.count() - 1, row)
         self._sync_row_order(want)
+
+        # nút "Xem thêm" (chỉ hiện khi còn job chưa dựng)
+        left_over = len(self._ordered) - len(want)
+        try:
+            self.more_btn.setVisible(left_over > 0)
+            if left_over > 0:
+                self.more_btn.setText(f"Xem thêm {left_over} công việc…")
+        except Exception:      # noqa: BLE001
+            pass
 
         if not self._ordered:
             self.current = None
@@ -947,6 +976,15 @@ class JobsPage(QWidget):
         task = next((t for t in self.store.tasks if t.id == task_id), None)
         if not task:
             return
+        if task_id not in self._rows:
+            # job nằm NGOÀI 60 dòng đang dựng -> mở rộng danh sách rồi mới chọn
+            try:
+                idx = next(i for i, t in enumerate(self._ordered) if t.id == task_id)
+                if idx >= int(getattr(self, "_show_limit", 60) or 60):
+                    self._show_limit = idx + 1
+                    self.refresh()
+            except StopIteration:
+                pass
         if getattr(self.current, "id", "") and self.current.id != task_id:
             self._save()                  # đổi JOB -> LƯU thông tin đang gõ của job CŨ (không mất)
             self._flush_editor()          # + chốt ảnh đang mở của job CŨ
