@@ -76,7 +76,7 @@ class PostPage(QWidget):
         b = self.card.body
 
         lrow = QHBoxLayout()
-        lbl = QLabel("Link nguồn (mỗi link 1 dòng — nhiều link = 1 bài viết)")
+        lbl = QLabel("Link nguồn (mỗi link 1 dòng)")
         lrow.addWidget(lbl)
         lrow.addStretch(1)
         self.get_links_btn = QPushButton("Lấy danh sách link sản phẩm")
