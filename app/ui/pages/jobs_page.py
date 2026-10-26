@@ -1971,8 +1971,6 @@ class JobsPage(QWidget):
                     return
                 r = cur.result = dict(cur.result or {})
                 r["image_links"] = list(state.get("links") or [])
-                r["image_nobg"] = bool(state.get("nobg"))
-                r["image_trim"] = bool(state.get("trim"))
                 self.store.upsert_task(cur)
                 self.store.save()
             except Exception:      # noqa: BLE001
@@ -1981,8 +1979,6 @@ class JobsPage(QWidget):
         dlg = SourceImageDialog([u for u in (r0.get("source_images") or []) if u], self,
                                 links=links,
                                 cache=self._img_cache.setdefault(str(task.id), {}),
-                                nobg=bool(r0.get("image_nobg")),
-                                trim=bool(r0.get("image_trim")),
                                 on_save=_save_state)
         accepted = dlg.exec() == QDialog.Accepted
         try:      # nhớ link + danh sách ảnh cho RIÊNG job này
@@ -1994,8 +1990,8 @@ class JobsPage(QWidget):
         except Exception:      # noqa: BLE001
             pass
         if accepted and dlg.chosen:
-            self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0),
-                                         nobg=bool(getattr(dlg, "chosen_nobg", False)))
+            # 2 ô tick "Trim hình / Xoá BG" BÊN NGOÀI sẽ xử lý ảnh mới thêm
+            self._add_upload_components(list(dlg.chosen), getattr(self, "_sel_index", 0))
 
     def _save_source_images(self, urls: list[str], keyword: str = "",
                             meta: list | None = None) -> None:

@@ -4,7 +4,6 @@ from __future__ import annotations
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
-    QCheckBox,
     QDialog,
     QFrame,
     QGridLayout,
@@ -70,7 +69,7 @@ class SourceImageDialog(QDialog):
 
     def __init__(self, urls: list[str] | None = None, parent=None,
                  links: list[str] | None = None, cache: dict | None = None,
-                 nobg: bool = False, trim: bool = False, on_save=None) -> None:
+                 on_save=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Tìm hình")
         self.setMinimumSize(720, 620)
@@ -106,16 +105,6 @@ class SourceImageDialog(QDialog):
         self.fetch_btn.setProperty("class", "primary")
         self.fetch_btn.clicked.connect(self._on_fetch)
         row.addWidget(self.fetch_btn)
-        self.nobg_cb = QCheckBox("Xoá nền")
-        self.nobg_cb.setToolTip("Khi chèn: xoá nền thành phần — giống hệt chuột phải → Xoá nền.")
-        self.nobg_cb.setChecked(bool(nobg))
-        self.nobg_cb.toggled.connect(self._emit_save)
-        row.addWidget(self.nobg_cb)
-        self.trim_cb = QCheckBox("Trim")
-        self.trim_cb.setToolTip("Khi chèn: tự cắt viền thừa quanh đối tượng.")
-        self.trim_cb.setChecked(bool(trim))
-        self.trim_cb.toggled.connect(self._emit_save)
-        row.addWidget(self.trim_cb)
         row.addStretch(1)
         v.addLayout(row)
 
@@ -172,11 +161,7 @@ class SourceImageDialog(QDialog):
         if self._on_save is None:
             return
         try:
-            self._on_save({
-                "links": list(self.links_list),
-                "nobg": bool(self.nobg_cb.isChecked()),
-                "trim": bool(self.trim_cb.isChecked()),
-            })
+            self._on_save({"links": list(self.links_list)})
         except Exception:      # noqa: BLE001
             pass
 
@@ -322,11 +307,9 @@ class SourceImageDialog(QDialog):
 
     # ---------------- chèn ---------------- #
     def _accept(self) -> None:
-        """Lưu ảnh đã chọn ra máy (kèm xoá nền / trim nếu tick) rồi đóng."""
+        """Lưu ảnh đã chọn ra máy rồi đóng (xoá nền / trim do 2 ô tick BÊN NGOÀI quyết định)."""
         from ...source import save_image_bytes
 
-        trim = bool(self.trim_cb.isChecked())
-        nobg = bool(self.nobg_cb.isChecked())
         self.links_list = self._links()
         paths: list[str] = []
         self.status.setText("Đang lưu ảnh…")
@@ -339,19 +322,12 @@ class SourceImageDialog(QDialog):
                 p = ""
             if not p:
                 continue
-            if trim:
-                try:
-                    from ...images.composer import trim_borders
-
-                    p = trim_borders(p)
-                except Exception:      # noqa: BLE001
-                    pass
             paths.append(p)
         if not paths:
             self.status.setText("Không lưu được ảnh đã chọn — thử ảnh khác.")
             return
         self.chosen = paths
-        self.chosen_nobg = nobg      # để canvas xoá nền y như "chuột phải -> Xoá nền"
+        self.chosen_nobg = False     # (bỏ ô tick trong popup — dùng 2 ô tick ngoài canvas)
         self.accept()
 
     def closeEvent(self, event) -> None:  # noqa: N802
