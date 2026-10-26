@@ -780,6 +780,19 @@ SECTION_ICONS = (
     ("Câu hỏi thường gặp", "🧩"),
     ("Câu hỏi đáp", "🧩"),
 )
+# Icon dự phòng cho <h2> KHÔNG khớp mục nào trong SECTION_ICONS (10 icon)
+EXTRA_H2_ICONS = ("🔹", "🔸", "✅", "⚡", "🔍", "📦", "🛠️", "📊", "🧭", "⭐")
+
+
+def _random_h2_icon(text: str) -> str:
+    """Icon 'ngẫu nhiên' nhưng ỔN ĐỊNH theo tên mục (format lại không bị đổi icon)."""
+    t = (text or "").strip()
+    if not t:
+        return ""
+    seed = sum(ord(c) for c in t) + len(t) * 7
+    return EXTRA_H2_ICONS[seed % len(EXTRA_H2_ICONS)]
+
+
 _PHONE_RE = re.compile(r"0\d{2,4}[\s.\-]?\d{3}[\s.\-]?\d{3,4}")
 _EMAIL_RE = re.compile(r"[\w.+-]+@[\w.-]+\.\w+")
 _HAS_ICON_RE = re.compile(r"^[\w\[\"'(\-]")
@@ -884,17 +897,28 @@ def apply_template_icons(html_text: str) -> str:
                 info = open_head.pop()
                 inner = "".join(info["text"]).strip()
                 # CHỈ thẻ <h2> của các mục mới có icon (h1/h3/h4/h5/h6: không icon)
-                icon = _section_icon(inner) if info["level"] == 2 else ""
+                is_h2 = (info["level"] == 2)
+                icon = _section_icon(inner) if is_h2 else ""
                 idx = info["first"]
                 if idx is not None:
                     old, rest = split_leading_icon(out[idx])
                     if icon:
                         # thay icon cũ (nếu AI viết sai) bằng icon ĐÚNG của template
                         out[idx] = f"{icon} {rest}" if rest.strip() else f"{icon} "
+                    elif is_h2:
+                        if old:
+                            pass                 # AI đã tự đặt icon -> GIỮ NGUYÊN
+                        else:
+                            # <h2> KHÔNG khớp mục chuẩn -> thêm icon ngẫu nhiên
+                            icon2 = _random_h2_icon(inner)
+                            if icon2 and out[idx].strip():
+                                out[idx] = f"{icon2} {out[idx].lstrip()}"
                     elif old:
                         out[idx] = rest          # xoá icon ở h1/h3/h4/h5/h6
-                elif icon:
-                    out.insert(info["pos"] + 1, f"{icon} ")
+                elif is_h2:
+                    icon2 = icon or _random_h2_icon(inner)
+                    if icon2:
+                        out.insert(info["pos"] + 1, f"{icon2} ")
                 out.append(part)
                 continue
             out.append(part)
