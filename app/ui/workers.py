@@ -1242,6 +1242,19 @@ class ModelsWorker(TrackedThread):
             self.failed.emit(str(exc))
 
 
+def same_site(host1: str, host2: str) -> bool:
+    """Cùng 1 website? Bỏ qua 'www.' và tên miền con (m., shop.…)."""
+    a = str(host1 or "").strip().lower().lstrip(".")
+    b = str(host2 or "").strip().lower().lstrip(".")
+    if a.startswith("www."):
+        a = a[4:]
+    if b.startswith("www."):
+        b = b[4:]
+    if not a or not b:
+        return False
+    return a == b or a.endswith("." + b) or b.endswith("." + a)
+
+
 class SourceLinksWorker(TrackedThread):
     """Nhờ ChatGPT (Project) mở 1 trang và trả về DANH SÁCH LINK SẢN PHẨM."""
 
@@ -1283,8 +1296,8 @@ class SourceLinksWorker(TrackedThread):
                 if not u:
                     continue
                 try:
-                    if _urlparse(u).netloc.lower() != host:
-                        continue          # chỉ nhận link CÙNG TÊN MIỀN
+                    if not same_site(_urlparse(u).netloc, host):
+                        continue          # chỉ nhận link CÙNG website (bỏ www. / tên miền con)
                 except Exception:      # noqa: BLE001
                     continue
                 if u in seen:
@@ -1295,7 +1308,8 @@ class SourceLinksWorker(TrackedThread):
                     break
             if not out:
                 raise RuntimeError(
-                    "ChatGPT không trả về link sản phẩm nào cùng tên miền. "
+                    "ChatGPT không trả về link sản phẩm nào cùng website "
+                    "(đã chấp nhận cả www. / tên miền con). "
                     "Thử link trang danh mục con, hoặc bật 'Hiện cửa sổ Chrome' để kiểm tra."
                 )
             self.ok.emit(out)
