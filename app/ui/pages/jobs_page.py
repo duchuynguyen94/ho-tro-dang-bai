@@ -883,7 +883,7 @@ class JobsPage(QWidget):
         self.count_badge.setText(str(len(tasks)))
         busy = any(t.status in (STATUS_QUEUED, STATUS_GENERATING) for t in tasks)
         self.stop_all_btn.setEnabled(busy)
-        self._ordered = list(reversed(tasks))
+        self._ordered = list(tasks)          # CŨ ở TRÊN, MỚI ở DƯỚI
         # giữ job ĐANG MỞ trong danh sách hiển thị
         if self.current is not None:
             for i, t in enumerate(self._ordered):
@@ -988,6 +988,12 @@ class JobsPage(QWidget):
         self.current = task
         for tid, row in self._rows.items():
             row.set_selected(tid == task_id)
+        try:      # job mới nằm DƯỚI -> cuộn tới để thấy ngay
+            row = self._rows.get(task_id)
+            if row is not None:
+                self.tasks_scroll.ensureWidgetVisible(row, 0, 40)
+        except Exception:      # noqa: BLE001
+            pass
         self.result_card.set_title("")      # đã bỏ tên website ở tiêu đề panel phải
         active = self.store.ai_content.get("active", "")
         self.provider_badge.setText(f"Provider: {active}" if active else "")
