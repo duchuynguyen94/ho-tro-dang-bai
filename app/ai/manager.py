@@ -61,7 +61,7 @@ CONTENT_OUTPUT_SPEC = (
     "📌 Giới thiệu tổng quan; "
     "⚙️ Tính năng kỹ thuật nổi bật; 📋 Thông số kỹ thuật tiêu chuẩn; 🧱 Vật liệu & xử lý – Độ bền vượt trội; "
     "🔄 Tương thích – Thay thế – Mở rộng; 🎯 Ứng dụng thực tế; 💡 Tại sao nên mua tại Ngọc Huy Dương?; "
-    "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; 🧩 Phiên bản & Mã sản phẩm; 🧩 FAQ (5 câu).\n"
+    "📞 Liên hệ – Đặt hàng / Tư vấn kỹ thuật; 🧩 Phiên bản & Mã sản phẩm; ❓ FAQ (5 câu).\n"
     "ICON Ở DÒNG LIÊN HỆ: 🌐 trước website; ☎️ trước số điện thoại và ✉️ trước email trong dòng liên hệ lặp lại; "
     "📞 trước hotline ở các dòng “Liên hệ ngay:”, “Hotline:”, “Hỗ trợ chọn cấu hình…”, “Gọi tư vấn theo ngành:”; "
     "📧 trước “Gửi yêu cầu tư vấn kỹ thuật”, ✉️ trước email trong dòng “Liên hệ ngay”, "
@@ -774,11 +774,11 @@ SECTION_ICONS = (
     ("Liên hệ và Tư vấn", "📞"),
     ("Phiên bản & Mã sản phẩm", "🧩"),
     ("Phiên bản và Mã sản phẩm", "🧩"),
-    ("FAQ", "🧩"),
-    ("Hỏi đáp", "🧩"),
-    ("Hỏi & Đáp", "🧩"),
-    ("Câu hỏi thường gặp", "🧩"),
-    ("Câu hỏi đáp", "🧩"),
+    ("FAQ", "❓"),
+    ("Hỏi đáp", "❓"),
+    ("Hỏi & Đáp", "❓"),
+    ("Câu hỏi thường gặp", "❓"),
+    ("Câu hỏi đáp", "❓"),
 )
 # Icon dự phòng cho <h2> KHÔNG khớp mục nào trong SECTION_ICONS (10 icon)
 EXTRA_H2_ICONS = ("🔹", "🔸", "✅", "⚡", "🔍", "📦", "🛠️", "📊", "🧭", "⭐")
