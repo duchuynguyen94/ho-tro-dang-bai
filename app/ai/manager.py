@@ -928,7 +928,10 @@ def apply_template_icons(html_text: str) -> str:
                 open_head[-1]["first"] = len(out)
             open_head[-1]["text"].append(part)
         out.append(_decorate_line(part))
-    return "".join(out)
+    res = "".join(out)
+    # sửa lỗi thiếu khoảng trắng ngay trước link: "...thích<a href" -> "...thích <a href"
+    res = re.sub(r"([^\s>])<a\s", r"\1 <a ", res)
+    return res
 
 
 def _section_re(name: str) -> re.Pattern:
@@ -980,9 +983,17 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
     heading_seen = 0        # đếm h1 + h2 (tiêu đề đầu tiên = h1 hoặc h2)
     # tiêu đề nào ĐÃ CÓ <a> bên trong -> bỏ qua toàn bộ (bấm lại không chèn thêm)
     skip_ranges: list[tuple[int, int]] = []
+    existing_hrefs: set[str] = set()
     for _m in re.finditer(r"<h([1-6])\b[^>]*>(.*?)</h\1>", html_text, flags=re.I | re.S):
-        if "<a" in str(_m.group(2) or "").lower():
+        inner_h = str(_m.group(2) or "")
+        if "<a" in inner_h.lower():
             skip_ranges.append((_m.start(), _m.end()))
+            for _href in re.findall(r'<a\b[^>]*href=["\']([^"\']+)["\']', inner_h, re.I):
+                existing_hrefs.add(_href.strip().rstrip("/"))
+    if existing_hrefs:
+        # link NÀO đã nằm trong tiêu đề rồi -> KHÔNG chèn lại (tránh đăng bài chèn thêm lần nữa)
+        pending = [l for l in pending
+                   if str(l).strip().rstrip("/") not in existing_hrefs]
 
     depth = 0
     in_a = 0                # đang ở TRONG thẻ <a> -> KHÔNG chèn thêm (tránh lồng link)
@@ -992,7 +1003,11 @@ def insert_title_links(html_text: str, site_url: str, links: list[str],
     while i < len(parts):
         part = parts[i]
         if any(_a <= pos < _b for _a, _b in skip_ranges):
-            out.append(part)          # tiêu đề đã có link -> giữ nguyên
+            # tiêu đề đã có link -> giữ nguyên, nhưng VẪN ĐẾM để số thứ tự không lệch
+            m = head_re.match(part)
+            if m and m.group(1) in ("1", "2"):
+                heading_seen += 1
+            out.append(part)
             pos += len(part)
             i += 1
             continue
