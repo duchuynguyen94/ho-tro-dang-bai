@@ -1106,7 +1106,7 @@ class JobsPage(QWidget):
 
         if task.status == STATUS_GENERATING:
             if keep:
-                self._keep_panel(task, "Đang tạo lại nội dung…")
+                self._keep_panel(task, "")      # KHÔNG hiện message "đang tạo lại nội dung"
                 return
             self.footer.hide()
             self.loading_label.setText("Đang tạo nội dung…")
