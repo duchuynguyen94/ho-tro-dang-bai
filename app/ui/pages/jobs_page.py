@@ -700,8 +700,7 @@ class JobsPage(QWidget):
             pass
         self.content_edit.changed.connect(self._sync_seo_btn)
         self.content_edit.changed.connect(self._queue_save)
-        ev2.addLayout(self._field("Nội dung", self.content_edit,
-                                  extra=("Auto format", self._auto_format)))
+        ev2.addLayout(self._field("Nội dung", self.content_edit))
 
         self.add_img_btn = QPushButton("+ Thêm hình")
         self.add_img_btn.setProperty("class", "ghost")
@@ -1902,15 +1901,11 @@ class JobsPage(QWidget):
         return super().eventFilter(obj, event)
 
     def _auto_format(self) -> None:
-        """Auto format nội dung: dọn rác + ICON theo logic + LINK tên miền + LINK tiêu đề mục."""
+        """Dọn rác + chèn ICON cho nội dung (KHÔNG chèn link — link chỉ chèn khi Đăng bài)."""
         if not self.current:
             return
         try:
-            from ...ai.manager import (already_auto_formatted, apply_template_icons,
-                                       clean_content_html, extract_product_name,
-                                       insert_readmore, insert_title_links,
-                                       linkify_domains, mark_auto_formatted,
-                                       readmore_from_store, set_first_title_link)
+            from ...ai.manager import apply_template_icons, clean_content_html
         except Exception:      # noqa: BLE001
             traceback.print_exc()
             return
@@ -1919,35 +1914,11 @@ class JobsPage(QWidget):
             if not html.strip():
                 show_toast(self, "Ô Nội dung đang trống", 2600, ok=False)
                 return
-            site = self.store.get_site(getattr(self.current, "site_id", ""))
-            site_url = str(getattr(site, "url", "") or "") if site else ""
-            if already_auto_formatted(html):
-                # Đã format rồi -> CHỈ kiểm tra + sửa link tiêu đề đầu cho đúng website sẽ đăng
-                fixed = set_first_title_link(html, site_url)
-                fixed = insert_readmore(fixed, readmore_from_store(self.store))
-                if fixed != html:
-                    self.content_edit.set_html(fixed)
-                    self._save()
-                    show_toast(self, "Đã cập nhật link tiêu đề đầu theo website sẽ đăng", 3000)
-                else:
-                    show_toast(self, "Nội dung đã auto format rồi — không chèn lại", 2800)
-                return
-            r = self.current.result or {}
-            out = clean_content_html(html)                    # 1) dọn rác HTML
-            out = apply_template_icons(out)                   # 2) icon đầu mục + dòng liên hệ
-            all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
-            out = linkify_domains(out, all_sites)             # 3) www.<domain> -> link thật
-            out = insert_title_links(                          # 4) link vào tiêu đề mục
-                out, site_url, list(self.store.title_links),
-                [extract_product_name(out, ""), str(r.get("focus_keyword") or ""),
-                 str(r.get("title") or ""), ""],
-            )
-            out = set_first_title_link(out, site_url)         # 5) tiêu đề đầu -> website sẽ đăng
-            out = insert_readmore(out, readmore_from_store(self.store))   # 5b) khối "Đọc thêm"
-            out = mark_auto_formatted(out)                    # 6) gắn dấu đã auto format
+            out = clean_content_html(html)      # 1) dọn rác HTML
+            out = apply_template_icons(out)     # 2) icon đầu mục + dòng liên hệ
             self.content_edit.set_html(out)
             self._save()
-            show_toast(self, "Đã auto format nội dung (icon + link)", 2600)
+            show_toast(self, "Đã format icon (link sẽ chèn khi bấm Đăng bài)", 2800)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()
             show_toast(self, f"Auto format lỗi: {exc}", 3600, ok=False)
