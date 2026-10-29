@@ -99,9 +99,7 @@ USPS = (
     "Nơi bán",
     "Tại sao chọn",
     "Hàng mới 100%",
-    "Miễn phí vận chuyển",
     "Kỹ sư tư vấn",
-    "Đổi trả 1-1",
 )
 
 # --------------------------------------------------------------------------- #
@@ -271,6 +269,14 @@ def detect_codes(text: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Trình duyệt + đăng nhập
 # --------------------------------------------------------------------------- #
+def _accept_dialog(d) -> None:
+    """Tự đồng ý confirm/prompt (bỏ qua lỗi 'No dialog is showing')."""
+    try:
+        d.accept()
+    except Exception:
+        pass
+
+
 H1_RE = re.compile(r"<h1\b[^>]*>.*?</h1>", re.I | re.S)
 SITE_LINK = "http://www.ngochuyduong.com/"
 
@@ -374,7 +380,7 @@ class Browser:
             self.page = ctx.pages[0] if ctx.pages else ctx.new_page()
             log("Đang dùng Chrome đã mở sẵn (không mở thêm cửa sổ).")
             try:
-                self.page.on("dialog", lambda d: d.accept())
+                self.page.on("dialog", _accept_dialog)
             except Exception:
                 pass
             try:
@@ -426,7 +432,7 @@ class Browser:
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         try:
             # Tự đồng ý hộp thoại (confirm "rời trang?" …) để không chặn việc lưu
-            self.page.on("dialog", lambda d: d.accept())
+            self.page.on("dialog", _accept_dialog)
         except Exception:
             pass
         try:
@@ -572,6 +578,15 @@ class Browser:
                 return True
             except Exception as exc:      # noqa: BLE001
                 log(f"  ⚠ Mở trang chậm/lỗi (lần {attempt}): {str(exc).splitlines()[0][:140]}")
+                # dọn hộp thoại "rời trang?" (nguyên nhân gây ERR_ABORTED)
+                try:
+                    page.keyboard.press("Escape")
+                except Exception:
+                    pass
+                try:
+                    page.evaluate("window.onbeforeunload = null")
+                except Exception:
+                    pass
                 try:
                     page.evaluate("u => { window.location.href = u; }", url)
                 except Exception:
@@ -698,11 +713,26 @@ class Browser:
         if m_h1:
             h1_html = m_h1.group(0)
         h1_text = html_to_text(h1_html, limit=400).strip()
+        focus_kw = ""
+        try:
+            focus_kw = page.evaluate(
+                """() => {
+                    const box = document.querySelector('.rank-math-focus-keyword');
+                    if (!box) return '';
+                    const tags = [...box.querySelectorAll('.tagify__tag-text')].map(e => e.textContent.trim());
+                    if (tags.length) return tags.join(', ');
+                    const inp = box.querySelector('.tagify__input');
+                    return inp ? (inp.textContent || '').trim() : '';
+                }"""
+            ) or ""
+        except Exception:
+            focus_kw = ""
         text = html_to_text(content_html)
         return {
             "id": pid,
             "h1_text": h1_text,
             "h1_has_link": bool(h1_html) and SITE_LINK in h1_html,
+            "focus_keyword": focus_kw,
             "edit_url": edit_url,
             "public_url": f"{self.base}/product/{slug}/" if slug else "",
             "title_old": title.strip(),
@@ -841,6 +871,55 @@ class Browser:
             return True
         return False
 
+    def _set_focus_keyword(self, keyword: str) -> bool:
+        """Xoá Focus Keyword cũ (Rank Math) và thêm keyword mới."""
+        if not keyword:
+            return True
+        page = self.open()
+        try:
+            box = page.locator("#rank_math_metabox")
+            if box.count():
+                try:
+                    inside = box.first.locator(".inside")
+                    if inside.count() and not inside.first.is_visible():
+                        h = box.first.locator(".hndle, h2")
+                        if h.count():
+                            h.first.click()
+                            page.wait_for_timeout(400)
+                except Exception:
+                    pass
+            inp = page.locator(".rank-math-focus-keyword .tagify__input")
+            if not inp.count():
+                log("  ⚠ Không thấy ô Focus Keyword (Rank Math) — bỏ qua")
+                return None
+            inp.first.click()
+            page.wait_for_timeout(150)
+            # xoá tag cũ
+            for _ in range(6):
+                rm = page.locator(".rank-math-focus-keyword .tagify__tag__removeBtn")
+                if not rm.count():
+                    break
+                rm.first.click()
+                page.wait_for_timeout(120)
+            if page.locator(".rank-math-focus-keyword .tagify__tag__removeBtn").count():
+                inp.first.click()
+                page.keyboard.press("Meta+A" if sys.platform == "darwin" else "Control+A")
+                page.keyboard.press("Backspace")
+            page.keyboard.type(keyword)
+            page.keyboard.press("Enter")
+            page.wait_for_timeout(400)
+            now = page.evaluate(
+                """() => {
+                    const box = document.querySelector('.rank-math-focus-keyword');
+                    if (!box) return '';
+                    return [...box.querySelectorAll('.tagify__tag-text')].map(e => e.textContent.trim()).join(', ');
+                }"""
+            )
+            return keyword.lower() in (now or "").lower()
+        except Exception as exc:      # noqa: BLE001
+            log(f"  ⚠ Lỗi đặt Focus Keyword: {str(exc).splitlines()[0][:140]}")
+            return False
+
     def _fill_title(self, title_new: str) -> bool:
         page = self.open()
         if page.locator("#title").count():
@@ -853,7 +932,7 @@ class Browser:
             return True
         return False
 
-    def update_post(self, pid: int, title_new: str, slug_new: str) -> dict:
+    def update_post(self, pid: int, title_new: str, slug_new: str, keyword: str = "") -> dict:
         page = self.open()
         edit_url = self._edit_url(pid)
         if not self._goto(edit_url):
@@ -880,6 +959,11 @@ class Browser:
                 log("  ⚠ Không ghi được nội dung để thay <h1>")
         except Exception as exc:      # noqa: BLE001
             log(f"  ⚠ Lỗi thay <h1>: {str(exc).splitlines()[0][:140]}")
+
+        kw_state = ""
+        if keyword:
+            kw_ok = self._set_focus_keyword(keyword)
+            kw_state = "skip" if kw_ok is None else ("ok" if kw_ok else "fail")
 
         # Slug PHẢI đổi được trước khi lưu; lỗi slug -> DỪNG (không lưu nửa vời)
         if not self.set_slug(pid, slug_new):
@@ -951,6 +1035,12 @@ class Browser:
             "h1_ok": after.get("h1_text", "").strip() == title_new.strip()
             and bool(after.get("h1_has_link")),
             "h1_state": h1_state,
+            "kw_ok": (
+                True if (not keyword or kw_state == "skip")
+                else keyword.lower() in (after.get("focus_keyword", "") or "").lower()
+            ),
+            "kw_state": kw_state,
+            "kw_now": after.get("focus_keyword", ""),
             "h1_now": after.get("h1_text", ""),
             "title_now": after.get("title_old", ""),
             "slug_now": after.get("slug_old", ""),
@@ -1100,19 +1190,69 @@ def cmd_list(args) -> int:
     return 0
 
 
-def _next_pending(st: dict, only_id: int | None = None) -> int | None:
+def _next_pending(st: dict, only_id: int | None = None,
+                  exclude: set[int] | None = None) -> int | None:
     done = {"applied", "skipped"}
+    skip = exclude or set()
     if only_id is not None:
         return only_id
     for pid in st.get("queue", []):
         item = st["items"].get(str(pid)) or {}
-        if item.get("status") in done:
+        if item.get("status") in done or int(pid) in skip:
             continue
         return int(pid)
     for pid, item in st["items"].items():
-        if item.get("status") not in done:
-            return int(pid)
+        if item.get("status") in done or int(pid) in skip:
+            continue
+        return int(pid)
     return None
+
+
+def _store_article(br, st: dict, pid: int) -> dict:
+    """Đọc 1 bài và lưu current.json + current_<id>.json; trả về dữ liệu."""
+    log(f"Đang đọc bài #{pid}…")
+    data = br.read_product(pid)
+    item = st["items"].setdefault(str(pid), {})
+    item.update(
+        {
+            "title_old": data["title_old"],
+            "slug_old": data["slug_old"],
+            "status": "fetched",
+            "fetched_at": data["fetched_at"],
+        }
+    )
+    # Focus keyword theo rule_seo.pdf: ưu tiên MODEL (mã sản phẩm) dò trong content
+    kw = ""
+    for c in data.get("codes") or []:
+        if c.get("from_keyword") and c.get("hits", 0) >= 2:
+            kw = c["code"]
+            break
+    if not kw and data.get("codes"):
+        kw = data["codes"][0]["code"]
+    if kw:
+        item["keyword"] = kw
+    save_state(st)
+    _write_json(CURRENT_FILE, data)
+    _write_json(OUT_DIR / f"current_{pid}.json", data)
+    return data
+
+
+def _print_article(data: dict) -> None:
+    log("")
+    log("=" * 78)
+    log(f"#{data['id']}  {data['title_old']}  ({len(data['title_old'])} ký tự)")
+    log(f"Slug cũ : {data['slug_old']}")
+    log(f"Danh mục/Thương hiệu: {', '.join(data['taxonomies']) or '—'}")
+    log(f"SKU     : {data['sku'] or '—'}")
+    log("Mã SP dò được trong content:")
+    if data["codes"]:
+        for c in data["codes"][:4]:
+            star = "★" if c["from_keyword"] else " "
+            log(f"  {star} {c['code']}  (xuất hiện {c['hits']} lần)")
+    else:
+        log("  (không thấy — cần đọc content để chọn mã)")
+    log(f"Content: {len(data['content_text'])} ký tự (xem tools/out/current_{data['id']}.json)")
+    log("=" * 78)
 
 
 def cmd_next(args) -> int:
@@ -1134,46 +1274,26 @@ def cmd_next(args) -> int:
             save_state(st)
             log(f"Danh sách: {len(products)} sản phẩm publish.")
 
-        pid = _next_pending(st, args.id)
-        if pid is None:
-            log("Đã xử lý HẾT sản phẩm trong danh sách.")
-            log("Muốn làm lại từ đầu: xoá tools/out/state.json rồi chạy `list`.")
-            return 0
-        log(f"Đang đọc bài #{pid}…")
-        data = br.read_product(pid)
+        count = max(1, int(getattr(args, "count", 1) or 1))
+        done = 0
+        read_ids: set[int] = set()
+        for _ in range(count):
+            pid = _next_pending(st, args.id if done == 0 else None, exclude=read_ids)
+            if pid is None:
+                log("Đã xử lý HẾT sản phẩm trong danh sách.")
+                break
+            data = _store_article(br, st, pid)
+            _print_article(data)
+            read_ids.add(pid)
+            done += 1
     finally:
         br.close()
 
-    item = st["items"].setdefault(str(pid), {})
-    item.update(
-        {
-            "title_old": data["title_old"],
-            "slug_old": data["slug_old"],
-            "status": "fetched",
-            "fetched_at": data["fetched_at"],
-        }
-    )
-    save_state(st)
-    _write_json(CURRENT_FILE, data)
-
+    if not done:
+        log("Không còn bài nào cần đọc.")
+        return 0
     log("")
-    log("=" * 78)
-    log(f"#{pid}  {data['title_old']}  ({len(data['title_old'])} ký tự)")
-    log(f"Slug cũ : {data['slug_old']}")
-    log(f"Danh mục/Thương hiệu: {', '.join(data['taxonomies']) or '—'}")
-    log(f"SKU     : {data['sku'] or '—'}")
-    log("Mã SP dò được trong content:")
-    if data["codes"]:
-        for c in data["codes"][:6]:
-            star = "★" if c["from_keyword"] else " "
-            log(f"  {star} {c['code']}  (xuất hiện {c['hits']} lần)")
-    else:
-        log("  (không thấy — cần đọc content để chọn mã)")
-    log(f"Content: {len(data['content_text'])} ký tự (xem đầy đủ trong tools/out/current.json)")
-    log("=" * 78)
-    log("")
-    log("Bước tiếp: ghi tools/out/proposal.json rồi chạy `review`.")
-    log('  {"id": %d, "title_new": "...", "usp": "...", "note": "..."}' % pid)
+    log("Bước tiếp: chọn tiêu đề rồi chạy `apply` (áp dụng mọi bài đã duyệt).")
     return 0
 
 
@@ -1440,6 +1560,7 @@ def cmd_apply(args) -> int:
                 "id": int(pid),
                 "title_new": item.get("title_new", ""),
                 "slug_new": item.get("slug_new", ""),
+                "keyword": item.get("keyword", ""),
                 "retry": status == "error",
             }
         )
@@ -1475,24 +1596,24 @@ def cmd_apply(args) -> int:
                 log("  (chạy thử — không ghi)")
                 continue
             try:
-                res = br.update_post(pid, r["title_new"], r["slug_new"])
+                res = br.update_post(pid, r["title_new"], r["slug_new"], r.get("keyword", ""))
             except Exception as exc:      # noqa: BLE001
                 res = {"ok": False, "error": f"Lỗi khi ghi: {str(exc).splitlines()[0][:160]}"}
             item = st["items"][str(pid)]
-            if res.get("ok") and res.get("slug_ok", True) and res.get("h1_ok", True):
+            if res.get("ok") and res.get("slug_ok", True) and res.get("h1_ok", True) and res.get("kw_ok", True):
                 item["status"] = "applied"
                 item["applied_at"] = datetime.now().isoformat(timespec="seconds")
                 item["title_now"] = res.get("title_now", "")
                 item["slug_now"] = res.get("slug_now", "")
                 save_state(st)
                 ok_count += 1
-                log(f"  ✔ Đã cập nhật: title + slug + <h1> đều khớp ({res.get('h1_state') or 'h1'}).")
+                log(f"  ✔ Đã cập nhật: title + slug + <h1> + keyword khớp ({res.get('h1_state') or 'h1'}).")
             else:
                 item["status"] = "error"
                 item["error"] = str(res.get("error") or "Không khớp sau khi lưu")
                 save_state(st)
                 log(f"  ✘ Lỗi: {item['error']}")
-                log(f"    hiện tại: title={res.get('title_now')!r} slug={res.get('slug_now')!r} h1={res.get('h1_now')!r}")
+                log(f"    hiện tại: title={res.get('title_now')!r} slug={res.get('slug_now')!r} h1={res.get('h1_now')!r} kw={res.get('kw_now')!r}")
     finally:
         if br:
             br.close()
@@ -1580,6 +1701,7 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("next", help="Đọc bài kế tiếp (title/slug cũ + content + mã SP)", parents=[common])
     p.add_argument("--id", type=int, default=None)
+    p.add_argument("--count", type=int, default=1, help="Đọc N bài một lượt (mặc định 1)")
     p.set_defaults(func=cmd_next)
 
     p = sub.add_parser("review", help="Mở trang HTML duyệt title + slug", parents=[common])
