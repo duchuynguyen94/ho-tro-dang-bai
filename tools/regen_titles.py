@@ -279,6 +279,8 @@ def _accept_dialog(d) -> None:
 
 H1_RE = re.compile(r"<h1\b[^>]*>.*?</h1>", re.I | re.S)
 SITE_LINK = "http://www.ngochuyduong.com/"
+BRAND_LINK = "https://samoapumps.com/"      # link chèn vào 1 mã sản phẩm trong content
+A_RE = re.compile(r"<a\b[^>]*>.*?</a>", re.I | re.S)
 
 
 def with_linked_h1(content_html: str, title: str) -> tuple[str, str]:
@@ -293,6 +295,41 @@ def with_linked_h1(content_html: str, title: str) -> tuple[str, str]:
     if m:
         return src[: m.start()] + new_h1 + src[m.end():], "replaced"
     return new_h1 + "\n" + src, "inserted"
+
+
+def with_brand_link(content_html: str, model: str) -> tuple[str, str]:
+    """Bọc LINK CHÍNH vào lần xuất hiện ĐẦU TIÊN của mã sản phẩm trong content.
+
+    Trả về (html_mới, "linked" | "already" | "no-model" | "not-found").
+    Không chèn vào trong <a> có sẵn hay vào trong thẻ HTML.
+    """
+    src = content_html or ""
+    code = (model or "").strip()
+    if not code:
+        return src, "no-model"
+
+    # vùng đã là link -> bỏ qua
+    skip: list[tuple[int, int]] = [(m.start(), m.end()) for m in A_RE.finditer(src)]
+    low = src.lower()
+    needle = code.lower()
+    start = 0
+    while True:
+        idx = low.find(needle, start)
+        if idx < 0:
+            return src, "not-found"
+        end = idx + len(needle)
+        inside_link = any(a <= idx < b for a, b in skip)
+        inside_tag = False
+        # nằm trong thẻ HTML? (giữa '<' và '>')
+        lt = src.rfind("<", 0, idx)
+        gt = src.rfind(">", 0, idx)
+        if lt > gt:
+            inside_tag = True
+        if not inside_link and not inside_tag:
+            if any(a <= idx < b for a, b in skip):
+                return src, "already"
+            return src[:idx] + f'<a href="{BRAND_LINK}">{src[idx:end]}</a>' + src[end:], "linked"
+        start = end
 
 
 def cdp_alive(timeout: float = 1.5) -> bool:
@@ -522,19 +559,25 @@ class Browser:
     def _manual_login(self) -> None:
         page = self.open()
         self._goto(self.base + "/wp-login.php")
-        self._settle(8000)
+        self._settle(4000)
         self._wait_login_done()
         try:
             self._goto(self.base + LIST_PATH)
-            self._settle(8000)
+            self._settle(4000)
         except Exception:
             pass
 
     def login(self) -> None:
         page = self.open()
+        # nhanh: Chrome đang giữ phiên ở trang quản trị -> khỏi mở lại
+        try:
+            if "/wp-admin/" in (page.url or "") and page.locator("#wpadminbar").count():
+                return
+        except Exception:
+            pass
         target = self.base + LIST_PATH
         self._goto(target)
-        self._settle(8000)
+        self._settle(4000)
         if "/wp-login.php" not in page.url:
             log("Đã đăng nhập (session còn hiệu lực).")
             return
@@ -570,7 +613,7 @@ class Browser:
         log("Đăng nhập thành công.")
 
     # -- mở trang (có thử lại khi mạng chậm) -- #
-    def _goto(self, url: str, timeout: int = 90000) -> bool:
+    def _goto(self, url: str, timeout: int = 60000) -> bool:
         page = self.open()
         for attempt in (1, 2):
             try:
@@ -595,8 +638,8 @@ class Browser:
         return False
 
     # -- chờ trang thật sự sẵn sàng -- #
-    def _settle(self, timeout: int = 10000) -> None:
-        """Chờ trang tải XONG (load) + mạng ổn định rồi mới thao tác."""
+    def _settle(self, timeout: int = 4000) -> None:
+        """Chờ trang tải xong (load) rồi nghỉ ngắn — KHÔNG chờ networkidle (chậm)."""
         page = self.page
         if not page:
             return
@@ -605,7 +648,7 @@ class Browser:
         except Exception:
             pass
         try:
-            page.wait_for_load_state("networkidle", timeout=min(timeout, 6000))
+            page.wait_for_timeout(250)
         except Exception:
             pass
 
@@ -628,7 +671,7 @@ class Browser:
             if not self._goto(url):
                 break
             page.wait_for_selector("#the-list, .wp-list-table", timeout=60000)
-            self._settle(8000)
+            self._settle(4000)
             rows = page.eval_on_selector_all(
                 "#the-list tr, .wp-list-table tbody tr",
                 """rows => rows.map(tr => {
@@ -652,16 +695,19 @@ class Browser:
             url = nxt[0]
         return products
 
-    def read_product(self, pid: int) -> dict:
+    def read_product(self, pid: int, model_code: str = "", reload: bool = True) -> dict:
         page = self.open()
         edit_url = f"{self.base}/wp-admin/post.php?post={pid}&action=edit"
-        if not self._goto(edit_url):
-            raise SystemExit(f"Không mở được trang sửa #{pid} (mạng chậm?) — thử lại sau.")
-        try:
-            page.wait_for_selector("#title, .editor-post-title__input, [aria-label*='tiêu đề' i]", timeout=60000)
-        except Exception:
-            pass
-        self._settle(8000)
+        if reload:
+            if not self._goto(edit_url):
+                raise SystemExit(f"Không mở được trang sửa #{pid} (mạng chậm?) — thử lại sau.")
+            try:
+                page.wait_for_selector(
+                    "#title, .editor-post-title__input, [aria-label*='tiêu đề' i]", timeout=60000
+                )
+            except Exception:
+                pass
+            self._settle(6000)
 
         title = ""
         try:
@@ -714,12 +760,23 @@ class Browser:
             h1_html = m_h1.group(0)
         h1_text = html_to_text(h1_html, limit=400).strip()
         focus_kw = self._read_focus_keyword()
+        brand_links = len(re.findall(r'href=["\']' + re.escape(BRAND_LINK) + r'["\']', content_html or "", re.I))
+        model_linked = False
+        if model_code:
+            pat = re.compile(
+                r'<a\b[^>]*href=["\']' + re.escape(BRAND_LINK) + r'["\'][^>]*>\s*'
+                + re.escape(model_code) + r'\s*</a>',
+                re.I,
+            )
+            model_linked = bool(pat.search(content_html or ""))
         text = html_to_text(content_html)
         return {
             "id": pid,
             "h1_text": h1_text,
             "h1_has_link": bool(h1_html) and SITE_LINK in h1_html,
             "focus_keyword": focus_kw,
+            "brand_links": brand_links,
+            "model_linked": model_linked,
             "edit_url": edit_url,
             "public_url": f"{self.base}/product/{slug}/" if slug else "",
             "title_old": title.strip(),
@@ -834,7 +891,7 @@ class Browser:
                 try:
                     self._goto(edit_url)
                     page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
-                    self._settle(8000)
+                    self._settle(4000)
                 except Exception:
                     pass
         return self._current_slug() == slug
@@ -858,7 +915,7 @@ class Browser:
             return True
         return False
 
-    def _read_focus_keyword(self, timeout: float = 6.0) -> str:
+    def _read_focus_keyword(self, timeout: float = 3.5) -> str:
         page = self.page
         if not page:
             return ""
@@ -930,10 +987,10 @@ class Browser:
                         break
                     rm.first.click(force=True)
                     page.wait_for_timeout(150)
-                page.keyboard.type(keyword, delay=40)
+                page.keyboard.type(keyword, delay=60)
                 page.wait_for_timeout(300)
                 page.keyboard.press("Enter")
-                page.wait_for_timeout(900)
+                page.wait_for_timeout(1400)
                 tags = self._focus_tags()
                 if any(keyword.lower() == t.lower() for t in tags):
                     return True
@@ -967,7 +1024,7 @@ class Browser:
             page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
         except Exception:
             pass
-        self._settle(8000)
+        self._settle(4000)
         if not self._fill_title(title_new):
             return {"ok": False, "error": "Không thấy ô tiêu đề (#title)"}
 
@@ -981,6 +1038,9 @@ class Browser:
                     "el => el ? el.innerHTML : ''",
                 )
             new_html, h1_state = with_linked_h1(content_html, title_new)
+            link_state = ""
+            if keyword:
+                new_html, link_state = with_brand_link(new_html, keyword)
             if not self._fill_content(new_html):
                 log("  ⚠ Không ghi được nội dung để thay <h1>")
         except Exception as exc:      # noqa: BLE001
@@ -1052,9 +1112,9 @@ class Browser:
             )
         except Exception:
             pass
-        page.wait_for_timeout(2000)
+        page.wait_for_timeout(1500)
 
-        after = self.read_product(pid)
+        after = self.read_product(pid, model_code=keyword, reload=False)
         return {
             "ok": after.get("title_old", "").strip() == title_new.strip(),
             "slug_ok": after.get("slug_old", "") == slug_new,
@@ -1066,6 +1126,8 @@ class Browser:
                 else keyword.lower() in (after.get("focus_keyword", "") or "").lower()
             ),
             "kw_state": kw_state,
+            "link_state": link_state,
+            "link_ok": True if not keyword else bool(after.get("model_linked")),
             "kw_now": after.get("focus_keyword", ""),
             "h1_now": after.get("h1_text", ""),
             "title_now": after.get("title_old", ""),
@@ -1614,8 +1676,11 @@ def cmd_apply(args) -> int:
     if not args.dry_run:
         br = _browser(args)
         br.login()
-        # Đọc lại title/slug THẬT của từng bài trước khi backup (để khôi phục chính xác)
+        # Đọc lại title/slug THẬT trước khi backup (chỉ khi chưa có -> đỡ chậm)
         for r in todo:
+            item0 = st["items"][str(r["id"])]
+            if item0.get("title_old") and item0.get("slug_old"):
+                continue
             try:
                 cur = br.read_product(r["id"])
                 item = st["items"][str(r["id"])]
@@ -1642,14 +1707,16 @@ def cmd_apply(args) -> int:
             except Exception as exc:      # noqa: BLE001
                 res = {"ok": False, "error": f"Lỗi khi ghi: {str(exc).splitlines()[0][:160]}"}
             item = st["items"][str(pid)]
-            if res.get("ok") and res.get("slug_ok", True) and res.get("h1_ok", True) and res.get("kw_ok", True):
+            if (res.get("ok") and res.get("slug_ok", True) and res.get("h1_ok", True)
+                    and res.get("kw_ok", True) and res.get("link_ok", True)):
                 item["status"] = "applied"
                 item["applied_at"] = datetime.now().isoformat(timespec="seconds")
                 item["title_now"] = res.get("title_now", "")
                 item["slug_now"] = res.get("slug_now", "")
                 save_state(st)
                 ok_count += 1
-                log(f"  ✔ Đã cập nhật: title + slug + <h1> + keyword khớp ({res.get('h1_state') or 'h1'}).")
+                log(f"  ✔ Đã cập nhật: title + slug + <h1> + keyword + link mã SP khớp "
+                    f"({res.get('h1_state') or 'h1'}/{res.get('link_state') or 'link'}).")
             else:
                 item["status"] = "error"
                 item["error"] = str(res.get("error") or "Không khớp sau khi lưu")
