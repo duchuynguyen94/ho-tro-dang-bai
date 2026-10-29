@@ -713,20 +713,7 @@ class Browser:
         if m_h1:
             h1_html = m_h1.group(0)
         h1_text = html_to_text(h1_html, limit=400).strip()
-        focus_kw = ""
-        try:
-            focus_kw = page.evaluate(
-                """() => {
-                    const box = document.querySelector('.rank-math-focus-keyword');
-                    if (!box) return '';
-                    const tags = [...box.querySelectorAll('.tagify__tag-text')].map(e => e.textContent.trim());
-                    if (tags.length) return tags.join(', ');
-                    const inp = box.querySelector('.tagify__input');
-                    return inp ? (inp.textContent || '').trim() : '';
-                }"""
-            ) or ""
-        except Exception:
-            focus_kw = ""
+        focus_kw = self._read_focus_keyword()
         text = html_to_text(content_html)
         return {
             "id": pid,
@@ -871,54 +858,93 @@ class Browser:
             return True
         return False
 
+    def _read_focus_keyword(self, timeout: float = 6.0) -> str:
+        page = self.page
+        if not page:
+            return ""
+        deadline = time.time() + timeout
+        val = ""
+        while time.time() < deadline:
+            try:
+                val = page.evaluate(
+                    """() => {
+                        const box = document.querySelector('.rank-math-focus-keyword');
+                        if (!box) return '';
+                        const tags = [...box.querySelectorAll('.tagify__tag-text')]
+                            .map(e => e.textContent.trim()).filter(Boolean);
+                        if (tags.length) return tags.join(', ');
+                        const t = box.querySelector('.tagify');
+                        return (t && t.value) ? String(t.value).trim() : '';
+                    }"""
+                ) or ""
+            except Exception:
+                val = ""
+            if val:
+                return val
+            time.sleep(0.4)
+        return val
+
+    def _focus_tags(self) -> list[str]:
+        page = self.page
+        try:
+            return page.evaluate(
+                """() => {
+                    const box = document.querySelector('.rank-math-focus-keyword');
+                    if (!box) return [];
+                    return [...box.querySelectorAll('.tagify__tag-text')]
+                        .map(e => e.textContent.trim()).filter(Boolean);
+                }"""
+            ) or []
+        except Exception:
+            return []
+
     def _set_focus_keyword(self, keyword: str) -> bool:
-        """Xoá Focus Keyword cũ (Rank Math) và thêm keyword mới."""
+        """Xoá Focus Keyword cũ (Rank Math) và thêm keyword mới.
+
+        Trả True/False; None nếu không có ô (bài không dùng Rank Math).
+        """
         if not keyword:
             return True
         page = self.open()
-        try:
-            box = page.locator("#rank_math_metabox")
-            if box.count():
+        inp = page.locator(".rank-math-focus-keyword .tagify__input")
+        if not inp.count():
+            try:
+                h = page.locator("#rank_math_metabox .hndle, #rank_math_metabox h2")
+                if h.count():
+                    h.first.click()
+                    page.wait_for_timeout(500)
+            except Exception:
+                pass
+        if not inp.count():
+            log("  ⚠ Không thấy ô Focus Keyword (Rank Math) — bỏ qua")
+            return None
+
+        for attempt in (1, 2, 3):
+            try:
+                inp.first.click(force=True)
+                page.wait_for_timeout(300)
+                # xoá tag cũ
+                for _ in range(8):
+                    rm = page.locator(".rank-math-focus-keyword .tagify__tag__removeBtn")
+                    if not rm.count():
+                        break
+                    rm.first.click(force=True)
+                    page.wait_for_timeout(150)
+                page.keyboard.type(keyword, delay=40)
+                page.wait_for_timeout(300)
+                page.keyboard.press("Enter")
+                page.wait_for_timeout(900)
+                tags = self._focus_tags()
+                if any(keyword.lower() == t.lower() for t in tags):
+                    return True
+                log(f"  ⚠ Keyword chưa vào (lần {attempt}) — thử lại…")
                 try:
-                    inside = box.first.locator(".inside")
-                    if inside.count() and not inside.first.is_visible():
-                        h = box.first.locator(".hndle, h2")
-                        if h.count():
-                            h.first.click()
-                            page.wait_for_timeout(400)
+                    page.keyboard.press("Escape")
                 except Exception:
                     pass
-            inp = page.locator(".rank-math-focus-keyword .tagify__input")
-            if not inp.count():
-                log("  ⚠ Không thấy ô Focus Keyword (Rank Math) — bỏ qua")
-                return None
-            inp.first.click()
-            page.wait_for_timeout(150)
-            # xoá tag cũ
-            for _ in range(6):
-                rm = page.locator(".rank-math-focus-keyword .tagify__tag__removeBtn")
-                if not rm.count():
-                    break
-                rm.first.click()
-                page.wait_for_timeout(120)
-            if page.locator(".rank-math-focus-keyword .tagify__tag__removeBtn").count():
-                inp.first.click()
-                page.keyboard.press("Meta+A" if sys.platform == "darwin" else "Control+A")
-                page.keyboard.press("Backspace")
-            page.keyboard.type(keyword)
-            page.keyboard.press("Enter")
-            page.wait_for_timeout(400)
-            now = page.evaluate(
-                """() => {
-                    const box = document.querySelector('.rank-math-focus-keyword');
-                    if (!box) return '';
-                    return [...box.querySelectorAll('.tagify__tag-text')].map(e => e.textContent.trim()).join(', ');
-                }"""
-            )
-            return keyword.lower() in (now or "").lower()
-        except Exception as exc:      # noqa: BLE001
-            log(f"  ⚠ Lỗi đặt Focus Keyword: {str(exc).splitlines()[0][:140]}")
-            return False
+            except Exception as exc:      # noqa: BLE001
+                log(f"  ⚠ Lỗi đặt Focus Keyword (lần {attempt}): {str(exc).splitlines()[0][:120]}")
+        return False
 
     def _fill_title(self, title_new: str) -> bool:
         page = self.open()
@@ -1026,7 +1052,7 @@ class Browser:
             )
         except Exception:
             pass
-        page.wait_for_timeout(600)
+        page.wait_for_timeout(2000)
 
         after = self.read_product(pid)
         return {
@@ -1543,6 +1569,22 @@ def _backup(st: dict, rows: list[dict]) -> Path:
     return path
 
 
+def _keyword_for(pid: int, item: dict) -> str:
+    """Keyword = Model (rule_seo). Lấy từ state, nếu chưa có thì đọc current_<id>.json."""
+    kw = (item.get("keyword") or "").strip()
+    if kw:
+        return kw
+    data = _read_json(OUT_DIR / f"current_{pid}.json", None)
+    if isinstance(data, dict):
+        for c in data.get("codes") or []:
+            if c.get("from_keyword") and c.get("hits", 0) >= 2:
+                return c["code"]
+        codes = data.get("codes") or []
+        if codes:
+            return codes[0].get("code", "")
+    return ""
+
+
 def cmd_apply(args) -> int:
     st = load_state()
     todo = []
@@ -1560,7 +1602,7 @@ def cmd_apply(args) -> int:
                 "id": int(pid),
                 "title_new": item.get("title_new", ""),
                 "slug_new": item.get("slug_new", ""),
-                "keyword": item.get("keyword", ""),
+                "keyword": _keyword_for(int(pid), item),
                 "retry": status == "error",
             }
         )
