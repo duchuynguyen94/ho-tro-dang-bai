@@ -422,10 +422,11 @@ class Browser:
     def _manual_login(self) -> None:
         page = self.open()
         page.goto(self.base + "/wp-login.php", wait_until="domcontentloaded")
+        self._settle(8000)
         self._wait_login_done()
         try:
             page.goto(self.base + LIST_PATH, wait_until="domcontentloaded")
-            time.sleep(0.5)
+            self._settle(8000)
         except Exception:
             pass
 
@@ -433,7 +434,7 @@ class Browser:
         page = self.open()
         target = self.base + LIST_PATH
         page.goto(target, wait_until="domcontentloaded")
-        time.sleep(0.6)
+        self._settle(8000)
         if "/wp-login.php" not in page.url:
             log("Đã đăng nhập (session còn hiệu lực).")
             return
@@ -468,6 +469,30 @@ class Browser:
             raise SystemExit("Đăng nhập THẤT BẠI — kiểm tra lại tài khoản/mật khẩu (hoặc chạy với --manual).")
         log("Đăng nhập thành công.")
 
+    # -- chờ trang thật sự sẵn sàng -- #
+    def _settle(self, timeout: int = 10000) -> None:
+        """Chờ trang tải XONG (load) + mạng ổn định rồi mới thao tác."""
+        page = self.page
+        if not page:
+            return
+        try:
+            page.wait_for_load_state("load", timeout=timeout)
+        except Exception:
+            pass
+        try:
+            page.wait_for_load_state("networkidle", timeout=min(timeout, 6000))
+        except Exception:
+            pass
+
+    def _wait_slug(self, slug: str, timeout: float = 10.0) -> bool:
+        """Chờ tới khi ô đường dẫn hiển thị đúng slug mới (AJAX có thể trả về chậm)."""
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if self._current_slug() == slug:
+                return True
+            time.sleep(0.3)
+        return self._current_slug() == slug
+
     # -- đọc dữ liệu -- #
     def list_products(self) -> list[dict]:
         page = self.open()
@@ -477,6 +502,7 @@ class Browser:
         for _ in range(200):
             page.goto(url, wait_until="domcontentloaded")
             page.wait_for_selector("#the-list, .wp-list-table", timeout=60000)
+            self._settle(8000)
             rows = page.eval_on_selector_all(
                 "#the-list tr, .wp-list-table tbody tr",
                 """rows => rows.map(tr => {
@@ -508,7 +534,7 @@ class Browser:
             page.wait_for_selector("#title, .editor-post-title__input, [aria-label*='tiêu đề' i]", timeout=60000)
         except Exception:
             pass
-        time.sleep(0.6)
+        self._settle(8000)
 
         title = ""
         try:
@@ -604,44 +630,77 @@ class Browser:
         return ""
 
     def set_slug(self, pid: int, slug: str) -> bool:
-        """Đổi slug qua nút "Chỉnh sửa" của WordPress. Trả về True nếu ĐÃ đúng."""
+        """Đổi slug: điền thẳng ô ẩn #post_name của form (WP lưu khi bấm Cập nhật).
+
+        Vì AJAX "Đồng ý" của WordPress có thể không chạy (site dùng plugin/JS lỗi),
+        nên ưu tiên cách chắc chắn: gán #post_name -> bấm Cập nhật là slug đổi.
+        Nếu không có #post_name thì mới dùng giao diện Chỉnh sửa -> OK.
+        """
         page = self.open()
         edit_url = self._edit_url(pid)
+        if self._current_slug() == slug:
+            return True
+
+        # --- Cách 1: gán ô ẩn #post_name (form sẽ gửi lên khi Cập nhật) ---
+        try:
+            if page.locator("#post_name").count():
+                done = page.evaluate(
+                    """(slug) => {
+                        const el = document.querySelector('#post_name');
+                        if (!el) return false;
+                        el.value = slug;
+                        el.dispatchEvent(new Event('input', { bubbles: true }));
+                        el.dispatchEvent(new Event('change', { bubbles: true }));
+                        const full = document.querySelector('#editable-post-name-full');
+                        if (full) full.textContent = slug;
+                        const name = document.querySelector('#editable-post-name');
+                        if (name && name.tagName !== 'INPUT') name.textContent = slug;
+                        return el.value === slug;
+                    }""",
+                    slug,
+                )
+                if done and self._current_slug() == slug:
+                    return True
+        except Exception as exc:      # noqa: BLE001
+            log(f"  ⚠ Không gán được ô slug ẩn: {str(exc).splitlines()[0][:140]}")
+
+        # --- Cách 2: giao diện Chỉnh sửa -> nhập -> OK ---
         for attempt in (1, 2):
-            if self._current_slug() == slug:
-                return True
             try:
-                # Nút sửa slug của WP là <button class="edit-slug ..."> (KHÔNG phải <a>).
                 btn = page.locator(
-                    "#edit-slug-buttons .edit-slug, button.edit-slug, a.edit-slug, .edit-slug"
+                    "#edit-slug-buttons .edit-slug, button.edit-slug, a.edit-slug"
                 )
                 if btn.count():
                     btn.first.click(force=True)
                 inp = page.locator("#new-post-slug")
-                inp.wait_for(state="visible", timeout=15000)
+                inp.wait_for(state="visible", timeout=10000)
                 inp.fill(slug)
-                save = page.locator(
-                    "#edit-slug-buttons button.save, #edit-slug-buttons .save, .edit-slug-buttons .save"
-                )
+                save = page.locator("#edit-slug-buttons button.save, #edit-slug-buttons .save")
                 if save.count():
-                    save.first.click()
+                    try:
+                        # chờ ĐÚNG phản hồi AJAX của WordPress rồi mới kiểm tra
+                        with page.expect_response(
+                            lambda r: "admin-ajax.php" in r.url, timeout=10000
+                        ):
+                            save.first.click()
+                    except Exception:
+                        save.first.click()
                 else:
                     inp.press("Enter")
-                page.wait_for_timeout(900)
+                self._wait_slug(slug, timeout=10.0)
             except Exception as exc:      # noqa: BLE001
-                log(f"  ⚠ Lỗi thao tác ô slug (lần {attempt}): {str(exc).splitlines()[0][:150]}")
+                log(f"  ⚠ Lỗi thao tác ô slug (lần {attempt}): {str(exc).splitlines()[0][:140]}")
 
             if self._current_slug() == slug:
                 return True
-            # Bị điều hướng khỏi trang sửa -> quay lại rồi thử lại 1 lần
-            try:
-                if "post.php" not in page.url:
-                    log("  ⚠ Trang bị chuyển hướng -> quay lại trang sửa…")
+            if "post.php" not in page.url:
+                log("  ⚠ Trang bị chuyển hướng -> quay lại trang sửa…")
+                try:
                     page.goto(edit_url, wait_until="domcontentloaded")
                     page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
-                    time.sleep(0.5)
-            except Exception:
-                pass
+                    self._settle(8000)
+                except Exception:
+                    pass
         return self._current_slug() == slug
 
     def _fill_title(self, title_new: str) -> bool:
@@ -664,7 +723,7 @@ class Browser:
             page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
         except Exception:
             pass
-        time.sleep(0.4)
+        self._settle(8000)
         if not self._fill_title(title_new):
             return {"ok": False, "error": "Không thấy ô tiêu đề (#title)"}
 
@@ -696,7 +755,8 @@ class Browser:
                 }""",
                 timeout=180000,
             )
-            page.wait_for_timeout(1200)
+            self._settle(15000)
+            page.wait_for_timeout(600)
         except Exception as exc:      # noqa: BLE001
             return {"ok": False, "error": f"Bấm Cập nhật lỗi: {str(exc).splitlines()[0][:160]}"}
 
