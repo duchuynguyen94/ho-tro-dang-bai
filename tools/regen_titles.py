@@ -515,11 +515,11 @@ class Browser:
 
     def _manual_login(self) -> None:
         page = self.open()
-        page.goto(self.base + "/wp-login.php", wait_until="domcontentloaded")
+        self._goto(self.base + "/wp-login.php")
         self._settle(8000)
         self._wait_login_done()
         try:
-            page.goto(self.base + LIST_PATH, wait_until="domcontentloaded")
+            self._goto(self.base + LIST_PATH)
             self._settle(8000)
         except Exception:
             pass
@@ -527,7 +527,7 @@ class Browser:
     def login(self) -> None:
         page = self.open()
         target = self.base + LIST_PATH
-        page.goto(target, wait_until="domcontentloaded")
+        self._goto(target)
         self._settle(8000)
         if "/wp-login.php" not in page.url:
             log("Đã đăng nhập (session còn hiệu lực).")
@@ -563,6 +563,22 @@ class Browser:
             raise SystemExit("Đăng nhập THẤT BẠI — kiểm tra lại tài khoản/mật khẩu (hoặc chạy với --manual).")
         log("Đăng nhập thành công.")
 
+    # -- mở trang (có thử lại khi mạng chậm) -- #
+    def _goto(self, url: str, timeout: int = 90000) -> bool:
+        page = self.open()
+        for attempt in (1, 2):
+            try:
+                page.goto(url, wait_until="domcontentloaded", timeout=timeout)
+                return True
+            except Exception as exc:      # noqa: BLE001
+                log(f"  ⚠ Mở trang chậm/lỗi (lần {attempt}): {str(exc).splitlines()[0][:140]}")
+                try:
+                    page.evaluate("u => { window.location.href = u; }", url)
+                except Exception:
+                    pass
+                time.sleep(1.5)
+        return False
+
     # -- chờ trang thật sự sẵn sàng -- #
     def _settle(self, timeout: int = 10000) -> None:
         """Chờ trang tải XONG (load) + mạng ổn định rồi mới thao tác."""
@@ -594,7 +610,8 @@ class Browser:
         products: list[dict] = []
         seen: set[int] = set()
         for _ in range(200):
-            page.goto(url, wait_until="domcontentloaded")
+            if not self._goto(url):
+                break
             page.wait_for_selector("#the-list, .wp-list-table", timeout=60000)
             self._settle(8000)
             rows = page.eval_on_selector_all(
@@ -623,7 +640,8 @@ class Browser:
     def read_product(self, pid: int) -> dict:
         page = self.open()
         edit_url = f"{self.base}/wp-admin/post.php?post={pid}&action=edit"
-        page.goto(edit_url, wait_until="domcontentloaded")
+        if not self._goto(edit_url):
+            raise SystemExit(f"Không mở được trang sửa #{pid} (mạng chậm?) — thử lại sau.")
         try:
             page.wait_for_selector("#title, .editor-post-title__input, [aria-label*='tiêu đề' i]", timeout=60000)
         except Exception:
@@ -797,7 +815,7 @@ class Browser:
             if "post.php" not in page.url:
                 log("  ⚠ Trang bị chuyển hướng -> quay lại trang sửa…")
                 try:
-                    page.goto(edit_url, wait_until="domcontentloaded")
+                    self._goto(edit_url)
                     page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
                     self._settle(8000)
                 except Exception:
@@ -838,7 +856,8 @@ class Browser:
     def update_post(self, pid: int, title_new: str, slug_new: str) -> dict:
         page = self.open()
         edit_url = self._edit_url(pid)
-        page.goto(edit_url, wait_until="domcontentloaded")
+        if not self._goto(edit_url):
+            return {"ok": False, "error": "Không mở được trang sửa (mạng chậm?) — thử lại sau"}
         try:
             page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
         except Exception:
@@ -872,7 +891,7 @@ class Browser:
 
         # Có thể bị chuyển trang trong lúc sửa slug -> quay lại và điền lại tiêu đề
         if "post.php" not in page.url:
-            page.goto(edit_url, wait_until="domcontentloaded")
+            self._goto(edit_url)
             page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
             self._fill_title(title_new)
             if self._current_slug() != slug_new and not self.set_slug(pid, slug_new):
@@ -1455,7 +1474,10 @@ def cmd_apply(args) -> int:
             if args.dry_run:
                 log("  (chạy thử — không ghi)")
                 continue
-            res = br.update_post(pid, r["title_new"], r["slug_new"])
+            try:
+                res = br.update_post(pid, r["title_new"], r["slug_new"])
+            except Exception as exc:      # noqa: BLE001
+                res = {"ok": False, "error": f"Lỗi khi ghi: {str(exc).splitlines()[0][:160]}"}
             item = st["items"][str(pid)]
             if res.get("ok") and res.get("slug_ok", True) and res.get("h1_ok", True):
                 item["status"] = "applied"
