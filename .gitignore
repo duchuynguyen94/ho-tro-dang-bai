@@ -14,6 +14,11 @@ config.json
 sessions/
 media/
 
+# Tool riêng (tools/regen_titles.py): dữ liệu chạy + profile Chrome + tài khoản
+tools/out/
+tools/.regen_profile/
+tools/.regen_secret.json
+
 # OS
 .DS_Store
 Thumbs.db
