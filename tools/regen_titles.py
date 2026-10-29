@@ -309,6 +309,14 @@ def with_brand_link(content_html: str, model: str) -> tuple[str, str]:
     if not code:
         return src, "no-model"
 
+    # gỡ các link samoapumps.com đã có (tránh sai mã từ lần trước)
+    src = re.sub(
+        r'<a\b[^>]*href=["\']' + re.escape(BRAND_LINK) + r'["\'][^>]*>(.*?)</a>',
+        r"\1",
+        src,
+        flags=re.I | re.S,
+    )
+
     # vùng đã là link -> bỏ qua
     skip: list[tuple[int, int]] = [(m.start(), m.end()) for m in A_RE.finditer(src)]
     low = src.lower()
@@ -892,7 +900,7 @@ class Browser:
                 try:
                     self._goto(edit_url)
                     page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
-                    self._settle(4000)
+                    self._settle(1500)
                 except Exception:
                     pass
         return self._current_slug() == slug
@@ -921,6 +929,32 @@ class Browser:
             return True
         except Exception:
             return False
+
+    def _read_focus_keyword(self, timeout: float = 2.0) -> str:
+        page = self.page
+        if not page:
+            return ""
+        deadline = time.time() + timeout
+        val = ""
+        while time.time() < deadline:
+            try:
+                val = page.evaluate(
+                    """() => {
+                        const box = document.querySelector('.rank-math-focus-keyword');
+                        if (!box) return '';
+                        const tags = [...box.querySelectorAll('.tagify__tag-text')]
+                            .map(e => e.textContent.trim()).filter(Boolean);
+                        if (tags.length) return tags.join(', ');
+                        const t = box.querySelector('.tagify');
+                        return (t && t.value) ? String(t.value).trim() : '';
+                    }"""
+                ) or ""
+            except Exception:
+                val = ""
+            if val:
+                return val
+            time.sleep(0.3)
+        return val
 
     def _focus_tags(self) -> list[str]:
         page = self.page
@@ -999,6 +1033,12 @@ class Browser:
                 log(f"  ⚠ Lỗi đặt Focus Keyword (lần {attempt}): {str(exc).splitlines()[0][:120]}")
         return False
 
+    def _on_edit_page(self, pid: int) -> bool:
+        try:
+            return f"post={pid}" in (self.page.url or "")
+        except Exception:
+            return False
+
     def _fill_title(self, title_new: str) -> bool:
         page = self.open()
         if page.locator("#title").count():
@@ -1027,7 +1067,9 @@ class Browser:
                 page.wait_for_selector("#title, .editor-post-title__input", timeout=30000)
             except Exception:
                 pass
-        self._settle(3000)
+        self._settle(1200)
+        if not self._on_edit_page(pid):
+            return {"ok": False, "error": f"Sai trang (đang ở {page.url[:80]}) — KHÔNG ghi để tránh nhầm bài"}
         if not self._fill_title(title_new):
             return {"ok": False, "error": "Không thấy ô tiêu đề (#title)"}
 
@@ -1080,6 +1122,9 @@ class Browser:
         if not btn.count():
             return {"ok": False, "error": "Không thấy nút Cập nhật"}
 
+        if not self._on_edit_page(pid):
+            return {"ok": False, "error": "Trang đã đổi trước khi lưu — KHÔNG bấm Cập nhật"}
+
         def _is_save_response(resp) -> bool:
             try:
                 if resp.request.method != "POST":
@@ -1111,7 +1156,7 @@ class Browser:
             page.wait_for_selector(
                 "#message.updated, #message.notice-success, .notice-success, "
                 "#message.updated, .components-snackbar",
-                timeout=15000,
+                timeout=3000,
             )
         except Exception:
             pass
