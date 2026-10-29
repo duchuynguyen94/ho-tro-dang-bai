@@ -62,6 +62,7 @@ CURRENT_FILE = OUT_DIR / "current.json"
 PROPOSAL_FILE = OUT_DIR / "proposal.json"
 APPROVED_FILE = OUT_DIR / "approved.json"
 PRODUCTS_FILE = OUT_DIR / "products.json"
+LOCK_FILE = OUT_DIR / ".run.lock"
 
 DEFAULT_BASE = "https://samoapumps.com"
 CDP_PORT = 9222                       # Chrome giữ mở -> các lệnh nối vào cùng cửa sổ
@@ -964,17 +965,32 @@ class Browser:
             return True
         page = self.open()
         inp = page.locator(".rank-math-focus-keyword .tagify__input")
+        def _open_panel() -> None:
+            for sel in ("#rank_math_metabox .components-panel__body-title",
+                        "#rank_math_metabox .hndle", "#rank_math_metabox h2"):
+                try:
+                    el = page.locator(sel)
+                    if el.count():
+                        el.first.click(force=True)
+                        page.wait_for_timeout(400)
+                        return
+                except Exception:
+                    continue
+
         if not inp.count():
-            try:
-                h = page.locator("#rank_math_metabox .hndle, #rank_math_metabox h2")
-                if h.count():
-                    h.first.click()
-                    page.wait_for_timeout(500)
-            except Exception:
-                pass
+            _open_panel()
         if not inp.count():
             log("  ⚠ Không thấy ô Focus Keyword (Rank Math) — bỏ qua")
             return None
+        try:
+            if not inp.first.is_visible():
+                _open_panel()
+                page.wait_for_timeout(300)
+            if not inp.first.is_visible():
+                log("  ⚠ Ô Focus Keyword đang bị ẩn — bỏ qua")
+                return None
+        except Exception:
+            pass
 
         for attempt in (1, 2, 3):
             try:
@@ -1018,13 +1034,20 @@ class Browser:
     def update_post(self, pid: int, title_new: str, slug_new: str, keyword: str = "") -> dict:
         page = self.open()
         edit_url = self._edit_url(pid)
-        if not self._goto(edit_url):
-            return {"ok": False, "error": "Không mở được trang sửa (mạng chậm?) — thử lại sau"}
-        try:
-            page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
-        except Exception:
-            pass
-        self._settle(4000)
+        ok_page = self._goto(edit_url)
+        if ok_page:
+            try:
+                page.wait_for_selector("#title, .editor-post-title__input", timeout=30000)
+            except Exception:
+                pass
+        if not page.locator("#title, .editor-post-title__input").count():
+            log("  ⚠ Chưa thấy ô tiêu đề — mở lại trang…")
+            self._goto(edit_url)
+            try:
+                page.wait_for_selector("#title, .editor-post-title__input", timeout=30000)
+            except Exception:
+                pass
+        self._settle(3000)
         if not self._fill_title(title_new):
             return {"ok": False, "error": "Không thấy ô tiêu đề (#title)"}
 
@@ -1127,7 +1150,10 @@ class Browser:
             ),
             "kw_state": kw_state,
             "link_state": link_state,
-            "link_ok": True if not keyword else bool(after.get("model_linked")),
+            "link_ok": (
+                True if not keyword
+                else bool(after.get("model_linked")) or link_state in ("not-found", "no-model")
+            ),
             "kw_now": after.get("focus_keyword", ""),
             "h1_now": after.get("h1_text", ""),
             "title_now": after.get("title_old", ""),
@@ -1768,6 +1794,43 @@ def cmd_usp(args) -> int:
 
 
 # --------------------------------------------------------------------------- #
+def _acquire_lock() -> bool:
+    """Chỉ cho 1 tiến trình điều khiển Chrome cùng lúc (tránh ghi nhầm bài)."""
+    OUT_DIR.mkdir(parents=True, exist_ok=True)
+    try:
+        if LOCK_FILE.exists():
+            try:
+                pid = int((LOCK_FILE.read_text() or "0").strip() or 0)
+            except Exception:
+                pid = 0
+            alive = False
+            if pid:
+                try:
+                    os.kill(pid, 0)
+                    alive = True
+                except Exception:
+                    alive = False
+            if alive:
+                return False
+            LOCK_FILE.unlink(missing_ok=True)
+        fd = os.open(str(LOCK_FILE), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+        os.write(fd, str(os.getpid()).encode())
+        os.close(fd)
+        return True
+    except FileExistsError:
+        return False
+    except Exception:
+        return True
+
+
+def _release_lock() -> None:
+    try:
+        if LOCK_FILE.exists() and (LOCK_FILE.read_text().strip() == str(os.getpid())):
+            LOCK_FILE.unlink()
+    except Exception:
+        pass
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
         description="Tạo lại Title + Slug cho sản phẩm đã publish (chạy ngoài app).",
@@ -1833,7 +1896,16 @@ def main(argv: list[str] | None = None) -> int:
     p.set_defaults(func=cmd_usp)
 
     args = ap.parse_args(argv)
-    return int(args.func(args) or 0)
+
+    needs_browser = getattr(args, "func", None) not in (cmd_usp, cmd_status)
+    if needs_browser and not _acquire_lock():
+        log("⏳ Đang có tiến trình khác chạy trên Chrome — chờ nó xong rồi chạy lại.")
+        return 3
+    try:
+        return int(args.func(args) or 0)
+    finally:
+        if needs_browser:
+            _release_lock()
 
 
 if __name__ == "__main__":
