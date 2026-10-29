@@ -24,7 +24,7 @@ Lệnh phụ:
   list             lấy danh sách sản phẩm publish -> tools/out/products.json
   skip --id 123    bỏ qua 1 bài
   status           xem tiến độ
-  usp              in danh sách USP + độ dài (để chọn vừa 55–60 ký tự)
+  usp              in danh sách USP + độ dài (để chọn vừa 55–75 ký tự)
 
 Đăng nhập:
   --manual         bạn TỰ bấm đăng nhập (dùng khi có captcha / không muốn lưu mật khẩu)
@@ -65,10 +65,11 @@ PRODUCTS_FILE = OUT_DIR / "products.json"
 
 DEFAULT_BASE = "https://samoapumps.com"
 LIST_PATH = "/wp-admin/edit.php?post_status=publish&post_type=product"
-TITLE_MIN, TITLE_MAX = 55, 60
+TITLE_MIN, TITLE_MAX = 55, 75   # chấp nhận 55–75 (khuyến nghị 60–70)
+SLUG_MAX = 75
 
 # USP: danh sách người dùng chốt + chuẩn rule_seo.pdf + gợi ý thêm.
-# Mỗi title chỉ dùng 1 USP (chọn ngẫu nhiên, ưu tiên vừa 55–60 ký tự).
+# Mỗi title chỉ dùng 1 USP (chọn ngẫu nhiên, ưu tiên vừa 55–75 ký tự).
 USPS = (
     # nhóm chính
     "Chính hãng",
@@ -144,7 +145,7 @@ def _strip_slug_tails(s: str) -> str:
     return s
 
 
-def make_slug(text: str, max_len: int = 60) -> str:
+def make_slug(text: str, max_len: int = SLUG_MAX) -> str:
     """Tạo slug từ tiêu đề: bỏ dấu tiếng Việt, thường hoá, nối bằng '-'."""
     s = (text or "").strip().lower().replace("đ", "d")
     s = unicodedata.normalize("NFD", s)
