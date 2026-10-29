@@ -1005,6 +1005,11 @@ class Browser:
 
         if not inp.count():
             _open_panel()
+        # Rank Math (React) render trễ -> chờ tối đa ~8s
+        deadline = time.time() + 8
+        while time.time() < deadline and not inp.count():
+            page.wait_for_timeout(400)
+            _open_panel()
         if not inp.count():
             log("  ⚠ Không thấy ô Focus Keyword (Rank Math) — bỏ qua")
             return None
@@ -1020,6 +1025,10 @@ class Browser:
 
         for attempt in (1, 2, 3):
             try:
+                try:
+                    inp.first.scroll_into_view_if_needed(timeout=5000)
+                except Exception:
+                    pass
                 inp.first.click(force=True)
                 page.wait_for_timeout(300)
                 # xoá tag cũ
