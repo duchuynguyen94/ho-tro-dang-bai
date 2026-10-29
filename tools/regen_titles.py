@@ -980,16 +980,28 @@ class Browser:
         page = self.open()
         inp = page.locator(".rank-math-focus-keyword .tagify__input")
         def _open_panel() -> None:
-            for sel in ("#rank_math_metabox .components-panel__body-title",
-                        "#rank_math_metabox .hndle", "#rank_math_metabox h2"):
-                try:
-                    el = page.locator(sel)
-                    if el.count():
-                        el.first.click(force=True)
+            # (a) mở hộp Rank Math nếu đang thu gọn
+            try:
+                box = page.locator("#rank_math_metabox")
+                if box.count() and "closed" in (box.first.get_attribute("class") or ""):
+                    hd = box.first.locator(".handlediv")
+                    if not hd.count():
+                        hd = box.first.locator(".hndle")
+                    if hd.count():
+                        hd.first.click(force=True)
+                        page.wait_for_timeout(500)
+            except Exception:
+                pass
+            # (b) mở panel "Từ khóa chính" nếu chưa mở
+            try:
+                panel = page.locator(".rank-math-focus-keyword")
+                if panel.count() and "is-opened" not in (panel.first.get_attribute("class") or ""):
+                    t = panel.first.locator(".components-panel__body-title")
+                    if t.count():
+                        t.first.click(force=True)
                         page.wait_for_timeout(400)
-                        return
-                except Exception:
-                    continue
+            except Exception:
+                pass
 
         if not inp.count():
             _open_panel()
@@ -1163,6 +1175,9 @@ class Browser:
         page.wait_for_timeout(800)
 
         after = self.read_product(pid, model_code=keyword, reload=False)
+        if not (after.get("title_old") or "").strip():
+            log("  ⚠ Chưa đọc được tiêu đề sau khi lưu — mở lại trang để xác nhận…")
+            after = self.read_product(pid, model_code=keyword, reload=True)
         return {
             "ok": after.get("title_old", "").strip() == title_new.strip(),
             "slug_ok": after.get("slug_old", "") == slug_new,
