@@ -64,6 +64,15 @@ APPROVED_FILE = OUT_DIR / "approved.json"
 PRODUCTS_FILE = OUT_DIR / "products.json"
 
 DEFAULT_BASE = "https://samoapumps.com"
+CDP_PORT = 9222                       # Chrome giữ mở -> các lệnh nối vào cùng cửa sổ
+CDP_URL = f"http://127.0.0.1:{CDP_PORT}"
+CHROME_PATHS = (
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+    "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+    r"C:\Program Files\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe",
+    r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe",
+)
 LIST_PATH = "/wp-admin/edit.php?post_status=publish&post_type=product"
 TITLE_MIN, TITLE_MAX = 55, 75   # chấp nhận 55–75 (khuyến nghị 60–70)
 SLUG_MAX = 75
@@ -262,6 +271,24 @@ def detect_codes(text: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Trình duyệt + đăng nhập
 # --------------------------------------------------------------------------- #
+def cdp_alive(timeout: float = 1.5) -> bool:
+    """Chrome đang mở với cổng debug? (để nối vào thay vì mở cửa sổ mới)"""
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(CDP_URL + "/json/version", timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def find_chrome() -> str:
+    for path in CHROME_PATHS:
+        if Path(path).exists():
+            return path
+    return ""
+
+
 def load_credentials() -> tuple[str, str]:
     user = (os.environ.get("HTDB_WP_USER") or "").strip()
     pwd = os.environ.get("HTDB_WP_PASS") or ""
@@ -301,12 +328,33 @@ class Browser:
         self.context = None
         self.page = None
         self._user, self._pass = "", ""
+        self._external = False          # True = đang nối vào Chrome có sẵn (không tự đóng)
 
     # -- vòng đời -- #
     def open(self):
         if self.page:
             return self.page
         from playwright.sync_api import sync_playwright
+
+        # Có Chrome đang mở (lệnh `start`) -> nối vào cửa sổ đó, KHÔNG mở cửa sổ mới
+        if not self.headless and cdp_alive():
+            self._pw = sync_playwright().start()
+            browser = self._pw.chromium.connect_over_cdp(CDP_URL)
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            self.context = ctx
+            self._external = True
+            self.page = ctx.pages[0] if ctx.pages else ctx.new_page()
+            log("Đang dùng Chrome đã mở sẵn (không mở thêm cửa sổ).")
+            try:
+                self.page.on("dialog", lambda d: d.accept())
+            except Exception:
+                pass
+            try:
+                self.page.set_default_timeout(60000)
+                self.page.set_default_navigation_timeout(120000)
+            except Exception:
+                pass
+            return self.page
 
         PROFILE_DIR.mkdir(parents=True, exist_ok=True)
         self._pw = sync_playwright().start()
@@ -361,6 +409,18 @@ class Browser:
         return self.page
 
     def close(self) -> None:
+        if self._external:
+            # Chrome do lệnh `start` mở -> chỉ ngắt kết nối, giữ cửa sổ cho bước sau
+            self.context = None
+            self.page = None
+            try:
+                if self._pw:
+                    self._pw.stop()
+            except Exception:
+                pass
+            self._pw = None
+            self._external = False
+            return
         try:
             if self.context:
                 self.context.close()
@@ -815,6 +875,64 @@ def _browser(args) -> Browser:
         manual=getattr(args, "manual", False),
         login_wait=getattr(args, "login_wait", 600),
     )
+
+
+def cmd_start(args) -> int:
+    """Mở Chrome MỘT LẦN với cổng debug; các lệnh sau dùng chung cửa sổ này."""
+    if cdp_alive():
+        log(f"Chrome đã mở sẵn ở {CDP_URL} — không mở thêm.")
+        return 0
+    chrome = find_chrome()
+    if not chrome:
+        raise SystemExit(
+            "Không tìm thấy Google Chrome. Hãy cài Chrome hoặc chạy lệnh khác "
+            "(khi không có `start`, mỗi lệnh sẽ tự mở/đóng trình duyệt)."
+        )
+    import subprocess
+
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    subprocess.Popen(
+        [
+            chrome,
+            f"--user-data-dir={PROFILE_DIR}",
+            f"--remote-debugging-port={CDP_PORT}",
+            "--start-maximized",
+            "--disable-blink-features=AutomationControlled",
+            "--disable-translate",
+            "--no-default-browser-check",
+            "--no-first-run",
+        ],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    for _ in range(60):
+        if cdp_alive(0.5):
+            log(f"Chrome đã mở (cổng {CDP_PORT}). Giữ cửa sổ này cho các bước sau.")
+            return 0
+        time.sleep(0.5)
+    raise SystemExit("Chrome không mở được cổng debug. Thử đóng Chrome rồi chạy lại.")
+
+
+def cmd_stop(args) -> int:
+    """Đóng Chrome đang giữ."""
+    if not cdp_alive():
+        log("Chrome không mở — không có gì để đóng.")
+        return 0
+    from playwright.sync_api import sync_playwright
+
+    pw = sync_playwright().start()
+    try:
+        br = pw.chromium.connect_over_cdp(CDP_URL)
+        br.close()
+    except Exception as exc:      # noqa: BLE001
+        log(f"⚠ Không đóng được: {str(exc).splitlines()[0][:120]}")
+    finally:
+        try:
+            pw.stop()
+        except Exception:
+            pass
+    log("Đã đóng Chrome.")
+    return 0
 
 
 def cmd_login(args) -> int:
@@ -1314,6 +1432,12 @@ def main(argv: list[str] | None = None) -> int:
         help="Số giây chờ bạn đăng nhập tay (mặc định 600)",
     )
     common.add_argument("--headless", action="store_true", help="Chạy ẩn trình duyệt (không nên dùng)")
+
+    p = sub.add_parser("start", help="Mở Chrome 1 lần và giữ mở cho mọi bước", parents=[common])
+    p.set_defaults(func=cmd_start)
+
+    p = sub.add_parser("stop", help="Đóng Chrome đang giữ", parents=[common])
+    p.set_defaults(func=cmd_stop)
 
     p = sub.add_parser("login", help="Kiểm tra đăng nhập (chờ bạn tự bấm nếu có captcha)", parents=[common])
     p.add_argument("--keep-open", action="store_true")
