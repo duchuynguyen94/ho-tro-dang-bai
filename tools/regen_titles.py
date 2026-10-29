@@ -534,20 +534,7 @@ class Browser:
             except Exception:
                 content_html = ""
 
-        slug = ""
-        try:
-            permalink = page.eval_on_selector(
-                "#sample-permalink, #editable-post-name-full",
-                "el => el ? (el.innerText || el.textContent || '').trim() : ''",
-            )
-            if permalink:
-                if "://" in permalink:
-                    parts = [p for p in permalink.split("?")[0].split("/") if p]
-                    slug = parts[-1] if parts else ""
-                else:
-                    slug = permalink.strip()
-        except Exception:
-            pass
+        slug = self._current_slug()
 
         sku = ""
         try:
@@ -583,60 +570,120 @@ class Browser:
         }
 
     # -- ghi dữ liệu -- #
-    def set_slug(self, slug: str) -> bool:
-        page = self.open()
-        current = ""
+    def _edit_url(self, pid: int) -> str:
+        return f"{self.base}/wp-admin/post.php?post={pid}&action=edit"
+
+    def _current_slug(self) -> str:
+        """Slug ĐẦY ĐỦ: #editable-post-name-full -> #post_name -> href permalink.
+
+        KHÔNG dùng text của #sample-permalink (WP rút gọn bằng dấu …).
+        """
+        page = self.page
+        if not page:
+            return ""
+        for sel in ("#editable-post-name-full", "#post_name"):
+            try:
+                if page.locator(sel).count():
+                    val = page.locator(sel).first.evaluate(
+                        "el => (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')"
+                        " ? (el.value || '') : (el.textContent || '')"
+                    )
+                    val = (val or "").strip().strip("/")
+                    if val:
+                        return val
+            except Exception:
+                pass
         try:
-            cur = page.eval_on_selector(
-                "#sample-permalink, #editable-post-name-full",
-                "el => el ? (el.innerText || el.textContent || '').trim() : ''",
-            )
-            if cur:
-                current = cur.rstrip("/").split("/")[-1]
+            if page.locator("#sample-permalink a").count():
+                href = page.locator("#sample-permalink a").first.get_attribute("href") or ""
+                parts = [p for p in href.split("?")[0].split("/") if p]
+                if parts:
+                    return parts[-1]
         except Exception:
             pass
-        if current == slug:
+        return ""
+
+    def set_slug(self, pid: int, slug: str) -> bool:
+        """Đổi slug qua nút "Chỉnh sửa" của WordPress. Trả về True nếu ĐÃ đúng."""
+        page = self.open()
+        edit_url = self._edit_url(pid)
+        for attempt in (1, 2):
+            if self._current_slug() == slug:
+                return True
+            try:
+                # Nút sửa slug của WP là <button class="edit-slug ..."> (KHÔNG phải <a>).
+                btn = page.locator(
+                    "#edit-slug-buttons .edit-slug, button.edit-slug, a.edit-slug, .edit-slug"
+                )
+                if btn.count():
+                    btn.first.click(force=True)
+                inp = page.locator("#new-post-slug")
+                inp.wait_for(state="visible", timeout=15000)
+                inp.fill(slug)
+                save = page.locator(
+                    "#edit-slug-buttons button.save, #edit-slug-buttons .save, .edit-slug-buttons .save"
+                )
+                if save.count():
+                    save.first.click()
+                else:
+                    inp.press("Enter")
+                page.wait_for_timeout(900)
+            except Exception as exc:      # noqa: BLE001
+                log(f"  ⚠ Lỗi thao tác ô slug (lần {attempt}): {str(exc).splitlines()[0][:150]}")
+
+            if self._current_slug() == slug:
+                return True
+            # Bị điều hướng khỏi trang sửa -> quay lại rồi thử lại 1 lần
+            try:
+                if "post.php" not in page.url:
+                    log("  ⚠ Trang bị chuyển hướng -> quay lại trang sửa…")
+                    page.goto(edit_url, wait_until="domcontentloaded")
+                    page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
+                    time.sleep(0.5)
+            except Exception:
+                pass
+        return self._current_slug() == slug
+
+    def _fill_title(self, title_new: str) -> bool:
+        page = self.open()
+        if page.locator("#title").count():
+            page.locator("#title").first.fill(title_new)
             return True
-        try:
-            link = page.locator("#edit-slug-buttons a.edit-slug, a.edit-slug")
-            if not link.count():
-                box = page.locator("#edit-slug-box")
-                if box.count():
-                    box.first.click()
-            if link.count():
-                link.first.click(force=True)
-            inp = page.locator("#new-post-slug")
-            inp.wait_for(state="visible", timeout=10000)
-            inp.fill(slug)
-            save = page.locator("#edit-slug-buttons button.save, button.save")
-            if save.count():
-                save.first.click()
-            else:
-                inp.press("Enter")
-            page.wait_for_timeout(900)
+        if page.locator(".editor-post-title__input").count():
+            page.locator(".editor-post-title__input").first.click()
+            page.keyboard.press("Meta+A" if sys.platform == "darwin" else "Control+A")
+            page.keyboard.type(title_new)
             return True
-        except Exception as exc:      # noqa: BLE001
-            log(f"  ⚠ Không sửa được slug: {str(exc).splitlines()[0][:160]}")
-            return False
+        return False
 
     def update_post(self, pid: int, title_new: str, slug_new: str) -> dict:
         page = self.open()
-        page.goto(f"{self.base}/wp-admin/post.php?post={pid}&action=edit", wait_until="domcontentloaded")
+        edit_url = self._edit_url(pid)
+        page.goto(edit_url, wait_until="domcontentloaded")
         try:
             page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
         except Exception:
             pass
         time.sleep(0.4)
-        if page.locator("#title").count():
-            page.locator("#title").first.fill(title_new)
-        elif page.locator(".editor-post-title__input").count():
-            page.locator(".editor-post-title__input").first.click()
-            page.keyboard.press("Meta+A" if sys.platform == "darwin" else "Control+A")
-            page.keyboard.type(title_new)
-        else:
+        if not self._fill_title(title_new):
             return {"ok": False, "error": "Không thấy ô tiêu đề (#title)"}
 
-        slug_ok = self.set_slug(slug_new)
+        # Slug PHẢI đổi được trước khi lưu; lỗi slug -> DỪNG (không lưu nửa vời)
+        if not self.set_slug(pid, slug_new):
+            return {
+                "ok": False,
+                "error": f"Không đổi được slug (hiện tại: {self._current_slug() or '?'}) — đã dừng, KHÔNG bấm Cập nhật",
+                "slug_now": self._current_slug(),
+            }
+
+        # Có thể bị chuyển trang trong lúc sửa slug -> quay lại và điền lại tiêu đề
+        if "post.php" not in page.url:
+            page.goto(edit_url, wait_until="domcontentloaded")
+            page.wait_for_selector("#title, .editor-post-title__input", timeout=60000)
+            self._fill_title(title_new)
+            if self._current_slug() != slug_new and not self.set_slug(pid, slug_new):
+                return {"ok": False, "error": "Mất slug sau khi quay lại trang sửa — đã dừng"}
+            self._fill_title(title_new)
 
         try:
             btn = page.locator("#publish, .editor-post-publish-button, button.editor-post-publish-button__button")
@@ -656,7 +703,7 @@ class Browser:
         after = self.read_product(pid)
         return {
             "ok": after.get("title_old", "").strip() == title_new.strip(),
-            "slug_ok": (after.get("slug_old", "") == slug_new) if slug_ok else False,
+            "slug_ok": after.get("slug_old", "") == slug_new,
             "title_now": after.get("title_old", ""),
             "slug_now": after.get("slug_old", ""),
         }
@@ -1037,28 +1084,50 @@ def cmd_apply(args) -> int:
     st = load_state()
     todo = []
     for pid, item in (st.get("items") or {}).items():
-        if item.get("status") != "approved":
+        status = item.get("status")
+        # "error" = lần trước lỗi -> cho thử lại (không cần duyệt lại)
+        if status not in ("approved", "error"):
+            continue
+        if not item.get("title_new") or not item.get("slug_new"):
             continue
         if args.id and int(pid) != args.id:
             continue
-        todo.append({"id": int(pid), "title_new": item.get("title_new", ""), "slug_new": item.get("slug_new", "")})
+        todo.append(
+            {
+                "id": int(pid),
+                "title_new": item.get("title_new", ""),
+                "slug_new": item.get("slug_new", ""),
+                "retry": status == "error",
+            }
+        )
     if not todo:
-        log("Không có bài nào đang chờ ghi (status = approved).")
+        log("Không có bài nào đang chờ ghi (status = approved/error).")
         return 1
-
-    backup = _backup(st, todo)
-    log(f"Đã backup title/slug cũ → {backup}")
 
     br = None
     if not args.dry_run:
         br = _browser(args)
         br.login()
+        # Đọc lại title/slug THẬT của từng bài trước khi backup (để khôi phục chính xác)
+        for r in todo:
+            try:
+                cur = br.read_product(r["id"])
+                item = st["items"][str(r["id"])]
+                item["title_old"] = cur.get("title_old", item.get("title_old", ""))
+                item["slug_old"] = cur.get("slug_old", item.get("slug_old", ""))
+                save_state(st)
+                log(f"  hiện tại #{r['id']}: {item['title_old']}  (/{item['slug_old']}/)")
+            except Exception as exc:      # noqa: BLE001
+                log(f"  ⚠ Không đọc lại được bài #{r['id']}: {str(exc).splitlines()[0][:120]}")
+
+    backup = _backup(st, todo)
+    log(f"Đã backup title/slug cũ → {backup}")
     ok_count = 0
     try:
         for r in todo:
             pid = r["id"]
             log("")
-            log(f"→ #{pid}  {r['title_new']}  (/{r['slug_new']}/)")
+            log(f"→ #{pid}  {r['title_new']}  (/{r['slug_new']}/)" + ("  [thử lại]" if r.get("retry") else ""))
             if args.dry_run:
                 log("  (chạy thử — không ghi)")
                 continue
