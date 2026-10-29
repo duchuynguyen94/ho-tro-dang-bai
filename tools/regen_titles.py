@@ -898,49 +898,29 @@ class Browser:
         return self._current_slug() == slug
 
     def _fill_content(self, html_text: str) -> bool:
-        """Ghi HTML vào ô Mô tả sản phẩm (chuyển sang chế độ Mã cho chắc)."""
+        """Ghi HTML vào ô Mô tả sản phẩm bằng JS (cập nhật cả textarea lẫn TinyMCE)."""
         page = self.open()
+        if not page.locator("#content").count():
+            return False
         try:
-            if page.locator("#content-html").count():
-                page.locator("#content-html").first.click(timeout=5000)
-                page.wait_for_timeout(300)
-        except Exception:
-            pass
-        if page.locator("#content").count():
-            page.locator("#content").first.fill(html_text)
-            try:
-                if page.locator("#content-tmce").count():
-                    page.locator("#content-tmce").first.click(timeout=5000)
-            except Exception:
-                pass
+            page.evaluate(
+                """(html) => {
+                    const ta = document.querySelector('#content');
+                    if (!ta) return false;
+                    ta.value = html;
+                    ta.dispatchEvent(new Event('input', { bubbles: true }));
+                    ta.dispatchEvent(new Event('change', { bubbles: true }));
+                    try {
+                        const ed = window.tinymce ? window.tinymce.get('content') : null;
+                        if (ed && !ed.isHidden()) ed.setContent(html);
+                    } catch (e) {}
+                    return true;
+                }""",
+                html_text,
+            )
             return True
-        return False
-
-    def _read_focus_keyword(self, timeout: float = 3.5) -> str:
-        page = self.page
-        if not page:
-            return ""
-        deadline = time.time() + timeout
-        val = ""
-        while time.time() < deadline:
-            try:
-                val = page.evaluate(
-                    """() => {
-                        const box = document.querySelector('.rank-math-focus-keyword');
-                        if (!box) return '';
-                        const tags = [...box.querySelectorAll('.tagify__tag-text')]
-                            .map(e => e.textContent.trim()).filter(Boolean);
-                        if (tags.length) return tags.join(', ');
-                        const t = box.querySelector('.tagify');
-                        return (t && t.value) ? String(t.value).trim() : '';
-                    }"""
-                ) or ""
-            except Exception:
-                val = ""
-            if val:
-                return val
-            time.sleep(0.4)
-        return val
+        except Exception:
+            return False
 
     def _focus_tags(self) -> list[str]:
         page = self.page
@@ -1115,7 +1095,7 @@ class Browser:
                 with page.expect_response(_is_save_response, timeout=120000):
                     if how == "locator":
                         btn.first.scroll_into_view_if_needed(timeout=10000)
-                        btn.first.click(timeout=15000)
+                        btn.first.click(timeout=8000)
                     else:
                         btn.first.evaluate("el => el.click()")
                 saved_ok = True
@@ -1125,7 +1105,7 @@ class Browser:
         if not saved_ok:
             return {"ok": False, "error": "Không nhận được phản hồi lưu từ WordPress (nút Cập nhật không gửi form)"}
 
-        self._settle(15000)
+        self._settle(1200)
         # Chờ thông báo "đã cập nhật" (1 số site lưu qua AJAX nên có thể không reload)
         try:
             page.wait_for_selector(
@@ -1135,7 +1115,7 @@ class Browser:
             )
         except Exception:
             pass
-        page.wait_for_timeout(1500)
+        page.wait_for_timeout(800)
 
         after = self.read_product(pid, model_code=keyword, reload=False)
         return {
