@@ -1346,7 +1346,7 @@ def cmd_list(args) -> int:
 
 def _next_pending(st: dict, only_id: int | None = None,
                   exclude: set[int] | None = None) -> int | None:
-    done = {"applied", "skipped"}
+    done = {"applied", "skipped", "approved", "error"}
     skip = exclude or set()
     if only_id is not None:
         return only_id
