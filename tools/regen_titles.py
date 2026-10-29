@@ -5,27 +5,33 @@ Website mặc định: https://samoapumps.com
 Danh sách:        /wp-admin/edit.php?post_status=publish&post_type=product
 
 Luồng chạy TỪNG BÀI (mỗi bài 1 vòng):
-  1) python tools/regen_titles.py next
-       - tự đăng nhập (tài khoản ngochuyduong), mở bài kế tiếp
-       - lấy: title cũ, slug cũ, content, danh mục, thương hiệu, SKU
+  1) python tools/regen_titles.py next --manual
+       - mở Chrome: BẠN TỰ ĐĂNG NHẬP (bấm captcha nếu có), script chờ rồi chạy tiếp
+       - session lưu vào profile riêng -> lần sau thường không phải đăng nhập lại
+       - mở bài kế tiếp, lấy: title cũ, slug cũ, content, danh mục, thương hiệu, SKU
        - dò MÃ SẢN PHẨM trong content -> tools/out/current.json
   2) AI (trong phiên chat) đọc current.json và ghi tools/out/proposal.json
        {"id": 123, "title_new": "...", "usp": "Giá kho", "note": "..."}
-  3) python tools/regen_titles.py review
+  3) python tools/regen_titles.py review --manual
        - mở trang HTML duyệt: title cũ -> title mới, slug cũ -> slug mới
        - tick "Áp dụng" rồi bấm "Lưu duyệt" -> tools/out/approved.json
-  4) python tools/regen_titles.py apply
+  4) python tools/regen_titles.py apply --manual
        - backup title/slug cũ ra tools/out/backup_*.csv
        - mở trang sửa, điền Title + Slug, bấm Cập nhật, đọc lại để xác nhận
 
 Lệnh phụ:
-  login            kiểm tra đăng nhập (mở trình duyệt)
+  login --manual   kiểm tra đăng nhập (mở trình duyệt, bạn tự bấm)
   list             lấy danh sách sản phẩm publish -> tools/out/products.json
   skip --id 123    bỏ qua 1 bài
   status           xem tiến độ
   usp              in danh sách USP + độ dài (để chọn vừa 55–60 ký tự)
 
-Tài khoản: lưu ở tools/.regen_secret.json (quyền 600, đã gitignore)
+Đăng nhập:
+  --manual         bạn TỰ bấm đăng nhập (dùng khi có captcha / không muốn lưu mật khẩu)
+  (không --manual) tự điền tài khoản/mật khẩu đã lưu; GẶP CAPTCHA thì tự chuyển sang chờ bạn bấm
+  --login-wait N   số giây chờ bạn đăng nhập (mặc định 600)
+
+Tài khoản (chỉ dùng khi KHÔNG có --manual): tools/.regen_secret.json (600, đã gitignore)
            hoặc biến môi trường HTDB_WP_USER / HTDB_WP_PASS.
 """
 from __future__ import annotations
@@ -284,10 +290,12 @@ def load_credentials() -> tuple[str, str]:
 
 class Browser:
     """Playwright + Chrome (profile riêng của tool, KHÔNG dùng chung profile của app)."""
-
-    def __init__(self, base: str, headless: bool = False) -> None:
+    def __init__(self, base: str, headless: bool = False, manual: bool = False,
+                 login_wait: int = 600) -> None:
         self.base = (base or DEFAULT_BASE).rstrip("/")
         self.headless = headless
+        self.manual = manual            # True = người dùng tự bấm đăng nhập (captcha)
+        self.login_wait = max(60, int(login_wait))
         self._pw = None
         self.context = None
         self.page = None
@@ -362,19 +370,88 @@ class Browser:
         self._pw = None
 
     # -- đăng nhập -- #
+    @staticmethod
+    def _has_captcha(page) -> bool:
+        try:
+            return page.locator(
+                ".g-recaptcha, #g-recaptcha-response, iframe[src*='recaptcha'], "
+                ".h-captcha, iframe[src*='hcaptcha'], #captcha, "
+                "input[name*='captcha' i]"
+            ).count() > 0
+        except Exception:
+            return False
+
+    def _logged_in(self) -> bool:
+        page = self.page
+        if not page:
+            return False
+        try:
+            bar = page.locator("#wpadminbar")
+            if bar.count() and bar.first.is_visible():
+                return True
+        except Exception:
+            pass
+        try:
+            return "wp-login.php" not in page.url and "/wp-admin" in page.url
+        except Exception:
+            return False
+
+    def _wait_login_done(self, timeout: int | None = None) -> None:
+        """Chờ NGƯỜI DÙNG tự đăng nhập trong cửa sổ Chrome (có captcha)."""
+        page = self.open()
+        wait = timeout or self.login_wait
+        log("")
+        log("─" * 70)
+        log("MỜI BẠN TỰ ĐĂNG NHẬP trong cửa sổ Chrome vừa mở")
+        log("  (nhập tài khoản / mật khẩu + bấm captcha nếu có)")
+        log(f"  Script sẽ tự chạy tiếp khi đăng nhập xong (chờ tối đa {wait // 60} phút).")
+        log("─" * 70)
+        deadline = time.time() + wait
+        last_note = 0.0
+        while time.time() < deadline:
+            if self._logged_in():
+                time.sleep(0.6)
+                log("Đã đăng nhập — tiếp tục.")
+                return
+            if time.time() - last_note > 20:
+                last_note = time.time()
+                log(f"  … đang chờ đăng nhập ({int(deadline - time.time())} giây còn lại)")
+            time.sleep(0.8)
+        raise SystemExit("Hết thời gian chờ đăng nhập. Chạy lại lệnh và đăng nhập sớm hơn nhé.")
+
+    def _manual_login(self) -> None:
+        page = self.open()
+        page.goto(self.base + "/wp-login.php", wait_until="domcontentloaded")
+        self._wait_login_done()
+        try:
+            page.goto(self.base + LIST_PATH, wait_until="domcontentloaded")
+            time.sleep(0.5)
+        except Exception:
+            pass
+
     def login(self) -> None:
         page = self.open()
-        self._user, self._pass = load_credentials()
         target = self.base + LIST_PATH
         page.goto(target, wait_until="domcontentloaded")
         time.sleep(0.6)
         if "/wp-login.php" not in page.url:
             log("Đã đăng nhập (session còn hiệu lực).")
             return
+        if self.manual:
+            self._manual_login()
+            return
         log("Chưa đăng nhập → tự đăng nhập…")
         page.goto(self.base + "/wp-login.php", wait_until="domcontentloaded")
-        page.fill("#user_login", self._user)
-        page.fill("#user_pass", self._pass)
+        self._user, self._pass = load_credentials()
+        try:
+            page.fill("#user_login", self._user)
+            page.fill("#user_pass", self._pass)
+        except Exception:
+            pass
+        if self._has_captcha(page):
+            log("Trang đăng nhập CÓ CAPTCHA → chuyển sang chế độ bạn tự bấm.")
+            self._wait_login_done()
+            return
         try:
             remember = page.locator("#rememberme")
             if remember.count() > 0:
@@ -385,7 +462,10 @@ class Browser:
         page.wait_for_load_state("domcontentloaded")
         time.sleep(0.9)
         if "/wp-login.php" in page.url:
-            raise SystemExit("Đăng nhập THẤT BẠI — kiểm tra lại tài khoản/mật khẩu.")
+            if self._has_captcha(page):
+                self._wait_login_done()
+                return
+            raise SystemExit("Đăng nhập THẤT BẠI — kiểm tra lại tài khoản/mật khẩu (hoặc chạy với --manual).")
         log("Đăng nhập thành công.")
 
     # -- đọc dữ liệu -- #
@@ -585,8 +665,17 @@ class Browser:
 # --------------------------------------------------------------------------- #
 # Lệnh: login / list / next
 # --------------------------------------------------------------------------- #
+def _browser(args) -> Browser:
+    return Browser(
+        getattr(args, "base", DEFAULT_BASE),
+        getattr(args, "headless", False),
+        manual=getattr(args, "manual", False),
+        login_wait=getattr(args, "login_wait", 600),
+    )
+
+
 def cmd_login(args) -> int:
-    br = Browser(args.base, args.headless)
+    br = _browser(args)
     try:
         br.login()
         page = br.open()
@@ -602,7 +691,7 @@ def cmd_login(args) -> int:
 
 def cmd_list(args) -> int:
     st = load_state()
-    br = Browser(args.base, args.headless)
+    br = _browser(args)
     br.login()
     try:
         products = br.list_products()
@@ -638,7 +727,7 @@ def _next_pending(st: dict, only_id: int | None = None) -> int | None:
 
 def cmd_next(args) -> int:
     st = load_state()
-    br = Browser(args.base, args.headless)
+    br = _browser(args)
     br.login()
     try:
         if not st.get("queue"):
@@ -962,7 +1051,7 @@ def cmd_apply(args) -> int:
 
     br = None
     if not args.dry_run:
-        br = Browser(args.base, args.headless)
+        br = _browser(args)
         br.login()
     ok_count = 0
     try:
@@ -1044,34 +1133,51 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--headless", action="store_true", help="Chạy ẩn trình duyệt (không nên dùng)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
-    p = sub.add_parser("login", help="Kiểm tra đăng nhập")
+    # Dùng chung cho mọi lệnh (đặt SAU tên lệnh): next --manual
+    common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--base", default=DEFAULT_BASE, help=f"URL website (mặc định {DEFAULT_BASE})")
+    common.add_argument(
+        "--manual",
+        action="store_true",
+        help="Bạn TỰ đăng nhập trong Chrome (dùng khi có captcha / không muốn lưu mật khẩu)",
+    )
+    common.add_argument(
+        "--login-wait",
+        type=int,
+        default=600,
+        metavar="GIAY",
+        help="Số giây chờ bạn đăng nhập tay (mặc định 600)",
+    )
+    common.add_argument("--headless", action="store_true", help="Chạy ẩn trình duyệt (không nên dùng)")
+
+    p = sub.add_parser("login", help="Kiểm tra đăng nhập (chờ bạn tự bấm nếu có captcha)", parents=[common])
     p.add_argument("--keep-open", action="store_true")
     p.set_defaults(func=cmd_login)
 
-    p = sub.add_parser("list", help="Lấy danh sách sản phẩm publish")
+    p = sub.add_parser("list", help="Lấy danh sách sản phẩm publish", parents=[common])
     p.set_defaults(func=cmd_list)
 
-    p = sub.add_parser("next", help="Đọc bài kế tiếp (title/slug cũ + content + mã SP)")
+    p = sub.add_parser("next", help="Đọc bài kế tiếp (title/slug cũ + content + mã SP)", parents=[common])
     p.add_argument("--id", type=int, default=None)
     p.set_defaults(func=cmd_next)
 
-    p = sub.add_parser("review", help="Mở trang HTML duyệt title + slug")
+    p = sub.add_parser("review", help="Mở trang HTML duyệt title + slug", parents=[common])
     p.add_argument("--timeout", type=int, default=3600, help="Giây chờ duyệt (mặc định 3600)")
     p.set_defaults(func=cmd_review)
 
-    p = sub.add_parser("apply", help="Ghi các bài đã duyệt lên WordPress")
+    p = sub.add_parser("apply", help="Ghi các bài đã duyệt lên WordPress", parents=[common])
     p.add_argument("--id", type=int, default=None)
     p.add_argument("--dry-run", action="store_true", help="Chỉ in ra, không ghi")
     p.set_defaults(func=cmd_apply)
 
-    p = sub.add_parser("skip", help="Bỏ qua 1 bài")
+    p = sub.add_parser("skip", help="Bỏ qua 1 bài", parents=[common])
     p.add_argument("--id", type=int, required=True)
     p.set_defaults(func=cmd_skip)
 
-    p = sub.add_parser("status", help="Xem tiến độ")
+    p = sub.add_parser("status", help="Xem tiến độ", parents=[common])
     p.set_defaults(func=cmd_status)
 
-    p = sub.add_parser("usp", help="In danh sách USP")
+    p = sub.add_parser("usp", help="In danh sách USP", parents=[common])
     p.set_defaults(func=cmd_usp)
 
     args = ap.parse_args(argv)
