@@ -348,6 +348,11 @@ class Browser:
 
         self.page = self.context.pages[0] if self.context.pages else self.context.new_page()
         try:
+            # Tự đồng ý hộp thoại (confirm "rời trang?" …) để không chặn việc lưu
+            self.page.on("dialog", lambda d: d.accept())
+        except Exception:
+            pass
+        try:
             self.page.set_default_timeout(60000)
             self.page.set_default_navigation_timeout(120000)
         except Exception:
@@ -744,21 +749,51 @@ class Browser:
                 return {"ok": False, "error": "Mất slug sau khi quay lại trang sửa — đã dừng"}
             self._fill_title(title_new)
 
+        # Bấm "Cập nhật" và CHỜ ĐÚNG phản hồi lưu của WordPress
+        # (trước đây điều kiện chờ luôn đúng ngay từ đầu -> không biết đã lưu hay chưa)
+        btn = page.locator(
+            "#publish, #save-post, .editor-post-publish-button, "
+            "button.editor-post-publish-button__button"
+        )
+        if not btn.count():
+            return {"ok": False, "error": "Không thấy nút Cập nhật"}
+
+        def _is_save_response(resp) -> bool:
+            try:
+                if resp.request.method != "POST":
+                    return False
+                url = resp.url or ""
+                return "post.php" in url or "admin-ajax.php" in url
+            except Exception:
+                return False
+
+        saved_ok = False
+        for how in ("locator", "js"):
+            try:
+                with page.expect_response(_is_save_response, timeout=120000):
+                    if how == "locator":
+                        btn.first.scroll_into_view_if_needed(timeout=10000)
+                        btn.first.click(timeout=15000)
+                    else:
+                        btn.first.evaluate("el => el.click()")
+                saved_ok = True
+                break
+            except Exception as exc:      # noqa: BLE001
+                log(f"  ⚠ Bấm Cập nhật ({how}) chưa lưu được: {str(exc).splitlines()[0][:140]}")
+        if not saved_ok:
+            return {"ok": False, "error": "Không nhận được phản hồi lưu từ WordPress (nút Cập nhật không gửi form)"}
+
+        self._settle(15000)
+        # Chờ thông báo "đã cập nhật" (1 số site lưu qua AJAX nên có thể không reload)
         try:
-            btn = page.locator("#publish, .editor-post-publish-button, button.editor-post-publish-button__button")
-            btn.first.click()
-            page.wait_for_function(
-                """() => {
-                    const b = document.querySelector('#publish');
-                    const notice = document.querySelector('#message.updated, #message.notice-success, .notice-success');
-                    return (b && !b.disabled && /cập nhật|update/i.test(b.value || b.innerText || '')) || !!notice;
-                }""",
-                timeout=180000,
+            page.wait_for_selector(
+                "#message.updated, #message.notice-success, .notice-success, "
+                "#message.updated, .components-snackbar",
+                timeout=15000,
             )
-            self._settle(15000)
-            page.wait_for_timeout(600)
-        except Exception as exc:      # noqa: BLE001
-            return {"ok": False, "error": f"Bấm Cập nhật lỗi: {str(exc).splitlines()[0][:160]}"}
+        except Exception:
+            pass
+        page.wait_for_timeout(600)
 
         after = self.read_product(pid)
         return {
