@@ -1029,6 +1029,17 @@ class Browser:
                     inp.first.scroll_into_view_if_needed(timeout=5000)
                 except Exception:
                     pass
+                # đã gõ sẵn chữ trong ô (chưa thành tag) -> chỉ cần Enter
+                try:
+                    pending = (inp.first.text_content() or "").strip()
+                except Exception:
+                    pending = ""
+                if pending and keyword.lower() in pending.lower():
+                    page.keyboard.press("Enter")
+                    page.wait_for_timeout(1000)
+                    if any(keyword.lower() == t.lower() for t in self._focus_tags()):
+                        return True
+                    pending = ""
                 inp.first.click(force=True)
                 page.wait_for_timeout(300)
                 # xoá tag cũ
@@ -1812,6 +1823,53 @@ def cmd_apply(args) -> int:
 # --------------------------------------------------------------------------- #
 # Lệnh phụ: skip / status / usp
 # --------------------------------------------------------------------------- #
+def cmd_keyword(args) -> int:
+    """Chỉ đặt lại Focus Keyword (= mã SP) cho các bài đã xử lý (không sửa content)."""
+    st = load_state()
+    items = st.get("items") or {}
+    if args.ids:
+        ids = [int(x) for x in str(args.ids).replace(" ", "").split(",") if x]
+    else:
+        ids = [int(pid) for pid, it in items.items() if it.get("status") == "applied"]
+    if not ids:
+        log("Không có bài nào cần đặt keyword.")
+        return 0
+    br = _browser(args)
+    br.login()
+    ok = 0
+    try:
+        for pid in ids:
+            item = items.get(str(pid), {})
+            kw = _keyword_for(pid, item)
+            if not kw:
+                log(f"#{pid}: không xác định được mã SP — bỏ qua")
+                continue
+            log(f"→ #{pid}  keyword = {kw}")
+            if not br._goto(br._edit_url(pid)):
+                log("  ⚠ Không mở được trang sửa")
+                continue
+            try:
+                br.page.wait_for_selector("#title, .editor-post-title__input", timeout=30000)
+            except Exception:
+                pass
+            br._settle(1200)
+            state = br._set_focus_keyword(kw)
+            if state is None:
+                log("  ⚠ Không có ô Focus Keyword — bỏ qua")
+                continue
+            res = br.update_post(pid, br.page.locator("#title").first.input_value(), br._current_slug(), kw)
+            if res.get("kw_ok"):
+                ok += 1
+                log("  ✔ keyword đã đặt")
+            else:
+                log(f"  ✘ keyword chưa đúng (hiện tại: {res.get('kw_now')!r})")
+    finally:
+        br.close()
+    log("")
+    log(f"Xong: {ok}/{len(ids)} bài có keyword đúng.")
+    return 0 if ok == len(ids) else 2
+
+
 def cmd_skip(args) -> int:
     st = load_state()
     item = st["items"].setdefault(str(args.id), {})
@@ -1933,6 +1991,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--id", type=int, default=None)
     p.add_argument("--dry-run", action="store_true", help="Chỉ in ra, không ghi")
     p.set_defaults(func=cmd_apply)
+
+    p = sub.add_parser("keyword", help="Chỉ đặt lại Focus Keyword cho bài đã xử lý", parents=[common])
+    p.add_argument("--ids", default="", help="Danh sách id, cách nhau dấu phẩy (mặc định: mọi bài đã xong)")
+    p.set_defaults(func=cmd_keyword)
 
     p = sub.add_parser("skip", help="Bỏ qua 1 bài", parents=[common])
     p.add_argument("--id", type=int, required=True)
