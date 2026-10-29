@@ -271,6 +271,24 @@ def detect_codes(text: str) -> list[dict]:
 # --------------------------------------------------------------------------- #
 # Trình duyệt + đăng nhập
 # --------------------------------------------------------------------------- #
+H1_RE = re.compile(r"<h1\b[^>]*>.*?</h1>", re.I | re.S)
+SITE_LINK = "http://www.ngochuyduong.com/"
+
+
+def with_linked_h1(content_html: str, title: str) -> tuple[str, str]:
+    """Đặt <h1> = link về ngochuyduong.com với nội dung là Title mới.
+
+    Trả về (html_mới, "replaced" | "inserted").
+    """
+    esc = html.escape((title or "").strip())
+    new_h1 = f'<h1><a href="{SITE_LINK}">{esc}</a></h1>'
+    src = content_html or ""
+    m = H1_RE.search(src)
+    if m:
+        return src[: m.start()] + new_h1 + src[m.end():], "replaced"
+    return new_h1 + "\n" + src, "inserted"
+
+
 def cdp_alive(timeout: float = 1.5) -> bool:
     """Chrome đang mở với cổng debug? (để nối vào thay vì mở cửa sổ mới)"""
     import urllib.request
@@ -339,7 +357,17 @@ class Browser:
         # Có Chrome đang mở (lệnh `start`) -> nối vào cửa sổ đó, KHÔNG mở cửa sổ mới
         if not self.headless and cdp_alive():
             self._pw = sync_playwright().start()
-            browser = self._pw.chromium.connect_over_cdp(CDP_URL)
+            try:
+                browser = self._pw.chromium.connect_over_cdp(CDP_URL)
+            except Exception as exc:      # noqa: BLE001
+                self._pw.stop()
+                self._pw = None
+                raise SystemExit(
+                    "Chrome đang mở nhưng không điều khiển được:\n"
+                    f"  {str(exc).splitlines()[0][:160]}\n"
+                    "Cách xử lý: chạy `tools/regen_titles.py stop` (hoặc đóng cửa sổ Chrome) "
+                    "rồi `start` lại."
+                )
             ctx = browser.contexts[0] if browser.contexts else browser.new_context()
             self.context = ctx
             self._external = True
@@ -647,9 +675,16 @@ class Browser:
         except Exception:
             taxes = []
 
+        h1_html = ""
+        m_h1 = H1_RE.search(content_html or "")
+        if m_h1:
+            h1_html = m_h1.group(0)
+        h1_text = html_to_text(h1_html, limit=400).strip()
         text = html_to_text(content_html)
         return {
             "id": pid,
+            "h1_text": h1_text,
+            "h1_has_link": bool(h1_html) and SITE_LINK in h1_html,
             "edit_url": edit_url,
             "public_url": f"{self.base}/product/{slug}/" if slug else "",
             "title_old": title.strip(),
@@ -769,6 +804,25 @@ class Browser:
                     pass
         return self._current_slug() == slug
 
+    def _fill_content(self, html_text: str) -> bool:
+        """Ghi HTML vào ô Mô tả sản phẩm (chuyển sang chế độ Mã cho chắc)."""
+        page = self.open()
+        try:
+            if page.locator("#content-html").count():
+                page.locator("#content-html").first.click(timeout=5000)
+                page.wait_for_timeout(300)
+        except Exception:
+            pass
+        if page.locator("#content").count():
+            page.locator("#content").first.fill(html_text)
+            try:
+                if page.locator("#content-tmce").count():
+                    page.locator("#content-tmce").first.click(timeout=5000)
+            except Exception:
+                pass
+            return True
+        return False
+
     def _fill_title(self, title_new: str) -> bool:
         page = self.open()
         if page.locator("#title").count():
@@ -792,6 +846,21 @@ class Browser:
         self._settle(8000)
         if not self._fill_title(title_new):
             return {"ok": False, "error": "Không thấy ô tiêu đề (#title)"}
+
+        # Đặt <h1> trong mô tả = link ngochuyduong.com + Title mới
+        h1_state = ""
+        try:
+            content_html = page.locator("#content").first.input_value() if page.locator("#content").count() else ""
+            if not content_html:
+                content_html = page.eval_on_selector(
+                    ".block-editor-block-list__layout, .editor-styles-wrapper",
+                    "el => el ? el.innerHTML : ''",
+                )
+            new_html, h1_state = with_linked_h1(content_html, title_new)
+            if not self._fill_content(new_html):
+                log("  ⚠ Không ghi được nội dung để thay <h1>")
+        except Exception as exc:      # noqa: BLE001
+            log(f"  ⚠ Lỗi thay <h1>: {str(exc).splitlines()[0][:140]}")
 
         # Slug PHẢI đổi được trước khi lưu; lỗi slug -> DỪNG (không lưu nửa vời)
         if not self.set_slug(pid, slug_new):
@@ -860,6 +929,10 @@ class Browser:
         return {
             "ok": after.get("title_old", "").strip() == title_new.strip(),
             "slug_ok": after.get("slug_old", "") == slug_new,
+            "h1_ok": after.get("h1_text", "").strip() == title_new.strip()
+            and bool(after.get("h1_has_link")),
+            "h1_state": h1_state,
+            "h1_now": after.get("h1_text", ""),
             "title_now": after.get("title_old", ""),
             "slug_now": after.get("slug_old", ""),
         }
@@ -882,6 +955,9 @@ def cmd_start(args) -> int:
     if cdp_alive():
         log(f"Chrome đã mở sẵn ở {CDP_URL} — không mở thêm.")
         return 0
+    # còn tiến trình Chrome kẹt profile nhưng không mở cổng -> dọn trước
+    if kill_profile_chrome():
+        time.sleep(1.5)
     chrome = find_chrome()
     if not chrome:
         raise SystemExit(
@@ -913,10 +989,41 @@ def cmd_start(args) -> int:
     raise SystemExit("Chrome không mở được cổng debug. Thử đóng Chrome rồi chạy lại.")
 
 
+def kill_profile_chrome() -> int:
+    """Tắt các tiến trình Chrome đang dùng profile của tool (khi CDP không điều khiển được)."""
+    import subprocess
+
+    killed = 0
+    key = str(PROFILE_DIR)
+    if sys.platform.startswith("win"):
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/FI", "IMAGENAME eq chrome.exe"],
+                capture_output=True,
+            )
+            return 1
+        except Exception:
+            return 0
+    try:
+        out = subprocess.run(["ps", "-axo", "pid=,command="], capture_output=True, text=True).stdout
+        for line in out.splitlines():
+            if key in line and ("Chrome" in line or "chrome" in line):
+                pid = line.strip().split(" ", 1)[0]
+                try:
+                    subprocess.run(["kill", "-9", pid], capture_output=True)
+                    killed += 1
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return killed
+
+
 def cmd_stop(args) -> int:
-    """Đóng Chrome đang giữ."""
+    """Đóng Chrome đang giữ (kể cả khi CDP không điều khiển được)."""
     if not cdp_alive():
-        log("Chrome không mở — không có gì để đóng.")
+        n = kill_profile_chrome()
+        log("Chrome không mở — không có gì để đóng." if not n else f"Đã tắt {n} tiến trình Chrome còn kẹt profile.")
         return 0
     from playwright.sync_api import sync_playwright
 
@@ -924,15 +1031,18 @@ def cmd_stop(args) -> int:
     try:
         br = pw.chromium.connect_over_cdp(CDP_URL)
         br.close()
+        log("Đã đóng Chrome.")
+        return 0
     except Exception as exc:      # noqa: BLE001
-        log(f"⚠ Không đóng được: {str(exc).splitlines()[0][:120]}")
+        log(f"⚠ CDP không đóng được ({str(exc).splitlines()[0][:100]}) → tắt trực tiếp…")
     finally:
         try:
             pw.stop()
         except Exception:
             pass
-    log("Đã đóng Chrome.")
-    return 0
+    n = kill_profile_chrome()
+    log(f"Đã tắt {n} tiến trình Chrome." if n else "Không tìm thấy tiến trình để tắt.")
+    return 0 if n else 1
 
 
 def cmd_login(args) -> int:
@@ -1347,20 +1457,20 @@ def cmd_apply(args) -> int:
                 continue
             res = br.update_post(pid, r["title_new"], r["slug_new"])
             item = st["items"][str(pid)]
-            if res.get("ok") and res.get("slug_ok", True):
+            if res.get("ok") and res.get("slug_ok", True) and res.get("h1_ok", True):
                 item["status"] = "applied"
                 item["applied_at"] = datetime.now().isoformat(timespec="seconds")
                 item["title_now"] = res.get("title_now", "")
                 item["slug_now"] = res.get("slug_now", "")
                 save_state(st)
                 ok_count += 1
-                log("  ✔ Đã cập nhật (title + slug khớp).")
+                log(f"  ✔ Đã cập nhật: title + slug + <h1> đều khớp ({res.get('h1_state') or 'h1'}).")
             else:
                 item["status"] = "error"
                 item["error"] = str(res.get("error") or "Không khớp sau khi lưu")
                 save_state(st)
                 log(f"  ✘ Lỗi: {item['error']}")
-                log(f"    hiện tại: title={res.get('title_now')!r} slug={res.get('slug_now')!r}")
+                log(f"    hiện tại: title={res.get('title_now')!r} slug={res.get('slug_now')!r} h1={res.get('h1_now')!r}")
     finally:
         if br:
             br.close()
