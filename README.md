@@ -54,5 +54,4 @@ app/
   images/              # ghép ảnh (Pillow)
   wp/                  # trình duyệt, ghi & phát lại kịch bản
   ui/                  # giao diện PySide6
-tools/dev_shot.py      # tạo dữ liệu mẫu + chụp ảnh màn hình (khi phát triển)
 ```
