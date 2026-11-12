@@ -1057,7 +1057,18 @@ class MainWindow(QMainWindow):
 
     # ---------------- nội dung “Đọc thêm” (tải từ GitHub) ---------------- #
     def _start_readmore_watch(self) -> None:
-        """Mỗi lần mở app: tải `content/readmore.html` từ GitHub (lỗi -> giữ bản đang có)."""
+        """Mỗi lần mở app: tải `content/readmore.html` từ GitHub (lỗi -> giữ bản đang có).
+
+        Hoãn 1,5 giây (chờ cửa sổ hiện xong) rồi mới chạy luồng tải — cũng để không tạo
+        QThread ngay trong __init__ (tránh "QThread: Destroyed while thread is still running"
+        khi app bị đóng/thoát ngay, ví dụ lúc smoke test).
+        """
+        QTimer.singleShot(1500, self._fetch_readmore)
+
+    def _fetch_readmore(self) -> None:
+        """Chạy 1 luồng tải nội dung “Đọc thêm” (bỏ qua nếu đang tải)."""
+        if self._readmore_worker is not None:
+            return
         try:
             from ..config import READMORE_URL
 
