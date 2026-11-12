@@ -167,7 +167,7 @@ class ReadMorePanel(QWidget):
         old = str(ui.get("readmore") or "").strip()
         ui["readmore"] = str(text or "")
         ui["readmore_synced"] = True
-        ui["readmore_fetched_at"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+        ui["readmore_fetched_at"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         try:
             self.store.save()
         except Exception:      # noqa: BLE001
@@ -175,7 +175,7 @@ class ReadMorePanel(QWidget):
         self.reload()
         self.changed.emit()
         if str(text or "").strip() == old:
-            show_toast(self, "Nội dung “Đọc thêm” không đổi (đã là bản mới nhất)", 2600)
+            show_toast(self, "Đã kiểm tra GitHub: nội dung không đổi (đã là bản mới nhất)", 2600)
         else:
             show_toast(self, "Đã cập nhật nội dung “Đọc thêm” từ GitHub", 2600)
 

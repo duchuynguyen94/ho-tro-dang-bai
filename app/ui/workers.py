@@ -1159,35 +1159,69 @@ class UpdateWorker(TrackedThread):
 
 
 class ReadMoreFetchWorker(TrackedThread):
-    """Tải nội dung "Đọc thêm" (Cài đặt -> Chèn nội dung) từ file trên GitHub."""
+    """Tải nội dung "Đọc thêm" (Cài đặt -> Chèn nội dung) từ file trên GitHub.
+
+    Thứ tự: GitHub API (cache ~60 giây) -> raw.githubusercontent (cache 5 phút).
+    raw.githubusercontent KHÔNG tôn trọng header Cache-Control và BỎ QUA query string,
+    nên dùng API là cách duy nhất thấy nội dung mới gần như ngay sau khi sửa.
+    """
 
     ok = Signal(str)          # nội dung mới
     failed = Signal(str)
 
     def __init__(self, url: str = "") -> None:
         super().__init__()
-        from ..config import READMORE_URL
+        from ..config import READMORE_API_URL, READMORE_URL
 
         self.url = str(url or READMORE_URL)
+        self.api_url = READMORE_API_URL
 
-    def run(self) -> None:
+    def _fetch_api(self) -> str:
+        """Lấy trực tiếp qua GitHub API (trả nguyên văn file)."""
         import httpx
 
-        try:
-            r = httpx.get(self.url, headers={"Cache-Control": "no-cache"},
-                          follow_redirects=True, timeout=30)
-            if r.status_code >= 400:
-                raise RuntimeError(f"GitHub trả về mã {r.status_code}")
-            text = (r.text or "").strip()
-            if not text:
-                # file rỗng = chủ ý không chèn “Đọc thêm”
-                self.ok.emit("")
-                return
-            if "<" not in text and len(text) < 20:
-                raise RuntimeError("Nội dung tải về không hợp lệ")
-            self.ok.emit(text)
-        except Exception as exc:      # noqa: BLE001 (mất mạng là bình thường)
-            self.failed.emit(str(exc))
+        r = httpx.get(self.api_url, headers={
+            "Accept": "application/vnd.github.raw",
+            "User-Agent": "ho-tro-dang-bai",
+        }, follow_redirects=True, timeout=30)
+        if r.status_code in (403, 429):
+            raise RuntimeError("GitHub API đã hết lượt gọi (thử lại sau ít phút)")
+        if r.status_code >= 400:
+            raise RuntimeError(f"GitHub API trả về mã {r.status_code}")
+        return r.text or ""
+
+    def _fetch_raw(self) -> str:
+        """Dự phòng: tải raw (có thể chậm tới ~5 phút so với lúc sửa)."""
+        import time
+
+        import httpx
+
+        sep = "&" if "?" in self.url else "?"
+        r = httpx.get(f"{self.url}{sep}v={int(time.time() * 1000)}", headers={
+            "Cache-Control": "no-cache", "Pragma": "no-cache",
+            "User-Agent": "ho-tro-dang-bai",
+        }, follow_redirects=True, timeout=30)
+        if r.status_code >= 400:
+            raise RuntimeError(f"GitHub trả về mã {r.status_code}")
+        return r.text or ""
+
+    def run(self) -> None:
+        errors: list[str] = []
+        text = ""
+        for fetch in (self._fetch_api, self._fetch_raw):
+            try:
+                text = (fetch() or "").strip()
+                break
+            except Exception as exc:      # noqa: BLE001 (mất mạng/chặn là bình thường)
+                errors.append(str(exc))
+        if not text and errors:
+            self.failed.emit(errors[0])
+            return
+        if text and "<" not in text and len(text) < 20:
+            self.failed.emit("Nội dung tải về không hợp lệ")
+            return
+        # text rỗng = file rỗng (chủ ý không chèn “Đọc thêm”)
+        self.ok.emit(text)
 
 
 class ImageEditWorker(TrackedThread):

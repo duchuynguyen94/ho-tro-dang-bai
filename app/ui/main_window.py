@@ -1084,15 +1084,17 @@ class MainWindow(QMainWindow):
 
             ui = self.store.data.setdefault("ui", {})
             new = str(text or "")
-            if new.strip() == str(ui.get("readmore") or "").strip() and ui.get("readmore_synced"):
-                return                                    # không đổi -> khỏi ghi đĩa
+            changed = new.strip() != str(ui.get("readmore") or "").strip()
             ui["readmore"] = new
             ui["readmore_synced"] = True
-            ui["readmore_fetched_at"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+            # LUÔN cập nhật giờ tải -> mở Cài đặt thấy app đã kiểm tra lúc nào
+            ui["readmore_fetched_at"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M:%S")
             self.store.save()
             panel = getattr(self.config_page, "_panels", {}).get("readmore")
             if panel is not None:
                 panel.reload()
+            if changed:                                   # nội dung thật sự đổi -> báo nhẹ
+                show_toast(self, "Đã cập nhật nội dung “Đọc thêm” từ GitHub", 2600)
         except Exception:      # noqa: BLE001
             traceback.print_exc()
 

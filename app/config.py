@@ -133,3 +133,8 @@ READMORE_URL = (
 READMORE_PAGE_URL = (
     "https://github.com/duchuynguyen94/ho-tro-dang-bai/blob/main/" + READMORE_REPO_PATH
 )
+# GitHub API: KHÔNG dính cache 5 phút của raw.githubusercontent (cache ~60 giây)
+READMORE_API_URL = (
+    "https://api.github.com/repos/duchuynguyen94/ho-tro-dang-bai/contents/"
+    + READMORE_REPO_PATH
+)

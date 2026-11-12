@@ -66,7 +66,8 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
 - **Model Extractor: đã bỏ** (không còn ô "Rule Model Extractor" trong Format Rule).
 - **Link tiêu đề: đã bỏ hoàn toàn** — không chèn link vào `h1/h2`, không còn cấu hình link tiêu đề.
 - **Chèn nội dung (“Đọc thêm”)**: nội dung lấy từ file **`content/readmore.html` trên GitHub**
-  (app tự tải mỗi lần mở + nút `↻ Tải lại từ GitHub`); **không nhập tay trong app**.
+  (app tự tải mỗi lần mở qua GitHub API — cache ~1 phút, nên sửa file là gần như thấy ngay;
+  nút `↻ Tải lại từ GitHub` để kiểm tra lại ngay); **không nhập tay trong app**.
   Mất mạng → dùng bản đang có; lần đầu chưa tải được → bản mặc định
   `app/assets/default/readmore.html`.
 - **Icon trong nội dung**: chỉ đặt ở thẻ `<h2>` + các dòng liên hệ (`🌐` website, `☎️` hotline,
