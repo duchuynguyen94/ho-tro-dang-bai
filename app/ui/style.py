@@ -144,7 +144,7 @@ QMainWindow, #contentRoot {{ background: {BG}; }}
 #cardHeader {{ border-bottom: 1px solid {LINE}; }}
 #cardHeader QLabel {{ font-weight: 700; font-size: 13px; }}
 #cardBody {{ background: #ffffff; border-radius: 10px; }}
-/* Panel Cài đặt (AI nội dung, AI ảnh, Format Rule, Link tiêu đề, Cập nhật): nền #f1f5f9 */
+/* Panel Cài đặt (AI nội dung, AI ảnh, Format Rule, Chèn nội dung, Cập nhật): nền #f1f5f9 */
 QWidget#cfgPanel, QScrollArea#cfgPanel {{ background: #e8edf3; }}
 QScrollArea#cfgPanel > QWidget {{ background: transparent; }}
 QWidget#cfgInner {{ background: transparent; }}

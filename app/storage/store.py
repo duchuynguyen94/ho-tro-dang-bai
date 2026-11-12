@@ -72,17 +72,14 @@ class Store:
             if st in ("review", "posting", "done"):
                 t["status"] = "finish"
 
-        """Chuyển format của site cũ sang format dùng chung (nếu chưa có)."""
+        # đã BỎ chức năng chèn link vào tiêu đề mục -> xoá cấu hình cũ
+        self.data.pop("title_links", None)
+        self.data.pop("title_link_first", None)
+
+        # đã BỎ phần chọn file rule riêng -> LUÔN dùng file rule mặc định kèm app
         fmt = self.data.setdefault("formats", {})
-        for k in ("content", "seo", "extractor"):
-            fmt.setdefault(k, "")
-        if not fmt.get("content"):
-            for s in self.data.get("sites", []):
-                sf = s.get("formats") or {}
-                if sf.get("content"):
-                    fmt["content"] = sf.get("content", "") or ""
-                    fmt["seo"] = sf.get("seo") or sf.get("title") or ""
-                    break
+        for k in ("content", "seo", "extractor", "title", "description", "tags"):
+            fmt[k] = ""
         if not isinstance(fmt.get("image_rules"), list) or not fmt.get("image_rules"):
             fmt["image_rules"] = ["", "", ""]
         # watermark: bỏ cơ chế tự điền URL website.
@@ -281,7 +278,7 @@ class Store:
         self.data["formats"] = fmt.to_dict()
 
     def has_format_content(self) -> bool:
-        """Có rule nội dung để chạy? (file riêng HOẶC file mặc định của phần mềm)."""
+        """Có rule nội dung để chạy? (dùng file rule mặc định kèm app)."""
         try:
             return bool(self.formats.rule("content"))
         except Exception:
@@ -326,25 +323,6 @@ class Store:
 
     def set_image_rules(self, rules: list[str]) -> None:
         self.data.setdefault("formats", {})["image_rules"] = [str(r) for r in rules]
-
-    @property
-    def title_links(self) -> list[str]:
-        """Danh sách link chèn vào tiêu đề mục (h2 số 2 trở đi)."""
-        links = self.data.get("title_links")
-        if not isinstance(links, list):
-            return []
-        return [str(x).strip() for x in links if str(x).strip()]
-
-    def set_title_links(self, links: list[str]) -> None:
-        self.data["title_links"] = [str(x).strip() for x in links if str(x).strip()]
-
-    @property
-    def title_link_first(self) -> str:
-        """Link chèn vào TIÊU ĐỀ ĐẦU TIÊN (h2 đầu)."""
-        return str(self.data.get("title_link_first") or "").strip()
-
-    def set_title_link_first(self, link: str) -> None:
-        self.data["title_link_first"] = str(link or "").strip()
 
 
     # ------------------------------------------------------------------ #

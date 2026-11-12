@@ -123,7 +123,7 @@ SEO_JSON_SPEC = """{
 # Đọc file rule
 # --------------------------------------------------------------------------- #
 def rule_path(rules, kind: str) -> str:
-    """Đường dẫn file rule hiệu dụng: file riêng -> file mặc định kèm app."""
+    """Đường dẫn file rule hiệu dụng: file mặc định kèm app."""
     try:
         return rules.rule(kind)
     except AttributeError:
@@ -267,30 +267,6 @@ def mark_auto_formatted(html_text: str) -> str:
             inner = m.group(1) or ""
             return t[:m.start()] + f'<{tag}{inner} {AUTO_FMT_ATTR}>' + t[m.end():]
     return f"<!-- auto-format -->\n{t}"
-
-
-def set_first_title_link(html_text: str, url: str) -> str:
-    """Đặt href của TIÊU ĐỀ ĐẦU TIÊN (h1, không có thì h2) = url website SẼ ĐĂNG.
-
-    - Tiêu đề đã có <a> -> CHỈ ĐỔI href (giữ nguyên chữ).
-    - Tiêu đề chưa có <a> -> bọc chữ thành link.
-    """
-    u = _norm_url(str(url or "").strip())
-    if not u or not html_text:
-        return html_text
-    m = re.search(r"<h([12])\b([^>]*)>(.*?)</h\1>", html_text, flags=re.I | re.S)
-    if not m:
-        return html_text
-    inner = m.group(3)
-    if "<a" in inner.lower():
-        new_inner = re.sub(r'(<a\b[^>]*?\bhref=)"[^"]*"', rf'\1"{u}"', inner, count=1, flags=re.I)
-        if new_inner == inner:
-            new_inner = re.sub(r"(<a\b[^>]*?\bhref=)'[^']*'", rf'\1"{u}"', inner, count=1, flags=re.I)
-    else:
-        lead, rest = split_leading_icon(inner)
-        body = rest.strip() or inner.strip()
-        new_inner = f'{lead}<a href="{u}">{body}</a>' if body else inner
-    return html_text[:m.start(3)] + new_inner + html_text[m.end(3):]
 
 
 def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> str:
@@ -719,35 +695,6 @@ def insert_external_links(html_text: str, links: list[tuple[str, str]],
     return "".join(out)
 
 
-DEFAULT_SECTIONS = (
-    "Giới thiệu tổng quan",
-    "Giới thiệu chung",
-    "Tính năng kỹ thuật nổi bật",
-    "Tính năng nổi bật",
-    "Thông số kỹ thuật tiêu chuẩn",
-    "Thông số kỹ thuật",
-    "Vật liệu & xử lý – Độ bền vượt trội",
-    "Vật liệu và xử lý",
-    "Vật liệu và độ bền",
-    "Vật liệu & độ bền",
-    "Tương thích – Thay thế – Mở rộng",
-    "Tương thích",
-    "Ứng dụng thực tế",
-    "Tại sao nên mua tại Ngọc Huy Dương?",
-    "Liên hệ – Đặt hàng / Tư vấn kỹ thuật",
-    "Liên hệ và Đặt hàng",
-    "Liên hệ & Đặt hàng",
-    "Phiên bản & Mã sản phẩm",
-    "Phiên bản và Mã sản phẩm",
-    "FAQ (5 câu)",
-    "FAQ",
-    "Hỏi đáp",
-    "Hỏi & Đáp",
-    "Câu hỏi thường gặp",
-    "Câu hỏi đáp",
-)
-
-
 # Icon đầu mục theo template (mục 5. TEMPLATE của Rule_Content)
 TITLE_ICON = "🏷️"
 SECTION_ICONS = (
@@ -878,7 +825,7 @@ def _decorate_line(text: str) -> str:
 def apply_template_icons(html_text: str) -> str:
     """Chèn icon đầu mục (h1/h2) và icon ở các dòng liên hệ cho ĐÚNG template.
 
-    Chạy TRƯỚC linkify_domains/insert_title_links. Nếu AI đã tự viết icon thì giữ nguyên.
+    Chạy TRƯỚC linkify_domains. Nếu AI đã tự viết icon thì giữ nguyên.
     """
     if not html_text:
         return html_text
@@ -953,122 +900,6 @@ def _section_re(name: str) -> re.Pattern:
         return re.compile(r"(?!)")
     # giữa các từ cho phép khoảng trắng + dấu câu (vd "FAQ (5 câu)")
     return re.compile(r"[\s\W_]*".join(parts), re.I)
-
-
-def insert_title_links(html_text: str, site_url: str, links: list[str],
-                       candidates: list[str] | None,
-                       sections: tuple[str, ...] | None = None) -> str:
-    """Chèn link vào TIÊU ĐỀ MỤC của bài viết.
-
-    - TIÊU ĐỀ ĐẦU TIÊN (<h1> hoặc <h2>, cái nào xuất hiện trước) -> chèn link của
-      CHÍNH website (site_url, thường là https://ngochuyduong.com).
-    - Các tiêu đề TIẾP THEO có chứa tên mục chuẩn ("Giới thiệu tổng quan",
-      "Tính năng kỹ thuật nổi bật", "Thông số kỹ thuật tiêu chuẩn") -> chèn lần lượt
-      các link trong danh sách cấu hình (mỗi link 1 lần, đúng số lượng link).
-    - Link được chèn vào phần TỪ KHOÁ trong tiêu đề (sau tên mục);
-      nếu tiêu đề không có từ khoá thì bọc cả tiêu đề.
-    """
-    if not html_text:
-        return html_text
-    cands = [c.strip() for c in (candidates or []) if c and len(c.strip()) >= 3]
-    sec_res = [_section_re(x) for x in (sections or DEFAULT_SECTIONS) if str(x).strip()]
-
-    head_re = re.compile(r"^<h([1-6])\b", re.I)      # tính cả h1 (tiêu đề bài viết)
-    close_re = re.compile(r"^</h[1-6]", re.I)
-
-    parts = re.split(r"(<[^>]+>)", html_text)
-    out: list[str] = []
-    pending = [l for l in (links or []) if str(l).strip()]
-    used: set[str] = set()
-    heading_seen = 0        # đếm h1 + h2 (tiêu đề đầu tiên = h1 hoặc h2)
-    # tiêu đề nào ĐÃ CÓ <a> bên trong -> bỏ qua toàn bộ (bấm lại không chèn thêm)
-    skip_ranges: list[tuple[int, int]] = []
-    existing_hrefs: set[str] = set()
-    for _m in re.finditer(r"<h([1-6])\b[^>]*>(.*?)</h\1>", html_text, flags=re.I | re.S):
-        inner_h = str(_m.group(2) or "")
-        if "<a" in inner_h.lower():
-            skip_ranges.append((_m.start(), _m.end()))
-            for _href in re.findall(r'<a\b[^>]*href=["\']([^"\']+)["\']', inner_h, re.I):
-                existing_hrefs.add(_href.strip().rstrip("/"))
-    if existing_hrefs:
-        # link NÀO đã nằm trong tiêu đề rồi -> KHÔNG chèn lại (tránh đăng bài chèn thêm lần nữa)
-        pending = [l for l in pending
-                   if str(l).strip().rstrip("/") not in existing_hrefs]
-
-    depth = 0
-    in_a = 0                # đang ở TRONG thẻ <a> -> KHÔNG chèn thêm (tránh lồng link)
-    head_has_a = False      # tiêu đề HIỆN TẠI đã có <a> -> KHÔNG chèn nữa
-    pos = 0
-    i = 0
-    while i < len(parts):
-        part = parts[i]
-        if any(_a <= pos < _b for _a, _b in skip_ranges):
-            # tiêu đề đã có link -> giữ nguyên, nhưng VẪN ĐẾM để số thứ tự không lệch
-            m = head_re.match(part)
-            if m and m.group(1) in ("1", "2"):
-                heading_seen += 1
-            out.append(part)
-            pos += len(part)
-            i += 1
-            continue
-        pos += len(part)
-        if part.startswith("<"):
-            m = head_re.match(part)
-            if m:
-                depth += 1
-                head_has_a = False              # tiêu đề mới -> chưa có link
-                if m.group(1) in ("1", "2"):
-                    heading_seen += 1
-            elif close_re.match(part):
-                depth = max(0, depth - 1)
-            low = part.lower()
-            if low.startswith("<a ") or low.startswith("<a>"):
-                in_a += 1
-                if depth:
-                    head_has_a = True           # tiêu đề này đã có link -> bỏ qua
-            elif low.startswith("</a"):
-                in_a = max(0, in_a - 1)
-            out.append(part)
-            i += 1
-            continue
-
-        text = part
-        if depth and not in_a and not head_has_a and text.strip():
-            href = ""
-            # tìm TÊN MỤC CHUẨN trong tiêu đề (linh hoạt &/và, -/–/—, dấu câu)
-            hit = None
-            for _re_sec in sec_res:
-                mm = _re_sec.search(text)
-                if mm:
-                    hit = mm
-                    break
-            if heading_seen == 1:
-                href = _norm_url(site_url) if site_url else ""
-            elif hit:
-                href = next((l for l in pending if l not in used), "")
-            if href:
-                # bọc TOÀN BỘ chữ còn lại SAU tên mục (chỉ khi phần đuôi có nghĩa;
-                # nếu đuôi chỉ là dấu câu như ")" thì bọc CẢ tiêu đề)
-                # Phần ĐUÔI sau tên mục: giữ TỪ NỐI ("của", "cho", "về"…) ở NGOÀI thẻ <a>
-                tail_raw = text[hit.end():] if hit is not None else ""
-                prefix = ""
-                mm_conn = re.match(r"^(\s*(?:của|cho|về|với|và|theo)\s+)", tail_raw, re.I)
-                if mm_conn:
-                    prefix = mm_conn.group(1)          # vd " của "
-                    tail_raw = tail_raw[mm_conn.end():]
-                tail = tail_raw.strip().lstrip(":–—-/|·•,.").strip()
-                if tail and len(tail) >= 3 and re.search(r"\w", tail):
-                    sep = prefix if prefix else (" " if text[hit.end():][:1].isspace() else "")
-                    text = f'{text[:hit.end()]}{sep}<a href="{_norm_url(href)}">{tail}</a>'
-                else:
-                    # không có chữ sau tên mục (hoặc không phải tiêu đề mục chuẩn)
-                    # -> bọc cả tiêu đề (giữ icon đầu mục NẰM NGOÀI thẻ <a>)
-                    lead, rest = split_leading_icon(text)
-                    text = f'{lead}<a href="{_norm_url(href)}">{rest.strip()}</a>'
-                used.add(href)
-        out.append(text)
-        i += 1
-    return "".join(out)
 
 
 # Những cụm từ cho thấy đoạn văn chỉ là NHÃN/ghi chú (không phải nội dung bài)

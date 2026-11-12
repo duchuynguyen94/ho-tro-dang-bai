@@ -28,7 +28,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from ...config import formats_dir, media_dir
+from ...config import media_dir
 from ...storage import Script, ScriptStep, Site, crypto
 from ...storage.store import Store
 from ..style import Card, make_cfg_panel, polish_combos
@@ -37,7 +37,6 @@ from ..widgets.update_panel import UpdatePanel
 from ..workers import LoginWorker, OpenLoginWorker
 
 IMAGE_FILTER = "Ảnh (*.png *.jpg *.jpeg *.webp *.svg);;Tất cả (*.*)"
-FORMAT_FILTER = "Quy định (*.txt *.html *.htm *.pdf *.doc *.docx);;Tất cả (*.*)"
 
 
 def _pick_file(store, parent, caption, filt) -> str:
@@ -147,13 +146,11 @@ class ConfigPage(QWidget):
         ai_c = AIContentPanel(self.store)
         ai_i = AIImagePanel(self.store)
         fmt = FormatPanel(self.store, self.changed.emit)
-        tlinks = TitleLinksPanel(self.store, self.changed.emit)
         updt = UpdatePanel(self.store)
         items = [
             ("ai_content", ai_c, "AI nội dung"),
             ("ai_image", ai_i, "AI ảnh"),
             ("format", fmt, "Format Rule"),
-            ("title_links", tlinks, "Link tiêu đề"),
         ]
         from ..widgets.readmore_panel import ReadMorePanel
 
@@ -1105,110 +1102,6 @@ class AIImagePanel(QWidget):
         show_toast(self, "Đã lưu AI ảnh")
 
 
-class TitleLinksPanel(QWidget):
-    """Danh sách link sẽ được chèn vào các tiêu đề mục (từ h2 thứ 2 trở đi)."""
-
-    def __init__(self, store, on_saved=None, parent=None) -> None:
-        super().__init__(parent)
-        self.store = store
-        self.on_saved = on_saved
-        self._rows: list[QLineEdit] = []
-        self._build()
-
-    def _build(self) -> None:
-        outer = QVBoxLayout(self)
-        outer.setContentsMargins(20, 18, 20, 12)
-        outer.setSpacing(10)
-
-        head = QHBoxLayout()
-        t = QLabel("Link tiêu đề")
-        t.setProperty("class", "h2")
-        head.addWidget(t)
-        head.addStretch(1)
-        save = QPushButton("Lưu danh sách link")
-        save.setProperty("class", "primary")
-        save.clicked.connect(self._save)
-        head.addWidget(save)
-        outer.addLayout(head)
-
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QFrame.NoFrame)
-        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        root = QWidget()
-        v = QVBoxLayout(root)
-        v.setContentsMargins(0, 0, 0, 8)
-        v.setSpacing(10)
-
-        sub = QLabel(
-            "<b>Tiêu đề đầu tiên (h1/h2 đầu)</b> luôn dùng link = <b>URL của website mà job sẽ đăng</b>. "
-            "Các link trong danh sách bên dưới chèn vào <b>tiêu đề thứ 2 trở đi</b> — "
-            "mỗi link chèn <b>1 lần</b> (có 2 link thì chèn 2 lần)."
-        )
-        sub.setProperty("class", "sub")
-        sub.setWordWrap(True)
-        v.addWidget(sub)
-
-        card = Card("Danh sách link")
-        self.box = QVBoxLayout()
-        self.box.setSpacing(8)
-        card.body.addLayout(self.box)
-
-        self.add_btn = QPushButton("+ Thêm link")
-        self.add_btn.setProperty("class", "ghost")
-        self.add_btn.clicked.connect(lambda: self._add_row(""))
-        card.body.addWidget(self.add_btn, alignment=Qt.AlignLeft)
-        v.addWidget(card)
-
-        v.addStretch(1)
-        scroll.setWidget(root)
-        outer.addWidget(scroll, 1)
-        make_cfg_panel(self)
-        self._load()
-
-    def _add_row(self, value: str = "") -> None:
-        row = QHBoxLayout()
-        lab = QLabel("Link chèn")
-        lab.setFixedWidth(70)
-        edit = QLineEdit(value)
-        edit.setPlaceholderText("https://vidu.com")
-        row.addWidget(lab)
-        row.addWidget(edit, 1)
-        del_btn = QPushButton("✕")
-        del_btn.setObjectName("imgDel")
-        del_btn.setFixedSize(22, 22)
-        del_btn.setToolTip("Xoá link này")
-        row.setContentsMargins(0, 0, 0, 0)      # bỏ lề mặc định của Qt -> các dòng sát nhau
-        holder = QWidget()
-        holder.setLayout(row)
-        del_btn.clicked.connect(lambda _=False, h=holder, e=edit: self._remove_row(h, e))
-        row.addWidget(del_btn)
-        self.box.addWidget(holder)
-        self._rows.append(edit)
-
-    def _remove_row(self, holder, edit) -> None:
-        if edit in self._rows:
-            self._rows.remove(edit)
-        holder.setParent(None)
-        holder.deleteLater()
-
-    def _load(self) -> None:
-        for link in self.store.title_links:
-            self._add_row(link)
-
-    def _save(self) -> None:
-        links = [e.text().strip() for e in self._rows if e.text().strip()]
-        try:
-            self.store.set_title_links(links)
-            self.store.save()
-        except Exception as exc:      # noqa: BLE001
-            show_toast(self, f"Lưu link tiêu đề THẤT BẠI: {exc}", 3400, ok=False)
-            return
-        show_toast(self, f"Đã lưu {len(links)} link chèn tiêu đề")
-        if self.on_saved:
-            self.on_saved()
-
-
 # ======================================================================= #
 # Panel "Format Rule" (dùng chung cho mọi website)
 # ======================================================================= #
@@ -1221,7 +1114,6 @@ class FormatPanel(QScrollArea):
         self.store = store
         self.on_saved = on_saved
         self.setWidgetResizable(True)
-        self._edits: dict[str, QLineEdit] = {}
         self.rule_edits: list[QLineEdit] = []
         self._build()
 
@@ -1234,40 +1126,6 @@ class FormatPanel(QScrollArea):
         t = QLabel("Format Rule")
         t.setProperty("class", "h2")
         v.addWidget(t)
-
-        card = Card("Rule quy định cho AI")
-        f = _form()
-        rows = [
-            ("content", "Rule Content"),
-            ("seo", "Rule SEO"),
-            ("extractor", "Rule Model Extractor"),
-        ]
-        self._rule_clear: dict[str, QPushButton] = {}
-        for key, label in rows:
-            box = QWidget()
-            rv = QVBoxLayout(box)
-            rv.setContentsMargins(0, 0, 0, 0)
-            rv.setSpacing(2)
-            edit = QLineEdit()
-            edit.setReadOnly(True)
-            edit.setPlaceholderText("(đang dùng mặc định của phần mềm)")
-            h = QHBoxLayout()
-            h.addWidget(edit, 1)
-            pick = QPushButton("Chọn file riêng…")
-            pick.setProperty("class", "ghost")
-            pick.clicked.connect(lambda _=False, k=key, e=edit, l=label: self._pick(k, e, l))
-            clear = QPushButton("Xoá")
-            clear.setProperty("class", "danger")
-            clear.setToolTip("Bỏ file riêng — quay về file mặc định của phần mềm")
-            clear.clicked.connect(lambda _=False, k=key, e=edit: self._clear_rule(k, e))
-            h.addWidget(pick)
-            h.addWidget(clear)
-            rv.addLayout(h)
-            f.addRow(label, box)
-            self._edits[key] = edit
-            self._rule_clear[key] = clear
-        card.body.addLayout(f)
-        v.addWidget(card)
 
         # ---- Rule ảnh ----
         img_card = Card("Rule ảnh")
@@ -1317,47 +1175,17 @@ class FormatPanel(QScrollArea):
         self.add_rule_btn.setEnabled(len(self.rule_edits) < MAX_IMAGE_RULES)
 
     def _load(self) -> None:
-        fmt = self.store.formats
-        for key, edit in self._edits.items():
-            edit.setText(getattr(fmt, key, ""))
-        self._refresh_rules()
         for value in self.store.image_rules:
             self._add_rule_row(value)
 
     # ------------------------------------------------------------------ #
-    def _pick(self, key: str, edit: QLineEdit, label: str) -> None:
-        from ..filepick import open_file
-
-        path = open_file(self.store, self, label, FORMAT_FILTER)
-        if not path:
-            return
-        edit.setText(Store.import_file(path, formats_dir()))
-        self._save(silent=True)
-
-    def _clear_rule(self, key: str, edit: QLineEdit) -> None:
-        """Bỏ file riêng -> quay về file mặc định của phần mềm."""
-        edit.setText("")
-        self._save(silent=True)
-
-    def _refresh_rules(self) -> None:
-        """Chỉ còn: ẩn/hiện nút Xoá theo việc có file riêng hay không."""
-        for key, edit in self._edits.items():
-            clear = self._rule_clear.get(key)
-            if clear is not None:
-                clear.setVisible(bool(edit.text().strip()))
-
     def _save(self, silent: bool = False) -> None:
         try:
-            fmt = self.store.formats
-            for key, edit in self._edits.items():
-                setattr(fmt, key, edit.text())
-            self.store.set_formats(fmt)
             self.store.set_image_rules([e.text().strip() for e in self.rule_edits])
             self.store.save()
         except Exception as exc:      # noqa: BLE001
             show_toast(self, f"Lưu Format Rule THẤT BẠI: {exc}", 3400, ok=False)
             return
-        self._refresh_rules()
         if not silent:
             show_toast(self, "Đã lưu Format Rule")
         if self.on_saved:

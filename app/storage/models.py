@@ -4,7 +4,6 @@ from __future__ import annotations
 import uuid
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
-from pathlib import Path
 from typing import Any
 
 from . import crypto
@@ -37,14 +36,14 @@ class Formats:
                   "extractor": "rule_model_extractor.pdf"}
 
     def rule(self, kind: str) -> str:
-        """Đường dẫn file rule HIỆU DỤNG: file riêng của người dùng -> nếu trống thì file mặc định."""
+        """Đường dẫn file rule HIỆU DỤNG: LUÔN dùng file mặc định kèm app.
+
+        (Đã bỏ phần chọn file riêng: quy định của AI cố định theo gói phát hành.)
+        """
         from ..config import default_asset_path
 
-        own = str(getattr(self, kind, "") or "").strip()
-        if own and Path(own).exists():
-            return own
         name = self.RULE_FILES.get(kind, "")
-        return default_asset_path(f"default_rules/{name}") or own
+        return default_asset_path(f"default_rules/{name}")
 
     def to_dict(self) -> dict:
         return {
@@ -302,17 +301,15 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "off": {},
         },
     },
-    "title_links": ["https://samoapumps.com", "https://enda-vietnam.com"],
-    "title_link_first": "https://ngochuyduong.com",   # link cho TIÊU ĐỀ ĐẦU TIÊN (h1/h2 đầu)
     "ui": {
         "export_dir": "",     # thư mục xuất ảnh đã chọn lần trước (nhớ qua các lần mở app)
     },
     "sites": [],
     "tasks": [],
-    "formats": {          # format & rule dùng chung cho MỌI website
-        "content": "",     # Rule Content  – quy tắc viết bài
-        "seo": "",         # Rule SEO      – yêu cầu đầu ra (title, keyword, mô tả, tags)
-        "extractor": "",   # Rule Model Extractor – trích xuất Product Models
+    "formats": {          # quy định AI: CHỈ dùng file rule mặc định kèm app (không cho đổi)
+        "content": "",     # (bỏ trống — giữ để đọc config cũ không lỗi)
+        "seo": "",
+        "extractor": "",
         "image_rules": ["{title}", "Tổng kho hàng sẵn {title}", "Đại lý giá tốt {title}"],
     },
 }

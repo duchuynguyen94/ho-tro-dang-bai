@@ -1901,7 +1901,7 @@ class JobsPage(QWidget):
         return super().eventFilter(obj, event)
 
     def _auto_format(self) -> None:
-        """Dọn rác + chèn ICON cho nội dung (KHÔNG chèn link — link chỉ chèn khi Đăng bài)."""
+        """Dọn rác + chèn ICON cho nội dung (KHÔNG chèn link vào tiêu đề)."""
         if not self.current:
             return
         try:

@@ -11,8 +11,7 @@ from PySide6.QtCore import QThread, Signal
 
 from .. import source as src
 from ..ai import generate_content
-from ..ai.manager import (apply_template_icons, extract_product_name,
-                             insert_title_links, linkify_domains, set_first_title_link)
+from ..ai.manager import apply_template_icons, linkify_domains
 from ..config import output_dir
 from ..images import compose, save_composed
 
@@ -422,21 +421,6 @@ class ContentWorker(TrackedThread):
             all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
             html_out = linkify_domains(html_out, all_sites)
 
-            # 2) link vào TIÊU ĐỀ MỤC: h2 đầu = website đang đăng; từ h2 thứ 2 = link trong cấu hình
-            title_links = list(self.store.title_links)
-            pname = extract_product_name(
-                raw_html, page.get("title", "") or data.get("title", "")
-            )
-            html_out = insert_title_links(
-                html_out, (site.url or self.store.title_link_first), title_links,
-                [pname, data.get("focus_keyword", ""), data.get("title", ""),
-                 page.get("title", "")],
-            )
-            html_out = set_first_title_link(html_out, site.url or self.store.title_link_first)
-            self.log.emit(
-                f"Chèn link tiêu đề: h1/h2 đầu → {(site.url or self.store.title_link_first) or '(trống)'}, "
-                f"{len(title_links)} link cấu hình cho các mục sau."
-            )
             data["content_html"] = html_out
             self.progress.emit(70)
 
@@ -944,7 +928,6 @@ class SplitWorker(TrackedThread):
         try:
             from ..ai.manager import (_call_ai, apply_template_icons,
                                       build_split_prompt, clean_content_html,
-                                      extract_product_name, insert_title_links,
                                       linkify_domains, parse_split_articles)
 
             self.log.emit(f"Đang đọc link nguồn rồi chia thành {self.n} bài…")
@@ -972,11 +955,6 @@ class SplitWorker(TrackedThread):
                 html = apply_template_icons(html)
                 # 1) mọi "www.<tên-miền>" -> link về ĐÚNG tên miền đó (bỏ www)
                 html = linkify_domains(html, all_sites)
-                # 2) link các TIÊU ĐỀ MỤC (link tiêu đề ĐẦU sẽ đặt khi tạo job — lúc đó mới biết website)
-                html = insert_title_links(
-                    html, "", list(self.store.title_links),
-                    [extract_product_name(html, ""), "", "", ""],
-                )
                 if html.strip():
                     out.append(html)
             if not out:
@@ -984,10 +962,7 @@ class SplitWorker(TrackedThread):
                     "AI không trả về BÀI VIẾT nào (chỉ có dòng ngăn cách hoặc bài quá ngắn). "
                     "Xem câu trả lời thô ở output/last_split_reply.txt"
                 )
-            self.log.emit(
-                f"Đã chia được {len(out)}/{self.n} bài. Chèn {len(self.store.title_links)} "
-                f"link cấu hình cho các mục sau (link tiêu đề đầu đặt theo website khi tạo job)."
-            )
+            self.log.emit(f"Đã chia được {len(out)}/{self.n} bài.")
             self.ok.emit(out)
         except Exception as exc:      # noqa: BLE001
             traceback.print_exc()

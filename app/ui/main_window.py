@@ -675,13 +675,6 @@ class MainWindow(QMainWindow):
                 status=STATUS_FINISH,
             )
             slots = [{"path": "", "footer": ""} for _ in range(count)]
-            # link TIÊU ĐỀ ĐẦU: tạm dùng link mặc định -> khi bấm Đăng mới đổi theo website
-            try:
-                from ..ai.manager import set_first_title_link as _set_first
-
-                content = _set_first(content, self.store.title_link_first or "")
-            except Exception:      # noqa: BLE001
-                pass
             t.result = {"title": "", "focus_keyword": "", "description": "", "tags": "",
                         "category_name": "", "brand_name": "", "ma_san_pham": "",
                         "content_html": content, "images": slots,
@@ -1005,7 +998,7 @@ class MainWindow(QMainWindow):
         fresh.site_name = site.name or site.url
         self.store.upsert_task(fresh)
         self.store.save()
-        # 1) AUTO FORMAT LẠI 1 LẦN + link tiêu đề ĐẦU = website vừa chọn
+        # 1) AUTO FORMAT LẠI 1 LẦN cho website vừa chọn
         self._format_content_for_site(fresh, site)
         # 2) ẢNH: chỉ GHÉP LẠI khi ĐỔI website (hoặc chưa có ảnh) -> chờ xong mới mở Chrome
         cur_imgs = (fresh.result or {}).get("images") or []
@@ -1378,13 +1371,11 @@ class MainWindow(QMainWindow):
         return site
 
     def _format_content_for_site(self, task, site) -> None:
-        """Auto format LẠI 1 lần + đặt link tiêu đề ĐẦU = website sẽ đăng."""
+        """Auto format LẠI 1 lần cho đúng website sẽ đăng."""
         try:
             from ..ai.manager import (apply_template_icons, clean_content_html,
-                                      extract_product_name, insert_readmore,
-                                      insert_title_links, linkify_domains,
-                                      mark_auto_formatted, readmore_from_store,
-                                      set_first_title_link)
+                                      insert_readmore, linkify_domains,
+                                      mark_auto_formatted, readmore_from_store)
 
             r = task.result = dict(task.result or {})
             html = str(r.get("content_html") or "")
@@ -1394,20 +1385,12 @@ class MainWindow(QMainWindow):
             from ..ai.manager import already_auto_formatted
 
             if already_auto_formatted(html):
-                # đã format rồi -> chỉ sửa link tiêu đề đầu cho đúng website
-                out = set_first_title_link(html, site_url)
-                out = insert_readmore(out, readmore_from_store(self.store))
+                out = insert_readmore(html, readmore_from_store(self.store))
             else:
                 out = clean_content_html(html)
                 out = apply_template_icons(out)
                 all_sites = [(x.url or "", x.name or "") for x in self.store.sites]
                 out = linkify_domains(out, all_sites)
-                out = insert_title_links(
-                    out, site_url, list(self.store.title_links),
-                    [extract_product_name(out, ""), str(r.get("focus_keyword") or ""),
-                     str(r.get("title") or ""), ""],
-                )
-                out = set_first_title_link(out, site_url)
                 out = insert_readmore(out, readmore_from_store(self.store))
                 out = mark_auto_formatted(out)
             r["content_html"] = out
@@ -1419,7 +1402,7 @@ class MainWindow(QMainWindow):
                     self.jobs_page.content_edit.set_html(out)
             except Exception:      # noqa: BLE001
                 pass
-            self.status(f"Đã auto format lại nội dung + link tiêu đề đầu → {site.name or site_url}")
+            self.status(f"Đã auto format lại nội dung → {site.name or site_url}")
         except Exception:      # noqa: BLE001
             traceback.print_exc()          # không ghi Log lỗi (việc đăng không đụng vào job)
 
