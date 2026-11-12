@@ -120,3 +120,16 @@ def resource_path(rel: str) -> Path:
     """Truy cập tài nguyên đi kèm (assets) khi chạy nguồn hoặc khi đã đóng gói."""
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
     return Path(base) / rel
+
+
+# --------------------------------------------------------------------------- #
+# Nội dung "Đọc thêm" (Cài đặt -> Chèn nội dung): lấy từ file trên GitHub
+# --------------------------------------------------------------------------- #
+READMORE_REPO_PATH = "content/readmore.html"
+READMORE_URL = (
+    "https://raw.githubusercontent.com/duchuynguyen94/ho-tro-dang-bai/main/"
+    + READMORE_REPO_PATH
+)
+READMORE_PAGE_URL = (
+    "https://github.com/duchuynguyen94/ho-tro-dang-bai/blob/main/" + READMORE_REPO_PATH
+)

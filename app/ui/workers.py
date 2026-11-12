@@ -1158,6 +1158,38 @@ class UpdateWorker(TrackedThread):
             self.failed.emit(str(exc))
 
 
+class ReadMoreFetchWorker(TrackedThread):
+    """Tải nội dung "Đọc thêm" (Cài đặt -> Chèn nội dung) từ file trên GitHub."""
+
+    ok = Signal(str)          # nội dung mới
+    failed = Signal(str)
+
+    def __init__(self, url: str = "") -> None:
+        super().__init__()
+        from ..config import READMORE_URL
+
+        self.url = str(url or READMORE_URL)
+
+    def run(self) -> None:
+        import httpx
+
+        try:
+            r = httpx.get(self.url, headers={"Cache-Control": "no-cache"},
+                          follow_redirects=True, timeout=30)
+            if r.status_code >= 400:
+                raise RuntimeError(f"GitHub trả về mã {r.status_code}")
+            text = (r.text or "").strip()
+            if not text:
+                # file rỗng = chủ ý không chèn “Đọc thêm”
+                self.ok.emit("")
+                return
+            if "<" not in text and len(text) < 20:
+                raise RuntimeError("Nội dung tải về không hợp lệ")
+            self.ok.emit(text)
+        except Exception as exc:      # noqa: BLE001 (mất mạng là bình thường)
+            self.failed.emit(str(exc))
+
+
 class ImageEditWorker(TrackedThread):
     """Sửa 1 ảnh bằng AI theo yêu cầu người dùng."""
 

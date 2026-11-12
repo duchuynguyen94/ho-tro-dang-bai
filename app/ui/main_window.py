@@ -47,6 +47,7 @@ from .workers import (
     ImageEditWorker,
     ImagesWorker,
     PostWorker,
+    ReadMoreFetchWorker,
     SeoJsonWorker,
     SplitSeoWorker,
     SplitWorker,
@@ -83,9 +84,11 @@ class MainWindow(QMainWindow):
         self._post_workers: dict = {}        # task_id -> luồng đăng bài
         self._post_sites: dict = {}           # task_id -> website đang đăng (chọn lúc bấm Đăng)
         self._post_started: dict = {}        # task_id -> thời điểm bắt đầu đăng (giây)
+        self._readmore_worker = None         # luồng tải nội dung “Đọc thêm” từ GitHub
         self._start_post_watchdog()          # lưới an toàn: Chrome tắt -> mở khoá nút
         self._start_update_watch()           # kiểm tra cập nhật (chỉ Windows)
         self._build()
+        self._start_readmore_watch()         # tải nội dung “Đọc thêm” từ GitHub
         try:                       # mở app là vào thẳng tab "Đăng bài"
             self._go(1)
         except Exception:
@@ -1051,6 +1054,47 @@ class MainWindow(QMainWindow):
         worker.finished.connect(_post_done)
         self._workers.append(worker)
         worker.start()
+
+    # ---------------- nội dung “Đọc thêm” (tải từ GitHub) ---------------- #
+    def _start_readmore_watch(self) -> None:
+        """Mỗi lần mở app: tải `content/readmore.html` từ GitHub (lỗi -> giữ bản đang có)."""
+        try:
+            from ..config import READMORE_URL
+
+            w = ReadMoreFetchWorker(READMORE_URL)
+        except Exception:      # noqa: BLE001
+            return
+        self._readmore_worker = w
+        w.ok.connect(self._on_readmore_fetched)
+        w.failed.connect(lambda _e: None)                 # mất mạng -> im lặng
+
+        def _done() -> None:
+            if self._readmore_worker is w:
+                self._readmore_worker = None
+            self._cleanup(w)
+
+        w.finished.connect(_done)
+        self._workers.append(w)
+        w.start()
+
+    def _on_readmore_fetched(self, text: str) -> None:
+        """Nhận nội dung mới từ GitHub -> lưu vào config (bản dùng để chèn vào bài)."""
+        try:
+            import datetime
+
+            ui = self.store.data.setdefault("ui", {})
+            new = str(text or "")
+            if new.strip() == str(ui.get("readmore") or "").strip() and ui.get("readmore_synced"):
+                return                                    # không đổi -> khỏi ghi đĩa
+            ui["readmore"] = new
+            ui["readmore_synced"] = True
+            ui["readmore_fetched_at"] = datetime.datetime.now().strftime("%d/%m/%Y %H:%M")
+            self.store.save()
+            panel = getattr(self.config_page, "_panels", {}).get("readmore")
+            if panel is not None:
+                panel.reload()
+        except Exception:      # noqa: BLE001
+            traceback.print_exc()
 
     # ---------------- kiểm tra cập nhật (CHỈ Windows) ---------------- #
     def _start_update_watch(self) -> None:

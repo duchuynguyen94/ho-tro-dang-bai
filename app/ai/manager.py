@@ -1321,8 +1321,26 @@ def insert_readmore(html_text: str, text: str) -> str:
 
 
 def readmore_from_store(store) -> str:
-    """Nội dung “Đọc thêm” đã cấu hình trong Cài đặt (rỗng = không chèn)."""
+    """Nội dung “Đọc thêm” đang dùng (rỗng = không chèn).
+
+    Nguồn: bản đã tải từ GitHub (lưu trong `ui.readmore`). Chưa tải lần nào thì
+    dùng bản mặc định đóng gói kèm app (`app/assets/default/readmore.html`).
+    """
     try:
-        return str(((store.data.get("ui") or {}).get("readmore") or "")).strip()
+        ui = store.data.get("ui") or {}
+        txt = str(ui.get("readmore") or "").strip()
+        if txt:
+            return txt
+        if ui.get("readmore_synced"):
+            return ""                      # đã đồng bộ từ GitHub và file đang rỗng -> không chèn
     except Exception:      # noqa: BLE001
         return ""
+    try:
+        from ..config import default_asset
+
+        p = default_asset("readmore.html")
+        if p:
+            return Path(p).read_text(encoding="utf-8", errors="ignore").strip()
+    except Exception:      # noqa: BLE001
+        pass
+    return ""

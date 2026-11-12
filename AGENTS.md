@@ -54,7 +54,8 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
 ## 3. Quy ước đang áp dụng (đừng tự đổi)
 
 - UI 100% tiếng Việt.
-- 1 website = 1 kịch bản; Format Rule dùng chung cho mọi website.
+- 1 website = 1 kịch bản; **Format Rule chỉ còn “Rule ảnh”** — rule nội dung/SEO luôn dùng file
+  mặc định kèm app (`app/assets/default_rules/`), **không cho chọn file riêng**.
 - Thứ tự tab: `Cài đặt` → `Đăng bài` → `Công việc đang làm` → `Log lỗi`; **mở app vào tab "Đăng bài"**.
 - **Không tự động bấm Đăng** — người dùng tự bấm trên WordPress.
 - **Mỗi công việc chỉ mở 1 Chrome**: nút `OK — Đăng bài` bị **khoá + mờ** khi đang mở, chỉ **mở lại khi
@@ -62,7 +63,12 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
 - **Lỗi ở bước đăng bài:** không hiện cảnh báo, vẫn hiện panel kết quả (giữ nguyên nội dung).
 - **Lỗi tạo nội dung:** hiện panel lỗi + nút `↻ Tạo lại`.
 - Footer panel kết quả: `[↻ Random lại]` sát **trái**, `[OK — Đăng bài]` sát **phải**.
-- **Model Extractor: đã bỏ** (giữ lại ô "Rule Model Extractor" trong Format Rule).
+- **Model Extractor: đã bỏ** (không còn ô "Rule Model Extractor" trong Format Rule).
+- **Link tiêu đề: đã bỏ hoàn toàn** — không chèn link vào `h1/h2`, không còn cấu hình link tiêu đề.
+- **Chèn nội dung (“Đọc thêm”)**: nội dung lấy từ file **`content/readmore.html` trên GitHub**
+  (app tự tải mỗi lần mở + nút `↻ Tải lại từ GitHub`); **không nhập tay trong app**.
+  Mất mạng → dùng bản đang có; lần đầu chưa tải được → bản mặc định
+  `app/assets/default/readmore.html`.
 - **Icon trong nội dung**: chỉ đặt ở thẻ `<h2>` + các dòng liên hệ (`🌐` website, `☎️` hotline,
   `✉️` email; `📞` các dòng hotline khác, `📧`, `📩`). Không đặt icon ở `h1/h3/h4`.
 - **SEO theo `rule_seo.pdf`**: title 55–60 ký tự `[Keyword] [Brand] [Model] + [USP]` (11 USP),
