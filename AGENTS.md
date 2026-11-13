@@ -60,6 +60,8 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
 - **Không tự động bấm Đăng** — người dùng tự bấm trên WordPress.
 - **Mỗi công việc chỉ mở 1 Chrome**: nút `OK — Đăng bài` bị **khoá + mờ** khi đang mở, chỉ **mở lại khi
   người dùng ĐÓNG trình duyệt** (không cần biết đã đăng hay chưa).
+- **Không chỉnh slug khi đăng bài** — kịch bản mặc định KHÔNG còn bước `slug_if_needed`; để
+  WordPress tự tạo đường dẫn từ tiêu đề (giữ nguyên đủ cụm USP, không cắt 60 ký tự).
 - **Lỗi ở bước đăng bài:** không hiện cảnh báo, vẫn hiện panel kết quả (giữ nguyên nội dung).
 - **Lỗi tạo nội dung:** hiện panel lỗi + nút `↻ Tạo lại`.
 - Footer panel kết quả: `[↻ Random lại]` sát **trái**, `[OK — Đăng bài]` sát **phải**.

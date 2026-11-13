@@ -196,17 +196,6 @@
       "force": false
     },
     {
-      "action": "slug_if_needed",
-      "selector": "",
-      "selectors": [],
-      "value": "{{slug}}",
-      "note": "Đặt đường dẫn (slug) = slug sạch từ tiêu đề (bỏ đuôi USP)",
-      "source": "auto",
-      "optional": true,
-      "force": false,
-      "when": ""
-    },
-    {
       "action": "click",
       "selector": "#set-post-thumbnail",
       "selectors": [
