@@ -74,7 +74,11 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
   `app/assets/default/readmore.html`.
 - **Icon trong nội dung**: chỉ đặt ở thẻ `<h2>` + các dòng liên hệ (`🌐` website, `☎️` hotline,
   `✉️` email; `📞` các dòng hotline khác, `📧`, `📩`). Không đặt icon ở `h1/h3/h4`.
-- **SEO theo `rule_seo.pdf`**: title 55–60 ký tự `[Keyword] [Brand] [Model] + [USP]` (11 USP),
+- **SEO theo `rule_seo.pdf`** (prompt GHI ĐÈ mục 1 — Title): title **50–55 ký tự**, theo 1 trong 4
+  cấu trúc: `Đại lý + [Brand] + Việt Nam – [Model]` / `[Phân phối / Tổng kho / Mua / Nơi bán / Báo
+  giá] + [Loại sản phẩm] + [Brand] + [Model]` / `[Loại sản phẩm] + [Brand] + [Model] + [Giá tốt /
+  Giao ngay / Hàng sẵn / Giá kho]` / `[Loại sản phẩm] + [Brand] + [Model] + nhập khẩu + [Nước xuất
+  xứ] + Chính hãng`;
   `focus_keyword` = Model, `description` 4 phần (câu mô tả + dòng liên hệ + "Tên sản phẩm … models
   tiêu biểu" + tối đa 5 model), `tags` > 350 từ theo 5 nhóm.
 - **Cập nhật phần mềm**: chỉ dùng **GitHub Releases** (nguồn gắn sẵn trong app, không nhập gì).

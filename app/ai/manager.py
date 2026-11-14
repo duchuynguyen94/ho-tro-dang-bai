@@ -110,7 +110,7 @@ def normalize_description(desc: str) -> str:
 
 # Kết quả bước 2 (theo Rule SEO)
 SEO_JSON_SPEC = """{
-  "title": "55-60 ký tự, dạng: [Keyword] [Brand] [Model] + [USP] — chọn NGẪU NHIÊN 1 USP trong: Chính hãng, Giá tốt, CO/CQ đầy đủ, Báo giá nhanh, Hàng sẵn, Giao nhanh, Đại lý, Phân phối, Hỗ trợ kỹ thuật, Bảo hành chính hãng, Tổng kho",
+  "title": "50-55 ký tự, GHI ĐÈ mục 1 (Title) trong rule_seo.pdf — theo 1 trong 4 cấu trúc: (1) “Đại lý + [Brand] + Việt Nam – [Model]”; (2) “[Phân phối / Tổng kho / Mua / Nơi bán / Báo giá] + [Loại sản phẩm] + [Brand] + [Model]”; (3) “[Loại sản phẩm] + [Brand] + [Model] + [Giá tốt / Giao ngay / Hàng sẵn / Giá kho]”; (4) “[Loại sản phẩm] + [Brand] + [Model] + nhập khẩu + [Nước xuất xứ] + Chính hãng”",
   "focus_keyword": "01 từ khoá chính duy nhất = Model của sản phẩm (vd: BI15U-EM30WDTC-AP6X)",
   "description": "mô tả siêu ngắn ĐÚNG mục 3 của rule_seo, gồm 4 phần trên các dòng riêng: (1) câu mô tả: “<Keyword> <Brand> <Model> được phân phối chính hãng bởi Công ty TNHH Ngọc Huy Dương – đơn vị phân phối <Keyword> <Brand> <Model> tại Việt Nam, giá tốt, hàng sẵn, giao nhanh toàn quốc.”; (2) dòng liên hệ: “🌐 www.ngochuyduong.com | ☎️ 0909 399 174 | thach.phan@ngochuyduong.com”; (3) “Tên sản phẩm <Brand> models tiêu biểu”; (4) tối đa 5 model tiêu biểu, MỖI DÒNG 1 model theo mẫu “<Tên sản phẩm> <Hãng> <Model>” (vd: Cảm biến siêu âm Carlo Gavazzi UA18CAD04PM1)",
   "tags": "trên 350 từ, mở rộng nhất có thể, thuần Việt, cách nhau dấu phẩy; GỒM: tên sản phẩm + đồng nghĩa, thương hiệu, sản phẩm + model nổi bật, từ khoá địa phương/tiếng Việt thông dụng, thông tin công ty",
@@ -197,9 +197,11 @@ Không giải thích gì thêm, không thêm tiêu đề phụ nào khác.
 
 # Chi tiết 4 trường SEO — thêm ngay dưới dòng nhắc "rule_seo.pdf"
 SEO_FIELDS_DETAIL = (
-    '   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 USP '
-    "trong danh sách: Chính hãng / Giá tốt / CO/CQ đầy đủ / Báo giá nhanh / Hàng sẵn / "
-    "Giao nhanh / Đại lý / Phân phối / Bảo hành chính hãng / Tổng kho.\n"
+    '   - "title": 50-55 ký tự, GHI ĐÈ mục 1 (Title) trong rule_seo.pdf — theo 1 trong 4 cấu '
+    'trúc: (1) "Đại lý + [Brand] + Việt Nam – [Model]"; (2) "[Phân phối / Tổng kho / Mua / '
+    'Nơi bán / Báo giá] + [Loại sản phẩm] + [Brand] + [Model]"; (3) "[Loại sản phẩm] + [Brand] '
+    '+ [Model] + [Giá tốt / Giao ngay / Hàng sẵn / Giá kho]"; (4) "[Loại sản phẩm] + [Brand] + '
+    '[Model] + nhập khẩu + [Nước xuất xứ] + Chính hãng".\n'
     '   - "focus_keyword": 01 từ khoá chính duy nhất = Model của sản phẩm '
     "(vd: BI15U-EM30WDTC-AP6X).\n"
     '   - "description": 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được phân '
@@ -1101,9 +1103,11 @@ def build_seo_only_prompt(rules, content_html: str, with_rule: bool = True) -> s
         "Project này bao gồm: title, focus_keyword, description, tags, category_name, brand_name\n"
         "   - TOÀN BỘ thông tin SEO phải DỰA TRÊN CHÍNH NỘI DUNG BÀI VIẾT Ở BÊN DƯỚI "
         "(đúng sản phẩm, thương hiệu, model, thông số trong bài; không bịa thêm).\n"
-        '   - "title": 55-60 ký tự, dạng "[Keyword] [Brand] [Model] + [USP]", chọn NGẪU NHIÊN 1 '
-        "USP trong danh sách: Chính hãng / Giá tốt / CO/CQ đầy đủ / Báo giá nhanh / Hàng sẵn / "
-        "Giao nhanh / Đại lý / Phân phối / Hỗ trợ kỹ thuật / Bảo hành chính hãng / Tổng kho\n"
+        '   - "title": 50-55 ký tự, GHI ĐÈ mục 1 (Title) trong rule_seo.pdf — theo 1 trong 4 cấu '
+        'trúc: (1) "Đại lý + [Brand] + Việt Nam – [Model]"; (2) "[Phân phối / Tổng kho / Mua / '
+        'Nơi bán / Báo giá] + [Loại sản phẩm] + [Brand] + [Model]"; (3) "[Loại sản phẩm] + '
+        '[Brand] + [Model] + [Giá tốt / Giao ngay / Hàng sẵn / Giá kho]"; (4) "[Loại sản phẩm] + '
+        '[Brand] + [Model] + nhập khẩu + [Nước xuất xứ] + Chính hãng"\n'
         '   - "focus_keyword": 01 từ khoá chính duy nhất = Model của sản phẩm '
         "(vd: BI15U-EM30WDTC-AP6X)\n"
         '   - "description": 4 phần trên dòng riêng: câu mô tả "<Keyword> <Brand> <Model> được '
