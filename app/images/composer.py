@@ -350,7 +350,7 @@ def compose(
     if brand is not None and brand_nobg:
         brand = remove_background_auto(brand, remove_bg_thresh)
     if brand is not None:
-        brand = _fit(brand, int(size * 0.4279 * brand_scale), int(size * 0.1636 * brand_scale))
+        brand = _fit(brand, int(size * 0.48 * brand_scale), int(size * 0.183 * brand_scale))
         bx = int(brand_pos[0] * size) - brand.size[0]
         by = int(brand_pos[1] * size)
         bx = max(0, min(size - brand.size[0], bx))

@@ -683,7 +683,8 @@ class JobsPage(QWidget):
         self.cat_edit.setPlaceholderText("VD: Cảm biến tiệm cận")
         self.cat_edit.setToolTip(
             "Chủng loại (danh mục sản phẩm) trên website.\n"
-            "Khi đăng: kịch bản tự chọn danh mục này; nếu website chưa có thì tự THÊM MỚI."
+            "Chỉ dùng 1 danh mục CHÍNH — khi đăng, kịch bản tự chọn danh mục này; "
+            "nếu website chưa có thì tự THÊM MỚI."
         )
         ev2.addLayout(self._field("Chủng loại (danh mục sản phẩm)", self.cat_edit))
         self.brand_edit = QLineEdit()

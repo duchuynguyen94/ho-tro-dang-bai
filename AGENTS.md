@@ -80,7 +80,8 @@ App desktop **tiếng Việt** (macOS + Windows 10): dùng AI tạo nội dung/�
   Giao ngay / Hàng sẵn / Giá kho]` / `[Loại sản phẩm] + [Brand] + [Model] + nhập khẩu + [Nước xuất
   xứ] + Chính hãng`;
   `focus_keyword` = Model, `description` 4 phần (câu mô tả + dòng liên hệ + "Tên sản phẩm … models
-  tiêu biểu" + tối đa 5 model), `tags` > 350 từ theo 5 nhóm.
+  tiêu biểu" + tối đa 5 model), `tags` > 350 từ theo 5 nhóm; `category_name` = **1 danh mục chính
+  duy nhất** (không trả nhiều danh mục, không dấu chấm phẩy).
 - **Cập nhật phần mềm**: chỉ dùng **GitHub Releases** (nguồn gắn sẵn trong app, không nhập gì).
   Mỗi lần phát hành: chạy workflow `build-windows` với **số phiên bản cao hơn** → tự tạo Release.
 - Gói Windows **không kèm Chromium** (dùng Chrome/Edge có sẵn) → ~100 MB.

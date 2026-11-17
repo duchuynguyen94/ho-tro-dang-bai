@@ -711,7 +711,7 @@ def _taxonomy_terms(page: Page, tax: str) -> list:
 
 
 def split_term_names(raw: str, multi: bool = True) -> list:
-    """Tách chuỗi tên loại: "A; B; C" -> [A, B, C] (bỏ trùng, bỏ rỗng)."""
+    """Tách chuỗi tên loại: "A; B; C" -> [A] (CHỈ lấy danh mục CHÍNH đầu tiên)."""
     if not multi:
         one = str(raw or "").strip()
         return [one] if one else []
@@ -722,14 +722,14 @@ def split_term_names(raw: str, multi: bool = True) -> list:
         if t and k and k not in seen:
             seen.add(k)
             out.append(t)
-        if len(out) >= 2:               # tối đa 2 loại (1 chính + 1 con)
+        if len(out) >= 1:               # chỉ 1 danh mục chính (bỏ các loại phía sau)
             break
     return out
 
 
 def pick_taxonomy_terms(page: Page, tax: str, raw: str, label: str = "",
                         multi: bool = True, log=None) -> int:
-    """Chọn/thêm NHIỀU loại một lượt (mỗi loại làm 1 lần — WordPress chỉ thêm 1 term/lần)."""
+    """Chọn/thêm loại (mặc định CHỈ 1 danh mục chính — WordPress chỉ thêm 1 term/lần)."""
     names = split_term_names(raw, multi)
     if not names:
         if log:
