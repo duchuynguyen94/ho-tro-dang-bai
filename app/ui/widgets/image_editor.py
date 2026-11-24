@@ -24,6 +24,8 @@ from ..style import polish_combos
 
 CANVAS = 400          # khung chỉnh sửa (ảnh đăng bài vẫn theo Cài đặt → AI ảnh)
 SRC = 1080
+# scale tối đa để ảnh chèn/dán phủ hết canvas (không chặn cứng 2.5× như trước)
+MAX_CONTENT_SCALE = SRC / max(1, product_box(SRC, 1.0))
 
 
 class DraggableImage(QLabel):
@@ -171,6 +173,10 @@ class DraggableImage(QLabel):
         dx = delta.x() if self._corner in ("tr", "br") else -delta.x()
         ratio = sh / max(1, sw)
         new_w = max(24, sw + dx)
+        # Không cho vượt canvas (giữ tỉ lệ) -> kéo sát 2 mép thì dừng ở mép,
+        # tránh lưu scale quá lớn rồi bị thu lại khi vẽ lại.
+        max_w = min(par.width(), int(par.height() / ratio)) if ratio > 0 else par.width()
+        new_w = max(24, min(new_w, max(1, max_w)))
         new_h = max(12, int(new_w * ratio))
         if self._src is not None and not self._src.isNull():
             self.setPixmap(self._src.scaled(new_w, new_h, Qt.KeepAspectRatio,
@@ -310,7 +316,7 @@ class ImageEditorPanel(QFrame):
 
         grid = QGridLayout()
         grid.setVerticalSpacing(10)
-        self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 300, 180)
+        self.s_logo = self._slider(grid, 0, "Logo website — kích thước", 50, 400, 180)
         self.s_wm = self._slider(grid, 1, "Watermark — độ mờ", 0, 100, 50)
         self.s_wm_size = self._slider(grid, 2, "Watermark — kích thước", 50, 200, 100)
         self.s_wm_rot = self._slider(grid, 3, "Watermark — góc xoay", 0, 90, 50, suffix="°")
@@ -617,7 +623,7 @@ class ImageEditorPanel(QFrame):
             item.on_pick = self._set_sel_item
 
         lp = self._opts.get("logo_pos") or [0.025, 0.018]
-        bp = self._opts.get("brand_pos") or [0.955, 0.032]
+        bp = self._opts.get("brand_pos") or [0.97, 0.032]
         self.logo_item.move(int(lp[0] * CANVAS), int(lp[1] * CANVAS))
         self.brand_item.move(
             max(0, min(CANVAS - self.brand_item.width(), int(bp[0] * CANVAS) - self.brand_item.width())),
@@ -779,7 +785,7 @@ class ImageEditorPanel(QFrame):
         if index < len(ups0) and isinstance(ups0[index], dict):
             path = ups0[index].get("path", "")
         disp1 = self._disp_width_at_scale1(path)
-        scale = max(0.3, min(2.5, width / max(1.0, disp1)))
+        scale = max(0.3, min(MAX_CONTENT_SCALE, width / max(1.0, disp1)))
         ups = list(self._opts.get("uploads") or [])
         if index < len(ups) and isinstance(ups[index], dict):
             ups[index]["scale"] = round(scale, 3)
@@ -916,7 +922,7 @@ class ImageEditorPanel(QFrame):
     def _on_product_resized(self, index: int, width: int) -> None:
         paths = list(self._preview.get("products") or [])
         disp1 = self._disp_width_at_scale1(paths[index] if index < len(paths) else "")
-        scale = max(0.3, min(2.5, width / max(1.0, disp1)))
+        scale = max(0.3, min(MAX_CONTENT_SCALE, width / max(1.0, disp1)))
         scales = list(self._opts.get("product_scales") or [])
         while len(scales) < index + 1:
             scales.append(1.0)
@@ -926,15 +932,18 @@ class ImageEditorPanel(QFrame):
 
     # ---------------- chung ---------------- #
     def _on_resized(self, which: str, width: int) -> None:
-        bw, bh = (0.26, 0.12) if which == "logo" else (0.34, 0.13)
+        # Khung gốc PHẢI giống lúc vẽ (_layout_items + composer): brand = 0.48 × 0.183
+        bw, bh = (0.26, 0.12) if which == "logo" else (0.48, 0.183)
         path = self._preview.get("logo" if which == "logo" else "brand", "")
-        w1, _h1 = self._composed_size(path, bw, bh, 1.0)
+        w1, h1 = self._composed_size(path, bw, bh, 1.0)
         disp1 = max(1, int(w1 * CANVAS / SRC))
-        hi = 3.0 if which == "logo" else 2.5
+        disp_h = max(1, int(h1 * CANVAS / SRC))
+        # Cho kéo tới SÁT 2 mép canvas (cả ngang lẫn dọc) thay vì chặn cứng 2.5×/3×
+        hi = max(1.0, min(CANVAS / disp1, CANVAS / disp_h))
         scale = max(0.3, min(hi, width / max(1.0, disp1)))
         if which == "logo":
             self.s_logo.blockSignals(True)
-            self.s_logo.setValue(int(scale * 100))
+            self.s_logo.setValue(int(round(scale * 100)))
             self.s_logo.blockSignals(False)
         self._opts["logo_scale" if which == "logo" else "brand_scale"] = round(scale, 3)
         self._schedule_save()
