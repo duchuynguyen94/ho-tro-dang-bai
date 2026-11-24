@@ -623,7 +623,7 @@ class ImageEditorPanel(QFrame):
             item.on_pick = self._set_sel_item
 
         lp = self._opts.get("logo_pos") or [0.025, 0.018]
-        bp = self._opts.get("brand_pos") or [0.97, 0.032]
+        bp = self._opts.get("brand_pos") or [0.977, 0.032]
         self.logo_item.move(int(lp[0] * CANVAS), int(lp[1] * CANVAS))
         self.brand_item.move(
             max(0, min(CANVAS - self.brand_item.width(), int(bp[0] * CANVAS) - self.brand_item.width())),
