@@ -239,11 +239,11 @@ def build_combined_short_prompt(source: dict) -> str:
         head = ("Đọc bài viết tại các nguồn sau:\n"
                 + "\n".join(f"- {u}" for u in urls)
                 + "\nSau đó tổng hợp các nguồn trên và tạo thành 1 bài viết "
-                  'độ dài 1000 - 1200 và tập trung vào keyword là 1 mã model cụ thể, BẮT BUỘC theo rule file "rule_content.pdf" '
+                  'độ dài 1000 - 1200 và tập trung vào keyword là 1 mã model cụ thể (không phải mã đặt hàng), BẮT BUỘC theo rule file "rule_content.pdf" '
                   "đã đính kèm trong Project này.")
         return f"{head}\n\n{tail}"
     head = f"Đọc bài viết tại link nguồn {urls[0] if urls else ''}"
-    make = ('Sau đó tạo bài viết độ dài 1000 - 1200 và tập trung vào keyword là 1 mã model cụ thể, BẮT BUỘC theo rule file '
+    make = ('Sau đó tạo bài viết độ dài 1000 - 1200 và tập trung vào keyword là 1 mã model cụ thể (không phải mã đặt hàng), BẮT BUỘC theo rule file '
             '"rule_content.pdf" đã đính kèm trong Project này.')
     return f"{head}\n\n{make}\n{tail}"
 
@@ -291,7 +291,7 @@ def build_split_prompt(rules, source: dict, n: int, with_rule: bool = True) -> s
             f"Dựa vào nguồn sau:\n{link_line}\n\n"
             f"Hãy lấy danh sách sản phẩm thực tế từ nguồn trên, sau đó chia các sản phẩm "
             f"thành {n} nhóm và viết {n} bài dựa trên các sản phẩm tương ứng trong nhóm đó. "
-            f"Mỗi bài dài 1000–1200 từ và tập trung vào keyword là 1 mã model cụ thể, BẮT BUỘC theo rule file rule_content.pdf đã đính kèm trong Project này.\n"
+            f"Mỗi bài dài 1000–1200 từ và tập trung vào keyword là 1 mã model cụ thể (không phải mã đặt hàng), BẮT BUỘC theo rule file rule_content.pdf đã đính kèm trong Project này.\n"
             f"Cách chia bài ví dụ: Nếu thu thập được 100 sản phẩm mà cần {n} bài, thì mỗi bài "
             f"sẽ là 100/{n} nếu số sản phẩm không chia hết cho {n}, các sản phẩm dư sẽ được "
             f"đưa vào bài cuối. \n\n"
